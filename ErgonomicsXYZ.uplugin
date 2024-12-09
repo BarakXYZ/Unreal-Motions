@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "ErgonomicsXYZ",
+	"Description": "Unreal Engine Ergonomic tools that will keep your hands (and soul!) healthy![ier]",
+	"Category": "Other",
+	"CreatedBy": "BarakXYZ",
+	"CreatedByURL": "https://github.com/BarakXYZ",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "ErgonomicsXYZ",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
