@@ -10,18 +10,20 @@ The plugin is designed to work alongside existing Unreal Engine shortcuts:
 - The Tab shortcuts can be found in Edit -> Editor Preferences -> Keyboard Shortcuts:<br>
 Type in the search bar "Focus Tab" and you should see the custom tab commands you can customize.
 
-### Blueprint Utility Widget ⚡
-Since some users (ME) might prefer to move their bookmarks to `Ctrl + Shift + 0-9`, I've included a Blueprint Utility Widget that lets you:
+### Editor Utility Widget ⚡
+![EUW](Docs/euw-hotkey-assist.png)
+Since some users (ME) might prefer to move their bookmarks to `Ctrl + Shift + 0-9`, I've included a Editor Utility Widget that lets you:
 - Easily clear and set hotkeys for bookmarks (or the custom tab navigation hotkeys) 0-9
 - Automatically setup hotkeys for bookmarks or tab navigation with different modifiers to find your perfect configuration!
 
-## Installation 🔧
+## Support & Installation 🔧
+1. The plugin should work safely in UE 5.3 to 5.5. I believe 5.0+ should also work (but haven't tested that). Keep in mind that the Editor Utility Widget won't show up in versions earlier than 5.3. If really needed you can manually copy paste the logic and recreate it.
 1. Create a `Plugins` folder in your Unreal Engine project's root directory (if it doesn't exist)
 2. Clone this repository into the `Plugins` folder:
 ```bash
 # From your project's root directory
 cd Plugins
-git clone https://github.com/YourUsername/ErgonomicsXYZ.git
+git clone https://github.com/BarakXYZ/ErgonomicsXYZ.git
 ```
 3. Restart the Unreal Editor
 4. The plugin should now be available in your project!
