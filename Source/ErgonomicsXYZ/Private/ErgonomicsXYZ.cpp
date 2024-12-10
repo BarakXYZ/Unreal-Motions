@@ -10,7 +10,8 @@
  * All other windows are children of it. */
 #include "Interfaces/IMainFrameModule.h"
 
-DEFINE_LOG_CATEGORY_STATIC(ErgonomicsXYZModuleSub, NoLogging, All);
+// DEFINE_LOG_CATEGORY_STATIC(ErgonomicsXYZModuleSub, NoLogging, All);  // Shipping
+DEFINE_LOG_CATEGORY_STATIC(ErgonomicsXYZModuleSub, Log, All); // Development
 
 #define LOCTEXT_NAMESPACE "FErgonomicsXYZModule"
 
@@ -29,6 +30,13 @@ void FErgonomicsXYZModule::StartupModule()
 	// 	RemoveDefaultCommand(InputBindingManager, Chord);
 	AddCommandsToList(MainFrameContext); // Macros
 	MapTabCommands(CommandList);
+
+	// Register our key interceptor
+	if (FSlateApplication::IsInitialized())
+	{
+		PreInputKeyDownDelegateHandle = FSlateApplication::Get().OnApplicationPreInputKeyDownListener().AddRaw(
+			this, &FErgonomicsXYZModule::OnPreInputKeyDown);
+	}
 }
 
 void FErgonomicsXYZModule::ShutdownModule()
@@ -145,6 +153,12 @@ void FErgonomicsXYZModule::InitTabNavInputChords(bool bCtrl, bool bAlt, bool bSh
 	{
 		TabChords.Add(FInputChord(ModifierKeys, Key));
 	}
+}
+
+void FErgonomicsXYZModule::OnPreInputKeyDown(const FKeyEvent& KeyEvent)
+{
+	// FHelpers::NotifySuccess();
+	UE_LOG(ErgonomicsXYZModuleSub, Display, TEXT("Key Down: %s"), *KeyEvent.GetKey().ToString());
 }
 
 /**

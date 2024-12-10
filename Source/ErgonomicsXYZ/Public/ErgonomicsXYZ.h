@@ -28,6 +28,7 @@ public: // Methods
 	void OnMoveToTab(int32 TabIndex);
 	bool TraverseWidgetTree(const TSharedPtr<SWidget>& TraverseWidget, TSharedPtr<SWidget>& DockingTabWell, int32 Depth = 0);
 	void FocusTab(const TSharedPtr<SWidget>& DockingTabWell, int TabIndex);
+	void OnPreInputKeyDown(const FKeyEvent& KeyEvent);
 
 public: // Members
 	// FSlateApplication*			  SlateApp = nullptr;
@@ -39,7 +40,8 @@ public: // Members
 	 * to live grep and look for something similar.
 	 * If not using the very specific names, the engine won't be able to open at all.
 	 */
-	const FName MainFrameContextName = TEXT("MainFrame");
+	const FName		MainFrameContextName = TEXT("MainFrame");
+	FDelegateHandle PreInputKeyDownDelegateHandle;
 
 	TSharedPtr<class FUICommandInfo>   CommandInfoTab1 = nullptr;
 	TArray<TSharedPtr<FUICommandInfo>> CommandInfoTabs = {
