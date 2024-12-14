@@ -1,4 +1,4 @@
-# ErgonomicsXYZ 🖐️✨
+# Unreal-Motions 🖐️✨
 Unreal Engine ergonomic tools that will keep your hands (and soul!) healthy[er] 🧘‍♂️
 
 ## Features 
