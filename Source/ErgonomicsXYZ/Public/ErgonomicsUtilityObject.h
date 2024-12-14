@@ -1,5 +1,3 @@
-// Copyright 2024 BarakXYZ. All Rights Reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,8 +11,9 @@
 UENUM(BlueprintType)
 enum class ETargetSection : uint8
 {
-	TabNavigation UMETA(DisplayName = "Tab Navigation"),
-	Bookmarks	  UMETA(DisplayName = "Bookmarks")
+	TabNavigation		 UMETA(DisplayName = "Tab Navigation"),
+	ViewportBookmarks	 UMETA(DisplayName = "Viewport Bookmarks"),
+	GraphEditorBookmarks UMETA(DisplayName = "Graph Editor Bookmarks")
 };
 
 UCLASS()
@@ -28,7 +27,7 @@ public:
 		bool bShift = true, bool bCmd = false);
 
 	UFUNCTION(BlueprintCallable, Category = "ErgonomicsXYZ | Utilities")
-	void ClearHotkeys(ETargetSection TargetSection = ETargetSection::Bookmarks,
+	void ClearHotkeys(ETargetSection TargetSection = ETargetSection::ViewportBookmarks,
 		bool						 bClearSecondary = false);
 
 	UFUNCTION(BlueprintCallable, Category = "ErgonomicsXYZ | Utilities")

@@ -1,5 +1,3 @@
-// Copyright 2024 BarakXYZ. All Rights Reserved.
-
 #include "ErgonomicsUtilityObject.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Commands/UICommandInfo.h"
@@ -47,10 +45,15 @@ void UErgonomicsUtilityObject::ConstructTargetParams(ETargetSection TargetSectio
 {
 	switch (TargetSection)
 	{
-		case (ETargetSection::Bookmarks):
+		case (ETargetSection::ViewportBookmarks):
 			ContextName = TEXT("LevelViewport");
 			TargetPrefix = "SetBookmark";
 			break;
+		case (ETargetSection::GraphEditorBookmarks):
+			ContextName = TEXT("GraphEditor");
+			TargetPrefix = "SetQuickJump";
+			break;
+
 		case (ETargetSection::TabNavigation):
 			ContextName = TEXT("MainFrame");
 			TargetPrefix = "MoveToTab";

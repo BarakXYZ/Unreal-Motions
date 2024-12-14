@@ -41,6 +41,7 @@ public class ErgonomicsXYZ : ModuleRules
 				"InputCore",
 				"UnrealEd",
 				"Blutility",
+				"EditorSubsystem",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
