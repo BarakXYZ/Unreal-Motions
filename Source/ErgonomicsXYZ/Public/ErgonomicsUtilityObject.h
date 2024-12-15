@@ -2,20 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "EditorUtilityObject.h"
+#include "HotkeySectionInfo.h"
 #include "ErgonomicsUtilityObject.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUtilityObjectAction);
 
 /**
  *
  */
-
-UENUM(BlueprintType)
-enum class ETargetSection : uint8
-{
-	TabNavigation		 UMETA(DisplayName = "Tab Navigation"),
-	ViewportBookmarks	 UMETA(DisplayName = "Viewport Bookmarks"),
-	GraphEditorBookmarks UMETA(DisplayName = "Graph Editor Bookmarks")
-};
-
 UCLASS()
 class ERGONOMICSXYZ_API UErgonomicsUtilityObject : public UEditorUtilityObject
 {
@@ -27,12 +21,11 @@ public:
 		bool bShift = true, bool bCmd = false);
 
 	UFUNCTION(BlueprintCallable, Category = "ErgonomicsXYZ | Utilities")
-	void ClearHotkeys(ETargetSection TargetSection = ETargetSection::ViewportBookmarks,
-		bool						 bClearSecondary = false);
+	void ClearHotkeys(EHotkeySection Section, bool bClearSecondary = false);
 
 	UFUNCTION(BlueprintCallable, Category = "ErgonomicsXYZ | Utilities")
 	void SetHotkeysToNums(
-		ETargetSection TargetSection = ETargetSection::TabNavigation,
+		EHotkeySection Section = EHotkeySection::TabNavigation,
 		bool		   bClearConflictingKeys = true,
 		bool bCtrl = true, bool bAlt = false,
 		bool bShift = true, bool bCmd = false);
@@ -40,10 +33,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ErgonomicsXYZ | Utilities")
 	void DebugBookmarks();
 
-	void ConstructTargetParams(ETargetSection TargetSection = ETargetSection::TabNavigation);
+	UFUNCTION(BlueprintCallable, Category = "ErgonomicsXYZ | Utilities")
+	void GetHotkeyMappingState(
+		EHotkeySection Section, TArray<FString>& OutMappingState);
 
 public:
 	TArray<FInputChord> Chords;
-	FName				ContextName;
-	FString				TargetPrefix;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FHotkeySectionInfo HotkeySectionInfo;
+	UPROPERTY(BlueprintAssignable)
+	FOnUtilityObjectAction OnUtilityObjectAction;
 };
