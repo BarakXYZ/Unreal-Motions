@@ -18,7 +18,7 @@ enum class EVimMode : uint8
  *
  */
 UCLASS()
-class ERGONOMICSXYZ_API UVimEditorSubsystem : public UEditorSubsystem
+class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 {
 	GENERATED_BODY()
 
