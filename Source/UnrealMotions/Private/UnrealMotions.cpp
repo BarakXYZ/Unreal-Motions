@@ -15,8 +15,8 @@ void FUnrealMotionsModule::StartupModule()
 void FUnrealMotionsModule::ShutdownModule()
 {
 	UE_LOG(LogUnrealMotionsModule, Display, TEXT("Unreal Motions: Shutdown."));
-	GraphNavigationManager.Reset();
-	TabNavigationManager.Reset();
+	// GraphNavigationManager.Reset();
+	// TabNavigationManager.Reset();
 }
 
 IMPLEMENT_MODULE(FUnrealMotionsModule, UnrealMotions)
