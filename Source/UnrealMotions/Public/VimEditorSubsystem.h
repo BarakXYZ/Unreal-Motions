@@ -31,9 +31,9 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	UFUNCTION(BlueprintCallable, Category = "Vim Editor Subsystem")
 	void ToggleVim(bool bEnabled);
 
-	ELogMethod		LogMethod = ELogMethod::PrintToScreen;
-	FDelegateHandle PreInputKeyDownDelegateHandle;
-	EVimMode		VimMode = EVimMode::Insert;
-	bool			bVisualLog = true;
-	bool			bConsoleLog = true;
+	EHelpersLogMethod HelpersLogMethod = EHelpersLogMethod::PrintToScreen;
+	FDelegateHandle	  PreInputKeyDownDelegateHandle;
+	EVimMode		  VimMode = EVimMode::Insert;
+	bool			  bVisualLog = true;
+	bool			  bConsoleLog = true;
 };

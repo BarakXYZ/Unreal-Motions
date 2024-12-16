@@ -55,12 +55,12 @@ void FHelpers::NotifySuccess(
  really make sense to scale assymetrically.
 */
 void FHelpers::AddDebugMessage(
-	const FString Message,
-	ELogMethod	  LogMethod,
-	float		  Duration,
-	FLinearColor  Color,
-	float		  Size,
-	const int	  Id)
+	const FString	  Message,
+	EHelpersLogMethod HelpersLogMethod,
+	float			  Duration,
+	FLinearColor	  Color,
+	float			  Size,
+	const int		  Id)
 {
 
 	// if (!LogCategory)
@@ -68,9 +68,9 @@ void FHelpers::AddDebugMessage(
 	// 	LogCategory = &LogTemp; // Default to LogTemp if null
 	// }
 
-	switch (LogMethod)
+	switch (HelpersLogMethod)
 	{
-		case ELogMethod::PrintToScreen:
+		case EHelpersLogMethod::PrintToScreen:
 		{
 			if (GEngine)
 			{
@@ -83,12 +83,12 @@ void FHelpers::AddDebugMessage(
 			}
 			break;
 		}
-		case ELogMethod::PrintToLog:
+		case EHelpersLogMethod::PrintToLog:
 		{
 			UE_LOG(LogTemp, Log, TEXT("%s"), *Message);
 			break;
 		}
-		case ELogMethod::Bypass:
+		case EHelpersLogMethod::Bypass:
 		{
 			break;
 		}
