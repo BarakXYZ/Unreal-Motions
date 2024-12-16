@@ -72,6 +72,12 @@ void FErgonomicsXYZModule::OnMoveToTab(int32 TabIndex)
 		else
 		{
 			FocusTab(DockingTabWell, TabIndex);
+			ActiveWindow->BringToFront();
+			/**
+			 * BringToFront is important to mitigate a bug where modal windows
+			 * will semi-steal focus from the active window when switching tabs.
+			 * Essentially, bring to front helps with solidifying the focus.
+			 * */
 		}
 	}
 	else
