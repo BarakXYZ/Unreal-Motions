@@ -4,14 +4,14 @@
 #include "Misc/Attribute.h"
 
 UENUM(BlueprintType)
-enum class EHelpersLogMethod : uint8
+enum class EUMHelpersLogMethod : uint8
 {
 	PrintToScreen UMETA(DisplayName = "Print to Screen"),
 	PrintToLog	  UMETA(DisplayName = "Print to Console"),
 	Bypass		  UMETA(DisplayName = "Bypass")
 };
 
-class FHelpers
+class FUMHelpers
 {
 public:
 	/** Displays a success notification with optional hyperlink */
@@ -23,12 +23,12 @@ public:
 		const float	   Lifetime = 3.0f);
 
 	/**
-	 * Print debug message to screen or console. You can assign a HelpersLogMethod in order to control debugging visibility and
+	 * Print debug message to screen or console. You can assign a UMHelpersLogMethod in order to control debugging visibility and
 	 * isolate debugging if needed.
 	 * @note This is a convinient wrapper for the built-in AddOnScreenDebugMessage.
 	 *
 	 * @param Message		The debug message to print.
-	 * @param HelpersLogMethod		An enum to control logging functionality. Can be then controlled to isolate or solo
+	 * @param UMHelpersLogMethod		An enum to control logging functionality. Can be then controlled to isolate or solo
 	 * debugging for certain classes.
 	 * @param Duration		The lifespan of the message (used only in Print to Screen debugging)
 	 * @param Color			The color of the debugging message. There are also some static presets available (e.g. Lime)
@@ -39,12 +39,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, meta = (DevelopmentOnly), Category = "Utilities XYZ - Debugging")
 	static void AddDebugMessage(
-		const FString	  Message = "Hello <3",
-		EHelpersLogMethod HelpersLogMethod = EHelpersLogMethod::PrintToScreen,
-		float			  Duration = 6.0f,
-		FLinearColor	  Color = FLinearColor::Yellow,
-		float			  Size = 1.0f,
-		const int32		  Id = -1);
+		const FString		Message = "Hello <3",
+		EUMHelpersLogMethod UMHelpersLogMethod = EUMHelpersLogMethod::PrintToScreen,
+		float				Duration = 6.0f,
+		FLinearColor		Color = FLinearColor::Yellow,
+		float				Size = 1.0f,
+		const int32			Id = -1);
 
 	UFUNCTION(BlueprintCallable, Category = "Utilities XYZ - Debugging")
 	static void RemoveStringFromScreenById(

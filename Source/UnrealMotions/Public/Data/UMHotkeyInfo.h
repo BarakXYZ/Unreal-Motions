@@ -1,10 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "HotkeyInfo.generated.h"
+#include "UMHotkeyInfo.generated.h"
 
 USTRUCT(BlueprintType)
-struct FHotkeyInfo
+struct FUMHotkeyInfo
 {
 	GENERATED_BODY()
 
@@ -14,13 +14,13 @@ struct FHotkeyInfo
 	UPROPERTY(BlueprintReadWrite, Category = "Command Context")
 	FString CommandPrefix;
 
-	FHotkeyInfo()
+	FUMHotkeyInfo()
 		: ContextName("")
 		, CommandPrefix("")
 	{
 	}
 
-	FHotkeyInfo(const FName& InContextName, const FString& InCommandPrefix)
+	FUMHotkeyInfo(const FName& InContextName, const FString& InCommandPrefix)
 		: ContextName(InContextName)
 		, CommandPrefix(InCommandPrefix)
 	{

@@ -42,6 +42,7 @@ public class UnrealMotions : ModuleRules
 				"UnrealEd",
 				"Blutility",
 				"EditorSubsystem",
+				"Kismet",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

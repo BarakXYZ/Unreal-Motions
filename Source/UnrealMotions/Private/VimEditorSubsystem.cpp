@@ -1,12 +1,12 @@
 #include "VimEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
-#include "Helpers.h"
+#include "UMHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All); // Development
 
 void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	const FConfigFile& ConfigFile = FHelpers::ConfigFile;
+	const FConfigFile& ConfigFile = FUMHelpers::ConfigFile;
 	FString			   OutLog = "Vim Editor Subsystem Initialized: ";
 
 	FString TestGetStr;
@@ -14,15 +14,15 @@ void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	if (!ConfigFile.IsEmpty())
 	{
-		ConfigFile.GetBool(*FHelpers::VimSection, TEXT("bStartVim"), bStartVim);
+		ConfigFile.GetBool(*FUMHelpers::VimSection, TEXT("bStartVim"), bStartVim);
 
 		// TODO: Remove to a more general place? Debug
-		ConfigFile.GetBool(*FHelpers::DebugSection, TEXT("bVisualLog"), bVisualLog);
+		ConfigFile.GetBool(*FUMHelpers::DebugSection, TEXT("bVisualLog"), bVisualLog);
 	}
 
 	ToggleVim(bStartVim);
 	OutLog += bStartVim ? "Enabled by Config." : "Disabled by Config.";
-	FHelpers::NotifySuccess(FText::FromString(OutLog), bVisualLog);
+	FUMHelpers::NotifySuccess(FText::FromString(OutLog), bVisualLog);
 	Super::Initialize(Collection);
 }
 
@@ -63,7 +63,7 @@ void UVimEditorSubsystem::ToggleVim(bool bEnable)
 		}
 	}
 
-	FHelpers::NotifySuccess(FText::FromString(OutLog), bVisualLog);
+	FUMHelpers::NotifySuccess(FText::FromString(OutLog), bVisualLog);
 }
 
 void UVimEditorSubsystem::OnPreInputKeyDown(const FKeyEvent& KeyEvent)
@@ -89,6 +89,6 @@ void UVimEditorSubsystem::SetMode(EVimMode NewMode)
 	if (VimMode != NewMode)
 	{
 		VimMode = NewMode;
-		FHelpers::NotifySuccess(FText::FromString(UEnum::GetValueAsString(NewMode)), bVisualLog);
+		FUMHelpers::NotifySuccess(FText::FromString(UEnum::GetValueAsString(NewMode)), bVisualLog);
 	}
 }

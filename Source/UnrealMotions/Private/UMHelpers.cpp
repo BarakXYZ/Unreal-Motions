@@ -1,13 +1,13 @@
-#include "Helpers.h"
+#include "UMHelpers.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
-const FString FHelpers::VimSection = TEXT("/Script/Vim");
-const FString FHelpers::DebugSection = TEXT("/Script/Debug");
-FConfigFile	  FHelpers::ConfigFile;
+const FString FUMHelpers::VimSection = TEXT("/Script/Vim");
+const FString FUMHelpers::DebugSection = TEXT("/Script/Debug");
+FConfigFile	  FUMHelpers::ConfigFile;
 
-void FHelpers::NotifySuccess(
+void FUMHelpers::NotifySuccess(
 	const FText&   NotificationText,
 	const bool	   Log,
 	const FString& HyperlinkURL,
@@ -54,13 +54,13 @@ void FHelpers::NotifySuccess(
  6. TextScale (Size): The font size of the displayed message. Provided to the user as a float, since it doesn't
  really make sense to scale assymetrically.
 */
-void FHelpers::AddDebugMessage(
-	const FString	  Message,
-	EHelpersLogMethod HelpersLogMethod,
-	float			  Duration,
-	FLinearColor	  Color,
-	float			  Size,
-	const int		  Id)
+void FUMHelpers::AddDebugMessage(
+	const FString		Message,
+	EUMHelpersLogMethod UMHelpersLogMethod,
+	float				Duration,
+	FLinearColor		Color,
+	float				Size,
+	const int			Id)
 {
 
 	// if (!LogCategory)
@@ -68,9 +68,9 @@ void FHelpers::AddDebugMessage(
 	// 	LogCategory = &LogTemp; // Default to LogTemp if null
 	// }
 
-	switch (HelpersLogMethod)
+	switch (UMHelpersLogMethod)
 	{
-		case EHelpersLogMethod::PrintToScreen:
+		case EUMHelpersLogMethod::PrintToScreen:
 		{
 			if (GEngine)
 			{
@@ -83,12 +83,12 @@ void FHelpers::AddDebugMessage(
 			}
 			break;
 		}
-		case EHelpersLogMethod::PrintToLog:
+		case EUMHelpersLogMethod::PrintToLog:
 		{
 			UE_LOG(LogTemp, Log, TEXT("%s"), *Message);
 			break;
 		}
-		case EHelpersLogMethod::Bypass:
+		case EUMHelpersLogMethod::Bypass:
 		{
 			break;
 		}
@@ -97,7 +97,7 @@ void FHelpers::AddDebugMessage(
 	}
 }
 
-void FHelpers::RemoveStringFromScreenById(int Id, bool& bOutSuccess, FString& OutInfoMessage)
+void FUMHelpers::RemoveStringFromScreenById(int Id, bool& bOutSuccess, FString& OutInfoMessage)
 {
 	if (GEngine)
 	{
@@ -120,7 +120,7 @@ void FHelpers::RemoveStringFromScreenById(int Id, bool& bOutSuccess, FString& Ou
 	}
 }
 
-void FHelpers::RemoveAllStringsFromScreen()
+void FUMHelpers::RemoveAllStringsFromScreen()
 {
 	if (GEngine)
 	{
@@ -133,7 +133,7 @@ void FHelpers::RemoveAllStringsFromScreen()
 	}
 }
 
-void FHelpers::SetPluginConfigFile()
+void FUMHelpers::SetPluginConfigFile()
 {
 	FString PluginConfigDir = FPaths::ProjectPluginsDir() / TEXT("ErgonomicsXYZ") / TEXT("Config");
 	FString ConfigPath = PluginConfigDir / TEXT("DefaultErgonomicsXYZ.ini");

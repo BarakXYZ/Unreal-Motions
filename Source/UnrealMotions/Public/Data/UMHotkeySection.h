@@ -1,10 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "HotkeySection.generated.h"
+#include "UMHotkeySection.generated.h"
 
 UENUM(BlueprintType)
-enum class EHotkeySection : uint8
+enum class EUMHotkeySection : uint8
 {
 	TabNavigation		 UMETA(DisplayName = "Tab Navigation"),
 	ViewportBookmarks	 UMETA(DisplayName = "Viewport Bookmarks"),

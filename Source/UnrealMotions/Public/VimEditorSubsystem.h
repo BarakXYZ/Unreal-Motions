@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "EditorSubsystem.h"
 #include "Framework/Commands/InputBindingManager.h"
-#include "Helpers.h"
+#include "UMHelpers.h"
 #include "VimEditorSubsystem.generated.h"
 
 UENUM(BlueprintType)
@@ -31,9 +31,9 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	UFUNCTION(BlueprintCallable, Category = "Vim Editor Subsystem")
 	void ToggleVim(bool bEnabled);
 
-	EHelpersLogMethod HelpersLogMethod = EHelpersLogMethod::PrintToScreen;
-	FDelegateHandle	  PreInputKeyDownDelegateHandle;
-	EVimMode		  VimMode = EVimMode::Insert;
-	bool			  bVisualLog = true;
-	bool			  bConsoleLog = true;
+	EUMHelpersLogMethod UMHelpersLogMethod = EUMHelpersLogMethod::PrintToScreen;
+	FDelegateHandle		PreInputKeyDownDelegateHandle;
+	EVimMode			VimMode = EVimMode::Insert;
+	bool				bVisualLog = true;
+	bool				bConsoleLog = true;
 };

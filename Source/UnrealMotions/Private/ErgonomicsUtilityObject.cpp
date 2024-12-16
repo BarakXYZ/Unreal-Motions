@@ -1,8 +1,7 @@
 #include "ErgonomicsUtilityObject.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Commands/UICommandInfo.h"
-#include "Helpers.h"
-#include "HotkeySection.h"
+#include "UMHelpers.h"
 
 void UErgonomicsUtilityObject::ConstructChords(bool bCtrl, bool bAlt, bool bShift, bool bCmd)
 
@@ -24,24 +23,24 @@ void UErgonomicsUtilityObject::ConstructChords(bool bCtrl, bool bAlt, bool bShif
 	}
 }
 
-void UErgonomicsUtilityObject::ClearHotkeys(EHotkeySection Section, bool bClearSecondary)
+void UErgonomicsUtilityObject::ClearHotkeys(EUMHotkeySection Section, bool bClearSecondary)
 {
-	if (FHotkeyInfo* HotkeyInfo = HotkeySectionInfo.Map.Find(Section))
+	if (FUMHotkeyInfo* UMHotkeyInfo = UMHotkeySectionInfo.Map.Find(Section))
 	{
 		FInputBindingManager&			   InputBindingManager = FInputBindingManager::Get();
 		TArray<TSharedPtr<FUICommandInfo>> CommandInfo;
 		InputBindingManager.GetCommandInfosFromContext(
-			HotkeyInfo->ContextName, CommandInfo);
+			UMHotkeyInfo->ContextName, CommandInfo);
 
 		for (const TSharedPtr<FUICommandInfo>& Command : CommandInfo)
 		{
 			FString CommandStr = Command->GetCommandName().ToString();
-			if (CommandStr.StartsWith(HotkeyInfo->CommandPrefix)) // aka conflict
+			if (CommandStr.StartsWith(UMHotkeyInfo->CommandPrefix)) // aka conflict
 			{
 				Command->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 				if (bClearSecondary)
 					Command->RemoveActiveChord(EMultipleKeyBindingIndex::Secondary);
-				FHelpers::NotifySuccess(FText::FromString("Command Clear: " + CommandStr));
+				FUMHelpers::NotifySuccess(FText::FromString("Command Clear: " + CommandStr));
 			}
 		}
 		OnUtilityObjectAction.Broadcast();
@@ -49,16 +48,16 @@ void UErgonomicsUtilityObject::ClearHotkeys(EHotkeySection Section, bool bClearS
 }
 
 void UErgonomicsUtilityObject::SetHotkeysToNums(
-	EHotkeySection Section, bool bClearConflictingKeys,
+	EUMHotkeySection Section, bool bClearConflictingKeys,
 	bool bCtrl, bool bAlt, bool bShift, bool bCmd)
 {
 
-	if (FHotkeyInfo* HotkeyInfo = HotkeySectionInfo.Map.Find(Section))
+	if (FUMHotkeyInfo* UMHotkeyInfo = UMHotkeySectionInfo.Map.Find(Section))
 	{
 		FInputBindingManager&			   InputBindingManager = FInputBindingManager::Get();
 		TArray<TSharedPtr<FUICommandInfo>> CommandInfo;
 		InputBindingManager.GetCommandInfosFromContext(
-			HotkeyInfo->ContextName, CommandInfo);
+			UMHotkeyInfo->ContextName, CommandInfo);
 
 		ConstructChords(bCtrl, bAlt, bShift, bCmd);
 		int32 i{ 0 };
@@ -66,17 +65,17 @@ void UErgonomicsUtilityObject::SetHotkeysToNums(
 		{
 			FString CommandStr = Command->GetCommandName().ToString();
 			// We are targeting only 10 commands really, so just for safety.
-			if (CommandStr.StartsWith(HotkeyInfo->CommandPrefix) && i < 10)
+			if (CommandStr.StartsWith(UMHotkeyInfo->CommandPrefix) && i < 10)
 			{
 				if (bClearConflictingKeys)
 				{
 					const TSharedPtr<FUICommandInfo> CheckCommand = InputBindingManager.GetCommandInfoFromInputChord(
-						HotkeyInfo->ContextName, Chords[i], false);
+						UMHotkeyInfo->ContextName, Chords[i], false);
 					if (CheckCommand.IsValid())
 						CheckCommand->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 				}
 				Command->SetActiveChord(Chords[i], EMultipleKeyBindingIndex::Primary);
-				FHelpers::NotifySuccess(FText::FromString("Command Set: " + CommandStr));
+				FUMHelpers::NotifySuccess(FText::FromString("Command Set: " + CommandStr));
 				++i;
 			}
 		}
@@ -85,27 +84,27 @@ void UErgonomicsUtilityObject::SetHotkeysToNums(
 }
 
 void UErgonomicsUtilityObject::GetHotkeyMappingState(
-	EHotkeySection Section, TArray<FString>& OutMappingState)
+	EUMHotkeySection Section, TArray<FString>& OutMappingState)
 {
-	if (FHotkeyInfo* HotkeyInfo = HotkeySectionInfo.Map.Find(Section))
+	if (FUMHotkeyInfo* UMHotkeyInfo = UMHotkeySectionInfo.Map.Find(Section))
 	{
 		FInputBindingManager&			   InputBindingManager = FInputBindingManager::Get();
 		TArray<TSharedPtr<FUICommandInfo>> CommandInfo;
 		InputBindingManager.GetCommandInfosFromContext(
-			HotkeyInfo->ContextName, CommandInfo);
+			UMHotkeyInfo->ContextName, CommandInfo);
 
 		for (const TSharedPtr<FUICommandInfo>& Command : CommandInfo)
 		{
 			FString CommandStr = Command->GetCommandName().ToString();
 			// We are targeting only 10 commands really, so just for safety.
-			if (CommandStr.StartsWith(HotkeyInfo->CommandPrefix))
+			if (CommandStr.StartsWith(UMHotkeyInfo->CommandPrefix))
 			{
 				CommandStr += " " + Command->GetInputText().ToString();
 				OutMappingState.Add(CommandStr);
 			}
 		}
 	}
-	UEnum* EnumPtr = StaticEnum<EHotkeySection>();
+	UEnum* EnumPtr = StaticEnum<EUMHotkeySection>();
 	EnumPtr->NumEnums();
 }
 
@@ -122,7 +121,7 @@ void UErgonomicsUtilityObject::DebugBookmarks()
 		FString CommandStr = Command->GetCommandName().ToString();
 		if (CommandStr.StartsWith("SetBookmark"))
 		{
-			FHelpers::NotifySuccess(FText::FromString(CommandStr));
+			FUMHelpers::NotifySuccess(FText::FromString(CommandStr));
 			Command->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 		}
 	}
