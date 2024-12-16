@@ -6,7 +6,7 @@ Unreal Engine ergonomic tools that will keep your hands (and soul!) healthy[er] 
 Navigate between editor tabs using customizable keyboard shortcuts just like you navigate browser tabs!<br>
 The plugin is designed to work alongside existing Unreal Engine shortcuts:
 - By default, the plugin uses `Ctrl + Shift + 0-9` to avoid conflicts with Unreal's built-in Viewport & BP Graph Editor Bookmark shortcuts (`Ctrl + 0-9`)
-- The plugin won't override any existing shortcuts by default, but I definitely recommend using the Blueprint Utility Widget I provide or manually changing the tab navigation to use Ctrl + 0-9 and moving Bookmarks to Ctrl + Shift + 0-9.
+- The plugin won't override any existing shortcuts by default, but I definitely recommend using the Editor Utility Widget I provide to change tab navigation to use Ctrl + 0-9 and accordingly to move Viewport & Graph Bookmarks to Ctrl + Shift + 0-9. **without doing this you won't be able to navigate smoothly between major tabs using ctrl + 0-9 :(**
 - The Tab shortcuts can be found in Edit -> Editor Preferences -> Keyboard Shortcuts:<br>
 Type in the search bar "Focus Tab" and you should see the custom tab commands you can customize.
 
@@ -15,7 +15,8 @@ Type in the search bar "Focus Tab" and you should see the custom tab commands yo
 ![EUW2](Docs/euw-hotkey-assist-viewport-bookmarks.png)
 Since some users (ME) might prefer to move their bookmarks to `Ctrl + Shift + 0-9`, I've included a Editor Utility Widget that lets you:
 - Easily clear and set hotkeys for bookmarks (or the custom tab navigation hotkeys) 0-9
-- Automatically setup hotkeys for bookmarks or tab navigation with different modifiers to find your perfect configuration!
+- Have a quick overview of the currently set configuration and hotkeys.
+- Try out different modifiers to find your perfect configuration and iterate quickly!
 
 ## Support & Installation 🔧
 1. The plugin should work safely in UE 5.3 to 5.5. I believe 5.0+ should also work (but haven't tested that). Keep in mind that the Editor Utility Widget won't show up in versions earlier than 5.3. If really needed you can manually copy paste the logic and recreate it.
@@ -33,7 +34,7 @@ git clone https://github.com/BarakXYZ/Unreal-Motions.git
 I'm heavily inspired by Vim Motions, and so I'm definitely gonna expand this plugin in the near future with more ergonomic tools! 🚀
 
 ## Contributing 🤝
-Bug reports and feature suggestions are welcome!
+Bug reports, PR's and feature suggestions are welcome!
 
 ## Thank You! ❤️
 - [BenUI](https://github.com/benui-dev) and the Discord community for their support
