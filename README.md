@@ -24,7 +24,7 @@ Since some users (ME) might prefer to move their bookmarks to `Ctrl + Shift + 0-
 ```bash
 # From your project's root directory
 cd Plugins
-git clone https://github.com/BarakXYZ/ErgonomicsXYZ.git
+git clone https://github.com/BarakXYZ/Unreal-Motions.git
 ```
 3. Restart the Unreal Editor
 4. The plugin should now be available in your project!
