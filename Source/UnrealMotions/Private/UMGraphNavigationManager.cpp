@@ -1,7 +1,9 @@
+#include "Layout/PaintGeometry.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "UMGraphNavigationManager.h"
 #include "GraphEditor.h"
 #include "UMHelpers.h"
+#include "Framework/Application/SlateApplication.h"
 
 FUMGraphNavigationManager::FUMGraphNavigationManager()
 {
@@ -92,6 +94,7 @@ void FUMGraphNavigationManager::DebugOnFocusChanged(
 								FUMHelpers::NotifySuccess(FText::FromString(LastActiveBorder.Pin()->GetBorderBackgroundColor().GetSpecifiedColor().ToString()));
 								LastActiveBorder.Pin()->SetBorderBackgroundColor(FocusedBorderColor);
 							}
+							DrawWidgetDebugOutline(LastActiveBorder.Pin());
 						}
 					}
 				}
@@ -111,4 +114,46 @@ void FUMGraphNavigationManager::DebugOnFocusChanged(
 		}
 		// FUMHelpers::NotifySuccess(FText::FromString(NewWidgetStr));  // Debug all
 	}
+}
+
+void FUMGraphNavigationManager::DrawWidgetDebugOutline(const TSharedPtr<SWidget>& InWidget)
+{
+	FSlateApplication&	SlateApp = FSlateApplication::Get();
+	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
+
+	if (ActiveWindow.IsValid())
+	{
+		FPaintGeometry WindowSpaceGeometry;
+		GetWidgetWindowSpaceGeometry(InWidget, ActiveWindow, WindowSpaceGeometry);
+
+		// Remove previous overlay if it exists
+		if (DebugWidgetInstance.IsValid())
+		{
+			ActiveWindow->RemoveOverlaySlot(DebugWidgetInstance.ToSharedRef());
+		}
+		DebugWidgetInstance = SNew(SUMDebugWidget)
+								  .TargetWidget(InWidget.ToWeakPtr())
+								  .CustomGeometry(WindowSpaceGeometry)
+								  .Visibility(EVisibility::HitTestInvisible);
+		ActiveWindow->AddOverlaySlot()
+			[DebugWidgetInstance.ToSharedRef()];
+	}
+}
+
+// ** Made from a few snippets taken from Widget Reflector.
+// It looks like without doing that, we will have some offset between the actual widget
+// and our outline debugger widget.
+// Here's what they have to say:
+// The FGeometry we get is from a WidgetPath, so it's rooted in desktop space.
+// We need to APPEND a transform to the Geometry to essentially undo this root transform
+// and get us back into Window Space.
+// This is nonstandard so we have to go through some hoops and a specially exposed method
+// in FPaintGeometry to allow appending layout transforms.
+// */
+void FUMGraphNavigationManager::GetWidgetWindowSpaceGeometry(const TSharedPtr<SWidget>& InWidget, const TSharedPtr<SWindow>& WidgetWindow, FPaintGeometry& WindowSpaceGeometry)
+{
+	FGeometry WidgetGeometry = InWidget->GetCachedGeometry();
+	WindowSpaceGeometry = WidgetGeometry.ToPaintGeometry();
+	WindowSpaceGeometry.AppendTransform(TransformCast<FSlateLayoutTransform>(Inverse(WidgetWindow->GetPositionInScreen())));
+	FUMHelpers::NotifySuccess(FText::FromString(WindowSpaceGeometry.GetLocalSize().ToString()));
 }

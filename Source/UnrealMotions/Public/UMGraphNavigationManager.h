@@ -2,7 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "BlueprintEditor.h"
-#include "Framework/Application/SlateApplication.h"
+#include "Layout/PaintGeometry.h"
+#include "UMDebugWidget.h"
 
 class FUMGraphNavigationManager
 {
@@ -17,10 +18,12 @@ public:
 		const FWidgetPath&		   WidgetPath,
 		const TSharedPtr<SWidget>& NewWidget);
 	void StartDebugOnFocusChanged();
+	void GetWidgetWindowSpaceGeometry(const TSharedPtr<SWidget>& InWidget, const TSharedPtr<SWindow>& WidgetWindow, FPaintGeometry& WindowSpaceGeometry);
+	void DrawWidgetDebugOutline(const TSharedPtr<SWidget>& InWidget);
 
 public:
-	// FSlateColor		  FocusedBorderColor = FLinearColor::FromSRGBColor(FColor::FromHex(TEXT("#854D0E")));
-	// FSlateColor		  FocusedBorderColor = FLinearColor::FromSRGBColor(FColor(161, 98, 7, 255));
-	FSlateColor		  FocusedBorderColor = FLinearColor(10.0, 10.0, 0.0f);
-	TWeakPtr<SBorder> LastActiveBorder = nullptr;
+	FSlateColor				   FocusedBorderColor = FLinearColor(10.0, 10.0, 0.0f);
+	TWeakPtr<SBorder>		   LastActiveBorder = nullptr;
+	TSharedPtr<SUMDebugWidget> DebugWidgetInstance = nullptr;
+	TSharedPtr<SOverlay>	   DebugOverlay = nullptr;
 };

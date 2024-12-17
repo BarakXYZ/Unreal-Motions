@@ -1,7 +1,7 @@
 #include "UMTabNavigationManager.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/Docking/SDockTab.h"
-#include "UMHelpers.h"
+// #include "UMHelpers.h"
 
 /* Main window representation of the app.
  * All other windows are children of it. */
