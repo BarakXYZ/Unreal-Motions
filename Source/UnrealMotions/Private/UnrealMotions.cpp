@@ -7,7 +7,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, NoLogging, All); // Prod
 void FUnrealMotionsModule::StartupModule()
 {
 	UE_LOG(LogUnrealMotionsModule, Display, TEXT("Unreal Motions: Startup."));
-	GraphNavigationManager = MakeUnique<FUMGraphNavigationManager>();
+	// GraphNavigationManager = MakeUnique<FUMGraphNavigationManager>();
 	TabNavigationManager = MakeUnique<FUMTabNavigationManager>();
 	FUMHelpers::SetPluginConfigFile();
 }

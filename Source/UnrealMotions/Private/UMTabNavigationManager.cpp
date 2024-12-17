@@ -7,8 +7,8 @@
  * All other windows are children of it. */
 #include "Interfaces/IMainFrameModule.h"
 
-// DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigation, NoLogging, All); // Prod
-DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigation, Log, All); // Dev
+DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigation, NoLogging, All); // Prod
+// DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigation, Log, All); // Dev
 
 #define LOCTEXT_NAMESPACE "UMTabNavigationManager"
 
