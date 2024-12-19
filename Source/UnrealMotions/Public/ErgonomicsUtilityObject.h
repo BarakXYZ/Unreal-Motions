@@ -25,7 +25,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UnrealMotions | Utilities")
 	void SetHotkeysToNums(
-		EUMHotkeySection Section = EUMHotkeySection::TabNavigation,
+		EUMHotkeySection Section = EUMHotkeySection::MajorTabNavigation,
 		bool			 bClearConflictingKeys = true,
 		bool bCtrl = true, bool bAlt = false,
 		bool bShift = true, bool bCmd = false);

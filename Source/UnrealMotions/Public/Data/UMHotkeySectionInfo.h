@@ -15,8 +15,11 @@ struct FUMHotkeySectionInfo
 
 	FUMHotkeySectionInfo()
 	{
-		Map.Add(EUMHotkeySection::TabNavigation,
-			FUMHotkeyInfo(TEXT("MainFrame"), TEXT("MoveToTab")));
+		Map.Add(EUMHotkeySection::MajorTabNavigation,
+			FUMHotkeyInfo(TEXT("MainFrame"), TEXT("MoveToMajorTab")));
+
+		Map.Add(EUMHotkeySection::MinorTabNavigation,
+			FUMHotkeyInfo(TEXT("MainFrame"), TEXT("MoveToMinorTab")));
 
 		Map.Add(EUMHotkeySection::ViewportBookmarks,
 			FUMHotkeyInfo(TEXT("LevelViewport"), TEXT("SetBookmark")));
