@@ -11,8 +11,10 @@ The plugin is designed to work alongside existing Unreal Engine shortcuts:
 Type in the search bar "Focus Tab" and you should see the custom tab commands you can customize.
 
 ### Editor Utility Widget ⚡
-![EUW1](Docs/euw-hotkey-assist-tab-nav.png)
-![EUW2](Docs/euw-hotkey-assist-viewport-bookmarks.png)
+![EUW1](Docs/euw-hotkey-assist-major-tab-nav.png)
+![EUW2](Docs/euw-hotkey-assist-minor-tab-nav.png)
+![EUW3](Docs/euw-hotkey-assist-viewport-bookmarks.png)
+![EUW4](Docs/euw-hotkey-assist-graph-bookmarks.png)
 Since some users (muah) might prefer to move their bookmarks to `Ctrl + Alt + Shift + 0-9`, I've included a Editor Utility Widget that lets you:
 - Easily clear and Auto-Setup Hotkeys to the recommened or any configuration you like quickly and easily!
 - Have a quick overview of the currently set configuration and hotkeys.
