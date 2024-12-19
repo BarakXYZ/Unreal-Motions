@@ -2,19 +2,19 @@
 Unreal Engine ergonomic tools that will keep your hands (and soul!) healthy[er] 🧘‍♂️
 
 ## Features 
-### Tab Navigation 🔄
+### Major & Minor Tab Navigation 🔄
 Navigate between editor tabs using customizable keyboard shortcuts just like you navigate browser tabs!<br>
 The plugin is designed to work alongside existing Unreal Engine shortcuts:
-- By default, the plugin uses `Ctrl + Shift + 0-9` to avoid conflicts with Unreal's built-in Viewport & BP Graph Editor Bookmark shortcuts (`Ctrl + 0-9`)
-- The plugin won't override any existing shortcuts by default, but I definitely recommend using the Editor Utility Widget I provide to change tab navigation to use Ctrl + 0-9 and accordingly to move Viewport & Graph Bookmarks to Ctrl + Shift + 0-9. **without doing this you won't be able to navigate smoothly between major tabs using ctrl + 0-9 :(**
+- By default, the plugin uses `Ctrl + Shift + 0-9` for Major Tabs && `Ctrl + Alt + Shift + 0-9` for Minor Tabs to avoid conflicts with Unreal's built-in Viewport & BP Graph Editor Bookmark shortcuts (`Ctrl + 0-9`).
+- The plugin won't override any existing shortcuts by default, but I definitely recommend using the Editor Utility Widget I provide to change Major Tab navigation to use `Ctrl + 0-9` && Minor Tab navigation to use `Ctrl + Shift + 0-9` and accordingly to move Viewport & Graph Bookmarks to `Ctrl + Alt + Shift + 0-9`.
 - The Tab shortcuts can be found in Edit -> Editor Preferences -> Keyboard Shortcuts:<br>
 Type in the search bar "Focus Tab" and you should see the custom tab commands you can customize.
 
 ### Editor Utility Widget ⚡
 ![EUW1](Docs/euw-hotkey-assist-tab-nav.png)
 ![EUW2](Docs/euw-hotkey-assist-viewport-bookmarks.png)
-Since some users (ME) might prefer to move their bookmarks to `Ctrl + Shift + 0-9`, I've included a Editor Utility Widget that lets you:
-- Easily clear and set hotkeys for bookmarks (or the custom tab navigation hotkeys) 0-9
+Since some users (muah) might prefer to move their bookmarks to `Ctrl + Alt + Shift + 0-9`, I've included a Editor Utility Widget that lets you:
+- Easily clear and Auto-Setup Hotkeys to the recommened or any configuration you like quickly and easily!
 - Have a quick overview of the currently set configuration and hotkeys.
 - Try out different modifiers to find your perfect configuration and iterate quickly!
 
