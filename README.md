@@ -7,6 +7,8 @@ Navigate between editor tabs using customizable keyboard shortcuts just like you
 The plugin is designed to work alongside existing Unreal Engine shortcuts:
 - By default, the plugin uses `Ctrl + Shift + 0-9` for Major Tabs && `Ctrl + Alt + Shift + 0-9` for Minor Tabs to avoid conflicts with Unreal's built-in Viewport & BP Graph Editor Bookmark shortcuts (`Ctrl + 0-9`).
 - The plugin won't override any existing shortcuts by default, but I definitely recommend using the Editor Utility Widget I provide to change Major Tab navigation to use `Ctrl + 0-9` && Minor Tab navigation to use `Ctrl + Shift + 0-9` and accordingly to move Viewport & Graph Bookmarks to `Ctrl + Alt + Shift + 0-9`.
+- Another way to navigate between tabs is using `Ctrl + ]` for moving to the next tab, and `Ctrl + [` for moving to the previous tab. Similarly, you can navigate back and forth in Minor Tabs using `Ctrl + Shift + ]` & `Ctrl + Shift + [`.<br>
+You can of course adjust these hotkeys to your liking in Preferences.
 - The Tab shortcuts can be found in Edit -> Editor Preferences -> Keyboard Shortcuts:<br>
 Type in the search bar "Focus Tab" and you should see the custom tab commands you can customize.
 
