@@ -1,9 +1,12 @@
 #include "UMTabNavigationManager.h"
+#include "Framework/Commands/UICommandInfo.h"
 #include "Templates/SharedPointer.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "UMHelpers.h"
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
+// #include "BlueprintEditor.h"
+// #include "Subsystems/AssetEditorSubsystem.h"
 
 /* Main window representation of the app.
  * All other windows are children of it. */
@@ -36,10 +39,12 @@ FUMTabNavigationManager::FUMTabNavigationManager()
 	AddMajorTabsNavigationCommandsToList(MainFrameContext); // Macros
 	MapTabCommands(CommandList, CommandInfoMajorTabs, true);
 
+	// Register Next & Previous Tab Navigation
+	RegisterNextPrevTabNavigation(MainFrameContext);
+	MapNextPrevTabNavigation(CommandList);
+
 	FCoreDelegates::OnPostEngineInit.AddRaw(
 		this, &FUMTabNavigationManager::RegisterSlateEvents);
-	// FCoreDelegates::OnAllModuleLoadingPhasesComplete.AddRaw(
-	// 	this, &FUMTabNavigationManager::RegisterSlateEvents);
 
 	// Debugging
 	// SetupFindTabWells(CommandList, MainFrameContext);
@@ -86,8 +91,27 @@ void FUMTabNavigationManager::MapTabCommands(const TSharedRef<FUICommandList>& C
 	{
 		CommandList->MapAction(CommandInfo[i],
 			FExecuteAction::CreateLambda(
-				[this, i, bIsMajorTab]() { OnMoveToTab(i, bIsMajorTab); }));
+				[this, i, bIsMajorTab]() { OnMoveToTabIndex(i, bIsMajorTab); }));
 	}
+}
+
+void FUMTabNavigationManager::MapNextPrevTabNavigation(const TSharedRef<FUICommandList>& CommandList)
+{
+	CommandList->MapAction(CmdInfoNextMajorTab,
+		FExecuteAction::CreateLambda(
+			[this]() { OnCycleTabs(true, true); }));
+
+	CommandList->MapAction(CmdInfoPrevMajorTab,
+		FExecuteAction::CreateLambda(
+			[this]() { OnCycleTabs(true, false); }));
+
+	CommandList->MapAction(CmdInfoNextMinorTab,
+		FExecuteAction::CreateLambda(
+			[this]() { OnCycleTabs(false, true); }));
+
+	CommandList->MapAction(CmdInfoPrevMinorTab,
+		FExecuteAction::CreateLambda(
+			[this]() { OnCycleTabs(false, false); }));
 }
 
 void FUMTabNavigationManager::OnActiveTabChanged(
@@ -102,38 +126,54 @@ void FUMTabNavigationManager::OnActiveTabChanged(
 		*PreviousActiveTab->GetTabLabel().ToString());
 
 	UE_LOG(LogUMTabNavigation, Log, TEXT("%s"), *LogTabs);
-	// FUMHelpers::NotifySuccess(FText::FromString(LogTabs));
+	FUMHelpers::NotifySuccess(FText::FromString(LogTabs), VisualLog);
 
-	CurrMinorTab = NewActiveTab;
-	NewActiveTab->GetParentWidget();
+	SetNewCurrentTab(NewActiveTab, false); // Set Minor Tab
 
-	if (const TSharedPtr<FTabManager> TabManager = NewActiveTab->GetTabManagerPtr())
+	if (const TSharedPtr<FTabManager> TabManager =
+			NewActiveTab->GetTabManagerPtr())
 	{
-		if (const TSharedPtr<SDockTab> MajorTab = FGlobalTabmanager::Get()->GetMajorTabForTabManager(TabManager.ToSharedRef()))
+		if (const TSharedPtr<SDockTab> MajorTab =
+				FGlobalTabmanager::Get()->GetMajorTabForTabManager(TabManager.ToSharedRef()))
 		{
-			CurrMajorTab = MajorTab;
-			// FUMHelpers::NotifySuccess(MajorTab->GetTabLabel());
+			SetNewCurrentTab(MajorTab, true);
+			// Interesting
+			// TabManager->GetPrivateApi().GetParentWindow();
 		}
 	}
 }
 
-void FUMTabNavigationManager::OnMoveToTab(int32 TabIndex, bool bIsMajorTab)
+bool FUMTabNavigationManager::ValidateTargetTab(TSharedPtr<SWidget>& OutTab, bool bIsMajorTab)
+{
+	if (bIsMajorTab && CurrMajorTab.IsValid())
+		OutTab = CurrMajorTab.Pin();
+
+	else if (!bIsMajorTab && CurrMinorTab.IsValid())
+		OutTab = CurrMinorTab.Pin();
+	else
+		return false;
+	return true;
+}
+
+bool FUMTabNavigationManager::GetParentTabWellFromTab(TSharedPtr<SWidget>& InOutTabWell)
+{
+	const TSharedPtr<SWidget>& ParentWidget = InOutTabWell->GetParentWidget();
+	if (!ParentWidget.IsValid())
+		return false;
+	else
+		InOutTabWell = ParentWidget;
+	return true;
+}
+
+void FUMTabNavigationManager::OnMoveToTabIndex(int32 TabIndex, bool bIsMajorTab)
 {
 	UE_LOG(LogUMTabNavigation, Display,
-		TEXT("OnMoveToTab, Tab Index: %d, bIsMajorTab: %d"),
+		TEXT("OnMoveToTabIndex, Tab Index: %d, bIsMajorTab: %d"),
 		TabIndex, bIsMajorTab);
 
-	TWeakPtr<SDockTab> TargetTab{ nullptr };
-	if (bIsMajorTab && CurrMajorTab.IsValid())
-		TargetTab = CurrMajorTab;
-	else if (!bIsMajorTab && CurrMinorTab.IsValid())
-		TargetTab = CurrMinorTab;
-	else
-		return;
-	const TSharedPtr<SWidget>& ParentWidget = TargetTab.Pin()->GetParentWidget();
-	if (!ParentWidget)
-		return;
-	FocusTab(ParentWidget, TabIndex);
+	TSharedPtr<SWidget> Tab = nullptr;
+	if (ValidateTargetTab(Tab, bIsMajorTab) && GetParentTabWellFromTab(Tab))
+		FocusTabIndex(Tab, TabIndex);
 
 	/**
 	 * Deprecated (Not needed with the new method, keeping for reference)
@@ -144,7 +184,7 @@ void FUMTabNavigationManager::OnMoveToTab(int32 TabIndex, bool bIsMajorTab)
 	// ActiveWindow->BringToFront();
 }
 
-void FUMTabNavigationManager::FocusTab(
+void FUMTabNavigationManager::FocusTabIndex(
 	const TSharedPtr<SWidget>& DockingTabWell, int32 TabIndex)
 {
 	FChildren* Tabs = DockingTabWell->GetChildren();
@@ -163,6 +203,58 @@ void FUMTabNavigationManager::FocusTab(
 	}
 }
 
+void FUMTabNavigationManager::OnCycleTabs(bool bIsMajorTab, bool bIsNextTab)
+{
+	TSharedPtr<SWidget> TargetTab = nullptr;
+	if (!ValidateTargetTab(TargetTab, bIsMajorTab))
+		return;
+	TSharedPtr<SWidget> TabWell = TargetTab;
+	if (!GetParentTabWellFromTab(TabWell))
+		return;
+	FChildren* Tabs = TabWell->GetChildren();
+	if (!Tabs || Tabs->Num() == 0)
+		return;
+
+	int32		CurrIndex = INDEX_NONE;
+	const int32 TNum = Tabs->Num();
+
+	const auto DockTarget = StaticCastSharedPtr<SDockTab>(TargetTab);
+	UE_LOG(LogUMTabNavigation, Display, TEXT("DockTarget Tab Label: %s"), *DockTarget->GetTabLabel().ToString());
+
+	for (int32 i = 0; i < TNum; ++i)
+	{
+		auto Dock = StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(i));
+		if (Dock->IsForeground())
+		{
+			CurrIndex = i;
+			UE_LOG(LogUMTabNavigation, Display, TEXT("Current Active Tab Index: %d"), i);
+			break;
+		}
+	}
+
+	if (CurrIndex == INDEX_NONE)
+		return;
+
+	CurrIndex = bIsNextTab ? (CurrIndex + 1) % TNum : (CurrIndex - 1 + TNum) % TNum;
+
+	TSharedPtr<SDockTab> DockTab = StaticCastSharedRef<SDockTab>(
+		Tabs->GetChildAt(CurrIndex));
+	if (DockTab.IsValid())
+	{
+		// None of these methods will actually trigger the:
+		// "On Focus" / "Tab Changed" delegates :(
+		DockTab->ActivateInParent(ETabActivationCause::SetDirectly);
+		// DockTab->ActivateInParent(ETabActivationCause::UserClickedOnTab);
+		// DockTab->DrawAttention();
+
+		// When switching between major tabs, for some reason they won't
+		// register our Delegate for tracking current tabs. Thus we need
+		// to set this manually.
+		if (bIsMajorTab)
+			SetNewCurrentTab(DockTab, true);
+	}
+}
+
 //** Deprecated *//
 bool FUMTabNavigationManager::GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNonMajorTab)
 {
@@ -177,31 +269,26 @@ bool FUMTabNavigationManager::GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNo
 	return false;
 }
 
-//** Deprecated *//
 bool FUMTabNavigationManager::GetActiveMajorTab(TWeakPtr<SDockTab>& OutMajorTab)
 {
-	if (FSlateApplication::IsInitialized())
+	if (!CurrWin.IsValid())
+		CurrWin = FSlateApplication::Get().GetActiveTopLevelWindow();
+	TWeakPtr<SWidget> FoundWidget;
+	if (!TraverseWidgetTree(CurrWin.Pin(), FoundWidget, "SDockingTabWell", 1))
+		return false;
+
+	if (FChildren* Tabs = FoundWidget.Pin()->GetChildren())
 	{
-		FSlateApplication& App = FSlateApplication::Get();
-		if (const TSharedPtr<SWindow>& Win = App.GetActiveTopLevelWindow())
+		for (int32 i{ 0 }; i < Tabs->Num(); ++i)
 		{
-			TWeakPtr<SWidget> FoundWidget;
-			if (TraverseWidgetTree(Win, FoundWidget, "SDockingTabWell", 1))
+			if (Tabs->GetChildAt(i)->GetTypeAsString() == "SDockTab")
 			{
-				if (FChildren* Tabs = FoundWidget.Pin()->GetChildren())
+				TSharedRef<SDockTab> Tab =
+					StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(i));
+				if (Tab->IsForeground())
 				{
-					for (int32 i{ 0 }; i < Tabs->Num(); ++i)
-					{
-						if (Tabs->GetChildAt(i)->GetTypeAsString() == "SDockTab")
-						{
-							TSharedRef<SDockTab> Tab = StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(i));
-							if (Tab->IsForeground())
-							{
-								OutMajorTab = Tab.ToWeakPtr();
-								return true;
-							}
-						}
-					}
+					OutMajorTab = Tab.ToWeakPtr();
+					return true;
 				}
 			}
 		}
@@ -322,10 +409,10 @@ void FUMTabNavigationManager::DebugWindow(const SWindow& Window)
 	switch (Window.GetType())
 	{
 		case (EWindowType::Normal):
-			FUMHelpers::NotifySuccess(Window.GetTitle());
+			FUMHelpers::NotifySuccess(Window.GetTitle(), VisualLog);
 			break;
 		case (EWindowType::GameWindow):
-			FUMHelpers::NotifySuccess(Window.GetTitle());
+			FUMHelpers::NotifySuccess(Window.GetTitle(), VisualLog);
 			break;
 		default:
 			break;
@@ -341,36 +428,87 @@ void FUMTabNavigationManager::RegisterSlateEvents()
 	GTM->OnActiveTabChanged_Subscribe(
 		FOnActiveTabChanged::FDelegate::CreateRaw(this, &FUMTabNavigationManager::OnActiveTabChanged));
 
-	// FSlateApplication& SlateApp = FSlateApplication::Get();
+	FSlateApplication& SlateApp = FSlateApplication::Get();
 
 	// SlateApp.OnWindowBeingDestroyed().AddRaw(this, &FUMTabNavigationManager::DebugWindow);
 
 	// Useful
-	// SlateApp.OnFocusChanging()
-	// 	.AddRaw(this, &FUMTabNavigationManager::CheckMovedToNewWindow);
+	SlateApp.OnFocusChanging()
+		.AddRaw(this, &FUMTabNavigationManager::OnFocusChanged);
+
+	// SlateApp.OnApplicationMousePreInputButtonDownListener()
+	// 	.AddRaw(this, &FUMTabNavigationManager::OnMouseButtonDown);
 }
 
-void FUMTabNavigationManager::CheckMovedToNewWindow(
+void FUMTabNavigationManager::OnMouseButtonDown(const FPointerEvent& PointerEvent)
+{
+	FUMHelpers::NotifySuccess(FText::FromString("On Mouse Button Down!"), VisualLog);
+	CheckHasMovedToNewWinAndSetTab();
+}
+
+void FUMTabNavigationManager::OnFocusChanged(
 	const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
 	const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
-	const TSharedPtr<SWindow>& Win = FSlateApplication::Get().GetActiveTopLevelWindow();
-	if (!Win.IsValid())
-		return;
+	CheckHasMovedToNewWinAndSetTab();
+}
 
-	if (!CurrWin.IsValid() || Win->GetId() != CurrWin.Pin()->GetId())
+void FUMTabNavigationManager::CheckHasMovedToNewWinAndSetTab()
+{
+	if (HasUserMovedToNewWindow())
 	{
-		CurrWin = Win;
-		FUMHelpers::NotifySuccess(FText::FromString(TEXT("New Window!")));
+		// This conditional won't work all the time, sadly. For exmaple when a modal window is up. We maybe can try to see activation time?
+		// if (!CurrMajorTab.IsValid() || !CurrMajorTab.Pin()->IsForeground())
+		// {
+		TWeakPtr<SDockTab> NewMajorTab = nullptr;
+		if (GetActiveMajorTab(NewMajorTab))
+		{
+			SetNewCurrentTab(NewMajorTab.Pin(), true);
+			return;
+		}
+		// }
+	}
+}
+
+void FUMTabNavigationManager::SetNewCurrentTab(const TSharedPtr<SDockTab>& NewTab, bool bIsMajorTab)
+{
+	if (!NewTab.IsValid())
+	{
+		UE_LOG(LogUMTabNavigation, Warning, TEXT("Attempted to set invalid tab as current"));
+		return;
+	}
+	if (bIsMajorTab)
+	{
+		FString PrevLabel = CurrMajorTab.IsValid() ? CurrMajorTab.Pin()->GetTabLabel().ToString() : TEXT("None");
+		CurrMajorTab = NewTab;
+		UE_LOG(LogUMTabNavigation, Log, TEXT("Set new major tab - Previous: %s, New: %s"),
+			*PrevLabel, *NewTab->GetTabLabel().ToString());
+		return;
 	}
 
-	// Alt:
-	// if (!NewWidget)
-	// 	return;
-	// TSharedPtr<SWindow> SWindowPtr = FSlateApplication::Get().FindWidgetWindow(NewWidget.ToSharedRef());
-	// if (SWindowPtr)
-	// 	FUMHelpers::NotifySuccess(SWindowPtr->GetTitle());
+	FString PrevLabel = CurrMinorTab.IsValid() ? CurrMinorTab.Pin()->GetTabLabel().ToString() : TEXT("None");
+	CurrMinorTab = NewTab;
+	UE_LOG(LogUMTabNavigation, Log, TEXT("Set new minor tab - Previous: %s, New: %s"),
+		*PrevLabel, *NewTab->GetTabLabel().ToString());
+	return;
+}
+
+bool FUMTabNavigationManager::HasUserMovedToNewWindow(bool bSetNewWindow)
+{
+	if (const TSharedPtr<SWindow>& Win =
+			FSlateApplication::Get().GetActiveTopLevelWindow())
+	{
+
+		if (!CurrWin.IsValid() || Win->GetId() != CurrWin.Pin()->GetId())
+		{
+			if (bSetNewWindow)
+				CurrWin = Win;
+			FUMHelpers::NotifySuccess(FText::FromString(TEXT("New Window!")), VisualLog);
+			return true;
+		}
+	}
+	return false;
 }
 
 bool FUMTabNavigationManager::TraverseWidgetTree(
@@ -460,6 +598,31 @@ bool FUMTabNavigationManager::TraverseWidgetTree(
 	}
 
 	return false;
+}
+
+void FUMTabNavigationManager::RegisterNextPrevTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext)
+{
+	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoNextMajorTab,
+		"MoveToNextMajorTab", "Focus the next major tab",
+		"Moves to the next major tab",
+		EUserInterfaceActionType::Button,
+		FInputChord(EModifierKey::Control, EKeys::RightBracket));
+
+	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoPrevMajorTab,
+		"MoveToPreviousMajorTab", "Focus the previous major tab",
+		"Moves to the previous major tab",
+		EUserInterfaceActionType::Button,
+		FInputChord(EModifierKey::Control, EKeys::LeftBracket));
+
+	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoNextMinorTab,
+		"MoveToNextMinorTab", "Focus the next minor tab",
+		"Moves to the next minor tab",
+		EUserInterfaceActionType::Button, FInputChord(EModifierKey::FromBools(true, false, true, false), EKeys::RightBracket));
+
+	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoPrevMinorTab,
+		"MoveToPreviousMinorTab", "Focus the previous minor tab",
+		"Moves to the previous minor tab",
+		EUserInterfaceActionType::Button, FInputChord(EModifierKey::FromBools(true, false, true, false), EKeys::LeftBracket));
 }
 
 /**

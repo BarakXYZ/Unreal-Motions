@@ -68,14 +68,26 @@ public:
 	 * @param TabIndex Index of tab to focus (1-based, 0 selects last tab)
 	 * @see MapTabCommands For the keybinding configuration
 	 */
-	void OnMoveToTab(int32 TabIndex, bool bIsMajorTab);
+	void OnMoveToTabIndex(int32 TabIndex, bool bIsMajorTab);
+
+	void OnCycleTabs(bool bIsMajorTab, bool bIsNextTab);
+
+	bool ValidateTargetTab(TSharedPtr<SWidget>& OutTab, bool bIsMajorTab);
+
+	bool GetParentTabWellFromTab(TSharedPtr<SWidget>& InOutTabWell);
+
+	void RegisterNextPrevTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
+
+	void MapNextPrevTabNavigation(const TSharedRef<FUICommandList>& CommandList);
+
+	void OnMouseButtonDown(const FPointerEvent& PointerEvent);
 
 	/**
 	 * Activates a specific tab within a SDockingTabWell widget.
 	 * @param DockingTabWell The tab well containing the tabs
 	 * @param TabIndex Index of tab to focus (1-based, 0 selects last tab)
 	 */
-	void FocusTab(const TSharedPtr<SWidget>& DockingTabWell, int32 TabIndex);
+	void FocusTabIndex(const TSharedPtr<SWidget>& DockingTabWell, int32 TabIndex);
 
 	/**
 	 * Recursively searches a widget tree for a SDockingTabWell widget.
@@ -107,7 +119,6 @@ public:
 		const FString&			   TargetType,
 		int32					   Depth = 0);
 
-
 	// ** Not used currently */
 	void SetupFindTabWells(TSharedRef<FUICommandList>& CommandList,
 		TSharedPtr<FBindingContext>					   MainFrameContext);
@@ -138,10 +149,14 @@ public:
 	void DebugWindow(const SWindow& Window);
 
 	// ** Not used currently */
-	void CheckMovedToNewWindow(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath, const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath, const TSharedPtr<SWidget>& NewWidget);
+	void OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath, const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath, const TSharedPtr<SWidget>& NewWidget);
 
 	// ** Not used currently */
-	void OnUserMovedToNewWindow();
+	bool HasUserMovedToNewWindow(bool bSetNewWindow = true);
+
+	void SetNewCurrentTab(const TSharedPtr<SDockTab>& NewTab, bool bIsMajorTab);
+
+	void CheckHasMovedToNewWinAndSetTab();
 
 public:
 	/**
@@ -162,6 +177,11 @@ public:
 		nullptr, nullptr, nullptr, nullptr, nullptr
 	};
 
+	TSharedPtr<FUICommandInfo> CmdInfoNextMajorTab = nullptr;
+	TSharedPtr<FUICommandInfo> CmdInfoPrevMajorTab = nullptr;
+	TSharedPtr<FUICommandInfo> CmdInfoNextMinorTab = nullptr;
+	TSharedPtr<FUICommandInfo> CmdInfoPrevMinorTab = nullptr;
+
 	TSharedPtr<FUICommandInfo> CmdInfoFindAllTabWells{ nullptr };
 	TArray<TWeakPtr<SWidget>>  EditorTabWells;
 	FOnActiveTabChanged		   OnActiveTabChanged(FOnActiveTabChanged::FDelegate);
@@ -171,4 +191,6 @@ public:
 	TWeakPtr<SWindow>		   CurrWin{ nullptr };
 	TWeakPtr<SDockTab>		   CurrMajorTab{ nullptr };
 	TWeakPtr<SDockTab>		   CurrMinorTab{ nullptr };
+
+	bool VisualLog{ false };
 };
