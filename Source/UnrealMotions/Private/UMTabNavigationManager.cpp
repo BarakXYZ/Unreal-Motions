@@ -132,19 +132,22 @@ void FUMTabNavigationManager::OnTabForegrounded(
 	UE_LOG(LogUMTabNavigation, Log, TEXT("%s"), *LogTabs);
 	FUMHelpers::NotifySuccess(FText::FromString(LogTabs), VisualLog);
 
+	// This should not be called here!
+	// Cause a bug of Major / Minor tabs misplace.
 	// SetNewCurrentTab(NewActiveTab, false); // Set Minor Tab
 
-	// if (const TSharedPtr<FTabManager> TabManager =
-	// 		NewActiveTab->GetTabManagerPtr())
-	// {
-	// 	if (const TSharedPtr<SDockTab> MajorTab =
-	// 			FGlobalTabmanager::Get()->GetMajorTabForTabManager(TabManager.ToSharedRef()))
-	// 	{
-	// 		SetNewCurrentTab(MajorTab, true);
-	// 		// Interesting
-	// 		// TabManager->GetPrivateApi().GetParentWindow();
-	// 	}
-	// }
+	// TODO: Debug if this calls something useful at all.
+	if (const TSharedPtr<FTabManager> TabManager =
+			NewActiveTab->GetTabManagerPtr())
+	{
+		if (const TSharedPtr<SDockTab> MajorTab =
+				FGlobalTabmanager::Get()->GetMajorTabForTabManager(TabManager.ToSharedRef()))
+		{
+			SetNewCurrentTab(MajorTab, true);
+			// Interesting
+			// TabManager->GetPrivateApi().GetParentWindow();
+		}
+	}
 }
 
 void FUMTabNavigationManager::OnActiveTabChanged(
@@ -459,13 +462,14 @@ void FUMTabNavigationManager::RegisterSlateEvents()
 {
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 	GTM->OnActiveTabChanged_Subscribe(
-		FOnActiveTabChanged::FDelegate::CreateRaw(this, &FUMTabNavigationManager::OnActiveTabChanged));
+		FOnActiveTabChanged::FDelegate::CreateRaw(
+			this, &FUMTabNavigationManager::OnActiveTabChanged));
 
 	// This seems to trigger in some cases where OnActiveTabChanged won't.
 	// Keeping this as a double check.
-	// TODO: We can use this, but need to check why it's messing up things with minor tabs.
-	// GTM->OnTabForegrounded_Subscribe(
-	// 	FOnActiveTabChanged::FDelegate::CreateRaw(this, &FUMTabNavigationManager::OnActiveTabChanged));
+	GTM->OnTabForegrounded_Subscribe(
+		FOnActiveTabChanged::FDelegate::CreateRaw(
+			this, &FUMTabNavigationManager::OnTabForegrounded));
 
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 
