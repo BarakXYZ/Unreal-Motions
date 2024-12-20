@@ -34,6 +34,6 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	EUMHelpersLogMethod UMHelpersLogMethod = EUMHelpersLogMethod::PrintToScreen;
 	FDelegateHandle		PreInputKeyDownDelegateHandle;
 	EVimMode			VimMode = EVimMode::Insert;
-	bool				bVisualLog = true;
-	bool				bConsoleLog = true;
+	bool				bVisualLog = false;
+	bool				bConsoleLog = false;
 };
