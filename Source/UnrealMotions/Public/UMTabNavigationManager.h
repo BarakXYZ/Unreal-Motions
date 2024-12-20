@@ -57,6 +57,8 @@ public:
 
 	void OnActiveTabChanged(TSharedPtr<SDockTab> PreviousActiveTab, TSharedPtr<SDockTab> NewActiveTab);
 
+	void OnTabForegrounded(TSharedPtr<SDockTab> PreviousActiveTab, TSharedPtr<SDockTab> NewActiveTab);
+
 	/**
 	 * Bind to FSlateApplication delegates PostEngineInit.
 	 * This is where we will register our Tab Tracking mechanism and such.

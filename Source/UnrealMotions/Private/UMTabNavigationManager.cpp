@@ -118,6 +118,35 @@ void FUMTabNavigationManager::MapNextPrevTabNavigation(const TSharedRef<FUIComma
 		EUIActionRepeatMode::RepeatEnabled);
 }
 
+void FUMTabNavigationManager::OnTabForegrounded(
+	TSharedPtr<SDockTab> PreviousActiveTab, TSharedPtr<SDockTab> NewActiveTab)
+{
+	if (!NewActiveTab.IsValid() || !PreviousActiveTab.IsValid())
+		return;
+
+	const FString& LogTabs = FString::Printf(
+		TEXT("Tab Foregrounded: %s Previous Active Tab: %s"),
+		*NewActiveTab->GetTabLabel().ToString(),
+		*PreviousActiveTab->GetTabLabel().ToString());
+
+	UE_LOG(LogUMTabNavigation, Log, TEXT("%s"), *LogTabs);
+	FUMHelpers::NotifySuccess(FText::FromString(LogTabs), VisualLog);
+
+	// SetNewCurrentTab(NewActiveTab, false); // Set Minor Tab
+
+	// if (const TSharedPtr<FTabManager> TabManager =
+	// 		NewActiveTab->GetTabManagerPtr())
+	// {
+	// 	if (const TSharedPtr<SDockTab> MajorTab =
+	// 			FGlobalTabmanager::Get()->GetMajorTabForTabManager(TabManager.ToSharedRef()))
+	// 	{
+	// 		SetNewCurrentTab(MajorTab, true);
+	// 		// Interesting
+	// 		// TabManager->GetPrivateApi().GetParentWindow();
+	// 	}
+	// }
+}
+
 void FUMTabNavigationManager::OnActiveTabChanged(
 	TSharedPtr<SDockTab> PreviousActiveTab, TSharedPtr<SDockTab> NewActiveTab)
 {
@@ -434,8 +463,9 @@ void FUMTabNavigationManager::RegisterSlateEvents()
 
 	// This seems to trigger in some cases where OnActiveTabChanged won't.
 	// Keeping this as a double check.
-	GTM->OnTabForegrounded_Subscribe(
-		FOnActiveTabChanged::FDelegate::CreateRaw(this, &FUMTabNavigationManager::OnActiveTabChanged));
+	// TODO: We can use this, but need to check why it's messing up things with minor tabs.
+	// GTM->OnTabForegrounded_Subscribe(
+	// 	FOnActiveTabChanged::FDelegate::CreateRaw(this, &FUMTabNavigationManager::OnActiveTabChanged));
 
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 
