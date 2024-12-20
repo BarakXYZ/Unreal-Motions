@@ -12,8 +12,8 @@
  * All other windows are children of it. */
 #include "Interfaces/IMainFrameModule.h"
 
-// DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigation, NoLogging, All); // Prod
-DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigation, Log, All); // Dev
+DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigation, NoLogging, All); // Prod
+// DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigation, Log, All); // Dev
 
 #define LOCTEXT_NAMESPACE "UMTabNavigationManager"
 
@@ -99,19 +99,23 @@ void FUMTabNavigationManager::MapNextPrevTabNavigation(const TSharedRef<FUIComma
 {
 	CommandList->MapAction(CmdInfoNextMajorTab,
 		FExecuteAction::CreateLambda(
-			[this]() { OnCycleTabs(true, true); }));
+			[this]() { OnCycleTabs(true, true); }),
+		EUIActionRepeatMode::RepeatEnabled);
 
 	CommandList->MapAction(CmdInfoPrevMajorTab,
 		FExecuteAction::CreateLambda(
-			[this]() { OnCycleTabs(true, false); }));
+			[this]() { OnCycleTabs(true, false); }),
+		EUIActionRepeatMode::RepeatEnabled);
 
 	CommandList->MapAction(CmdInfoNextMinorTab,
 		FExecuteAction::CreateLambda(
-			[this]() { OnCycleTabs(false, true); }));
+			[this]() { OnCycleTabs(false, true); }),
+		EUIActionRepeatMode::RepeatEnabled);
 
 	CommandList->MapAction(CmdInfoPrevMinorTab,
 		FExecuteAction::CreateLambda(
-			[this]() { OnCycleTabs(false, false); }));
+			[this]() { OnCycleTabs(false, false); }),
+		EUIActionRepeatMode::RepeatEnabled);
 }
 
 void FUMTabNavigationManager::OnActiveTabChanged(
@@ -269,6 +273,7 @@ bool FUMTabNavigationManager::GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNo
 	return false;
 }
 
+// TODO: Try to refine this method
 bool FUMTabNavigationManager::GetActiveMajorTab(TWeakPtr<SDockTab>& OutMajorTab)
 {
 	if (!CurrWin.IsValid())
@@ -423,21 +428,29 @@ void FUMTabNavigationManager::DebugWindow(const SWindow& Window)
 
 void FUMTabNavigationManager::RegisterSlateEvents()
 {
-	// Currently used!
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 	GTM->OnActiveTabChanged_Subscribe(
 		FOnActiveTabChanged::FDelegate::CreateRaw(this, &FUMTabNavigationManager::OnActiveTabChanged));
 
+	// This seems to trigger in some cases where OnActiveTabChanged won't.
+	// Keeping this as a double check.
+	GTM->OnTabForegrounded_Subscribe(
+		FOnActiveTabChanged::FDelegate::CreateRaw(this, &FUMTabNavigationManager::OnActiveTabChanged));
+
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 
-	// SlateApp.OnWindowBeingDestroyed().AddRaw(this, &FUMTabNavigationManager::DebugWindow);
-
-	// Useful
+	// Useful because sometimes we will jump between windows without the
+	// TabManager Delegates being called. So this is an additional way to
+	// keep track of the currently active tabs.
 	SlateApp.OnFocusChanging()
 		.AddRaw(this, &FUMTabNavigationManager::OnFocusChanged);
 
+	// Even more accurate but might be an overkill
 	// SlateApp.OnApplicationMousePreInputButtonDownListener()
 	// 	.AddRaw(this, &FUMTabNavigationManager::OnMouseButtonDown);
+
+	// Might be useful later
+	// SlateApp.OnWindowBeingDestroyed().AddRaw(this, &FUMTabNavigationManager::DebugWindow);
 }
 
 void FUMTabNavigationManager::OnMouseButtonDown(const FPointerEvent& PointerEvent)
