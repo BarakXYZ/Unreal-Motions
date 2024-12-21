@@ -43,6 +43,8 @@ public class UnrealMotions : ModuleRules
 				"Blutility",
 				"EditorSubsystem",
 				"Kismet",
+				"UMG",
+				// "Core",
 				// "LevelEditor",
 				// ... add private dependencies that you statically link with here ...	
 			}

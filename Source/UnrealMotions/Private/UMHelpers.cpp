@@ -10,9 +10,9 @@ FConfigFile	  FUMHelpers::ConfigFile;
 void FUMHelpers::NotifySuccess(
 	const FText&   NotificationText,
 	const bool	   Log,
+	const float	   Lifetime,
 	const FString& HyperlinkURL,
-	const FText&   HyperlinkText,
-	const float	   Lifetime)
+	const FText&   HyperlinkText)
 {
 	if (Log)
 	{

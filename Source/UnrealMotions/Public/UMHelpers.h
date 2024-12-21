@@ -18,9 +18,9 @@ public:
 	static void NotifySuccess(
 		const FText&   NotificationText = FText::GetEmpty(),
 		const bool	   Log = true,
+		const float	   Lifetime = 3.0f,
 		const FString& HyperlinkURL = FString(),
-		const FText&   HyperlinkText = FText::GetEmpty(),
-		const float	   Lifetime = 3.0f);
+		const FText&   HyperlinkText = FText::GetEmpty());
 
 	/**
 	 * Print debug message to screen or console. You can assign a UMHelpersLogMethod in order to control debugging visibility and

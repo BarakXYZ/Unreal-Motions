@@ -17,6 +17,8 @@ public:
 	FUMTabNavigationManager();
 	~FUMTabNavigationManager();
 
+	static FUMTabNavigationManager& Get();
+
 	/**
 	 * Initializes keyboard shortcuts for tab navigation (number keys 0-9).
 	 * @param bCtrl Use Control modifier (default: true)
@@ -55,12 +57,28 @@ public:
 	 */
 	void MapTabCommands(const TSharedRef<FUICommandList>& CommandList, const TArray<TSharedPtr<FUICommandInfo>>& CommandInfo, bool bIsMajorTab);
 
-	void OnActiveTabChanged(TSharedPtr<SDockTab> PreviousActiveTab, TSharedPtr<SDockTab> NewActiveTab);
-
-	void OnTabForegrounded(TSharedPtr<SDockTab> PreviousActiveTab, TSharedPtr<SDockTab> NewActiveTab);
+	/**
+	 * Being called when a new Minor Tab is being activated.
+	 * Major tabs can also be deduced from this by fetching the TabManagerPtr
+	 * and ->GetActiveMajorTab
+	 * @param PrevActiveTab the currently set, old tab.
+	 * @param NewActiveTab the newly to be set tab.
+	 * @note Unreal incorrectly passes the internal delegate params in an inverted order. I've countered it with flipping the values again to compensate.
+	 */
+	void OnActiveTabChanged(TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
 
 	/**
-	 * Bind to FSlateApplication delegates PostEngineInit.
+	 * Being called when a new Minor or Major Tab is being foregrounded.
+	 * We're using it as a second layer backup for setting the Major Tab
+	 * in cases where OnActiveTabChanged won't be invoked.
+	 * @param NewActiveTab the newly to be set tab.
+	 * @param PrevActiveTab the currently set, old tab.
+	 * @note In this case, Unreal passes the delegate params in the correctly documented order. So we keep it as is (firstly new tab, then old tab).
+	 */
+	void OnTabForegrounded(TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
+
+	/**
+	 * Called after FSlateApplication delegates PostEngineInit.
 	 * This is where we will register our Tab Tracking mechanism and such.
 	 */
 	void RegisterSlateEvents();
@@ -68,19 +86,44 @@ public:
 	/**
 	 * Command handler to focus a specific tab in the active window's tab well.
 	 * @param TabIndex Index of tab to focus (1-based, 0 selects last tab)
+	 * @param bIsMajorTab Dictates if we should move to a major or minor tab.
 	 * @see MapTabCommands For the keybinding configuration
 	 */
-	void OnMoveToTabIndex(int32 TabIndex, bool bIsMajorTab);
+	void MoveToTabIndex(int32 TabIndex, bool bIsMajorTab);
 
-	void OnCycleTabs(bool bIsMajorTab, bool bIsNextTab);
+	/**
+	 * Cycles between tabs back and forth. Hotkeys can be held to continuously
+	 * move between tabs repeatedly.
+	 * @param bIsMajorTab Dictates if we should move to a major or minor tab.
+	 * @param bIsNextTab Dictates if we should move to the next or previous tab.
+	 */
+	void CycleTabs(bool bIsMajorTab, bool bIsNextTab);
 
+	void CycleWindows(bool bIsNextWindow);
+
+	/**
+	 * Validates and sets the targeted tab (OutTab) to either the currently
+	 * set Major Tab or currently set Minor Tab.
+	 * @param OutTab Where the targeted tab will be stored at.
+	 * @param bIsMajorTab Dictates if we should move to a major or minor tab.
+	 */
 	bool ValidateTargetTab(TSharedPtr<SWidget>& OutTab, bool bIsMajorTab);
 
-	bool GetParentTabWellFromTab(TSharedPtr<SWidget>& InOutTabWell);
+	/**
+	 * Validates that the parent wiget for the targeted tab is valid and is
+	 * indeed a SDockingTabWell. Return false otherwise.
+	 * @param InOutTabWell Serves as both the SDockingTab from which we will get the parent, and where we will store the SDockingTabWell.
+	 */
+	bool GetParentTabWellFromTab(
+		const TSharedPtr<SWidget>& Tab, TSharedPtr<SWidget>& TabWell);
 
-	void RegisterNextPrevTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
+	void RegisterCycleTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
+
+	void RegisterCycleWindowNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
 
 	void MapNextPrevTabNavigation(const TSharedRef<FUICommandList>& CommandList);
+
+	void MapCycleWindowNavigation(const TSharedRef<FUICommandList>& CommandList);
 
 	void OnMouseButtonDown(const FPointerEvent& PointerEvent);
 
@@ -128,8 +171,14 @@ public:
 	// ** Not used currently */
 	void FindAllTabWells();
 
-	// ** Not used currently */
-	void DebugTab(const TSharedPtr<SDockTab>& Tab);
+	/**
+	 * Debug tab properties, Role vs. Visual Role, Id, Title, etc.
+	 * @param Tab Target tab to debug.
+	 * @param bDebugVisualTabRole Should we debug the visual or non-visual role.
+	 * @param DelegateType From where this debug is being called (e.g. OnTabForegrounded, OnActiveTabChanged)
+	 */
+	void DebugTab(const TSharedPtr<SDockTab>& Tab,
+		bool bDebugVisualTabRole, FString DelegateType);
 
 	// ** Not used currently */
 	ENavSpecTabType GetNavigationSpecificTabType(const TSharedPtr<SDockTab>& Tab);
@@ -161,6 +210,7 @@ public:
 	void CheckHasMovedToNewWinAndSetTab();
 
 public:
+	static TSharedPtr<FUMTabNavigationManager> TabNavigationManager;
 	/**
 	 * Mentioned in editor preferences as "System-wide" category
 	 * Another option is MainFrame
@@ -179,10 +229,13 @@ public:
 		nullptr, nullptr, nullptr, nullptr, nullptr
 	};
 
-	TSharedPtr<FUICommandInfo> CmdInfoNextMajorTab = nullptr;
-	TSharedPtr<FUICommandInfo> CmdInfoPrevMajorTab = nullptr;
-	TSharedPtr<FUICommandInfo> CmdInfoNextMinorTab = nullptr;
-	TSharedPtr<FUICommandInfo> CmdInfoPrevMinorTab = nullptr;
+	TSharedPtr<FUICommandInfo> CmdInfoNextMajorTab{ nullptr };
+	TSharedPtr<FUICommandInfo> CmdInfoPrevMajorTab{ nullptr };
+	TSharedPtr<FUICommandInfo> CmdInfoNextMinorTab{ nullptr };
+	TSharedPtr<FUICommandInfo> CmdInfoPrevMinorTab{ nullptr };
+
+	TSharedPtr<FUICommandInfo> CmdInfoCycleNextWindow{ nullptr };
+	TSharedPtr<FUICommandInfo> CmdInfoCyclePrevWindow{ nullptr };
 
 	TSharedPtr<FUICommandInfo> CmdInfoFindAllTabWells{ nullptr };
 	TArray<TWeakPtr<SWidget>>  EditorTabWells;
@@ -193,6 +246,8 @@ public:
 	TWeakPtr<SWindow>		   CurrWin{ nullptr };
 	TWeakPtr<SDockTab>		   CurrMajorTab{ nullptr };
 	TWeakPtr<SDockTab>		   CurrMinorTab{ nullptr };
+
+	TMap<uint64, TWeakPtr<SWindow>> TrackedWindows;
 
 	bool VisualLog{ false };
 };
