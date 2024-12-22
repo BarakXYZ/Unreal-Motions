@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Docking/TabManager.h"
+#include "UnrealMotions.h"
 
 enum ENavSpecTabType : uint8
 {
@@ -11,13 +12,15 @@ enum ENavSpecTabType : uint8
 	None,
 };
 
-class FUMTabNavigationManager
+class FUMTabsNavigationManager
 {
 public:
-	FUMTabNavigationManager();
-	~FUMTabNavigationManager();
+	FUMTabsNavigationManager();
+	~FUMTabsNavigationManager();
 
-	static FUMTabNavigationManager& Get();
+	static FUMTabsNavigationManager& Get();
+
+	static bool IsInitialized();
 
 	/**
 	 * Initializes keyboard shortcuts for tab navigation (number keys 0-9).
@@ -99,8 +102,6 @@ public:
 	 */
 	void CycleTabs(bool bIsMajorTab, bool bIsNextTab);
 
-	void CycleWindows(bool bIsNextWindow);
-
 	/**
 	 * Validates and sets the targeted tab (OutTab) to either the currently
 	 * set Major Tab or currently set Minor Tab.
@@ -119,11 +120,7 @@ public:
 
 	void RegisterCycleTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
 
-	void RegisterCycleWindowNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
-
 	void MapNextPrevTabNavigation(const TSharedRef<FUICommandList>& CommandList);
-
-	void MapCycleWindowNavigation(const TSharedRef<FUICommandList>& CommandList);
 
 	void OnMouseButtonDown(const FPointerEvent& PointerEvent);
 
@@ -196,21 +193,17 @@ public:
 	// ** Not used currently */
 	bool FindRootTargetWidgetName(FString& OutRootWidgetName);
 
-	// ** Not used currently */
-	void DebugWindow(const SWindow& Window);
-
-	// ** Not used currently */
 	void OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath, const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath, const TSharedPtr<SWidget>& NewWidget);
-
-	// ** Not used currently */
-	bool HasUserMovedToNewWindow(bool bSetNewWindow = true);
 
 	void SetNewCurrentTab(const TSharedPtr<SDockTab>& NewTab, bool bIsMajorTab);
 
-	void CheckHasMovedToNewWinAndSetTab();
+	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
+
+private:
+	static TSharedPtr<FUMTabsNavigationManager> TabsNavigationManager;
+	FUMOnUserMovedToNewTab						OnUserMovedToNewTab;
 
 public:
-	static TSharedPtr<FUMTabNavigationManager> TabNavigationManager;
 	/**
 	 * Mentioned in editor preferences as "System-wide" category
 	 * Another option is MainFrame
@@ -234,20 +227,15 @@ public:
 	TSharedPtr<FUICommandInfo> CmdInfoNextMinorTab{ nullptr };
 	TSharedPtr<FUICommandInfo> CmdInfoPrevMinorTab{ nullptr };
 
-	TSharedPtr<FUICommandInfo> CmdInfoCycleNextWindow{ nullptr };
-	TSharedPtr<FUICommandInfo> CmdInfoCyclePrevWindow{ nullptr };
-
 	TSharedPtr<FUICommandInfo> CmdInfoFindAllTabWells{ nullptr };
 	TArray<TWeakPtr<SWidget>>  EditorTabWells;
 	FOnActiveTabChanged		   OnActiveTabChanged(FOnActiveTabChanged::FDelegate);
 	const FString			   SDTabWell{ "SDockingTabWell" };
 	const FString			   SToolkit{ "SStandaloneAssetEditorToolkitHost" };
 	const FString			   SLvlEditor{ "SLevelEditor" };
-	TWeakPtr<SWindow>		   CurrWin{ nullptr };
+	TWeakPtr<SWindow>		   CurrWin{ nullptr }; // User for getting Maj Tab
 	TWeakPtr<SDockTab>		   CurrMajorTab{ nullptr };
 	TWeakPtr<SDockTab>		   CurrMinorTab{ nullptr };
-
-	TMap<uint64, TWeakPtr<SWindow>> TrackedWindows;
 
 	bool VisualLog{ false };
 };

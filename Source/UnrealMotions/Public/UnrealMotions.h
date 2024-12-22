@@ -1,9 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Widgets/SWindow.h"
+#include "Widgets/Docking/SDockTab.h"
 #include "Modules/ModuleManager.h"
-#include "UMGraphNavigationManager.h"
-#include "UMTabNavigationManager.h"
+
+DECLARE_MULTICAST_DELEGATE_OneParam(FUMOnUserMovedToNewWindow, TWeakPtr<SWindow>);
+DECLARE_MULTICAST_DELEGATE_OneParam(FUMOnUserMovedToNewTab, TWeakPtr<SDockTab>);
 
 class FUnrealMotionsModule : public IModuleInterface
 {
@@ -12,7 +15,10 @@ public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
-public:
-	TUniquePtr<FUMGraphNavigationManager> GraphNavigationManager = nullptr;
-	TUniquePtr<FUMTabNavigationManager>	  TabNavigationManager = nullptr;
+	static FUMOnUserMovedToNewWindow& GetOnUserMovedToNewWindow();
+	static FUMOnUserMovedToNewTab&	  GetOnUserMovedToNewTab();
+
+private:
+	static FUMOnUserMovedToNewWindow OnUserMovedToNewWindow;
+	static FUMOnUserMovedToNewTab	 OnUserMovedToNewTab;
 };

@@ -6,7 +6,6 @@
 #include "EditorUtilityWidget.h"
 #include "Data/UMWindowInfo.h"
 #include "Framework/Application/SlateApplication.h"
-#include "UMTabNavigationManager.h"
 #include "UMWindowDebugger.generated.h"
 
 /**
