@@ -2,6 +2,16 @@
 Unreal Engine ergonomic tools that will keep your hands (and soul!) healthy[er] 🧘‍♂️
 
 ## Features 
+
+### Windows Navigation 🪟
+Navigate between editor windows effortlessly using keyboard shortcuts!<br>
+- Use `Ctrl + Period` to cycle to the next none-root window and `Ctrl + Comma` to cycle to the previous none-root window
+- Toggle between root window and other windows using `Ctrl + Forward Slash` - minimizes non-root windows to focus root window, or vice versa
+- You can expect solid focus activation when navigating between windows (unlike UE's occasional issue where focus remains on the previous window after navigation)
+- Customize any hotkey configuration in preferences - simply search for "Cycle Window" to find all available commands
+![windows-navigation-pref](Docs/windows-navigation/windows-navigation-preferences.png)
+
+
 ### Major & Minor Tab Navigation 🔄
 Navigate between editor tabs using customizable keyboard shortcuts just like you navigate browser tabs!<br>
 The plugin is designed to work alongside existing Unreal Engine shortcuts:
@@ -35,7 +45,7 @@ git clone https://github.com/BarakXYZ/Unreal-Motions.git
 4. The plugin should now be available in your project!
 
 ## Roadmap 🗺️
-I'm heavily inspired by Vim Motions, and so I'm definitely gonna expand this plugin in the near future with more ergonomic tools! 🚀
+This plugin is inspired by Vim Motions and the core principle of keeping your hands on the keyboard. As someone who understands the impact of repetitive mouse movements on wrist health, I'm committed to expanding this plugin with more ergonomic tools that enhance Unreal Editor navigation. Each new feature will focus on reducing mouse dependency and improving workflow efficiency. Stay tuned for more keyboard-centric improvements! 🚀
 
 ## Contributing 🤝
 Bug reports, PR's and feature suggestions are welcome!
