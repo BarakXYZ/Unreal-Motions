@@ -18,7 +18,8 @@ enum class EUMActiveWindowQueryType : uint8
 	ActiveTopLevel		  UMETA(DisplayName = "Active Top Level Window"),
 	ActiveTopLevelRegular UMETA(DisplayName = "Active Top Level Regular Window"),
 	ActiveModal			  UMETA(DisplayName = "Active Modal Window"),
-	VisibleMenu			  UMETA(DisplayName = "Visible Menu Window")
+	VisibleMenu			  UMETA(DisplayName = "Visible Menu Window"),
+	RootWindow			  UMETA(DisplayName = "Root Window")
 };
 
 UENUM(BlueprintType)
@@ -26,7 +27,8 @@ enum class EUMWindowQueryType : uint8
 {
 	AllVisibleOrdered	UMETA(DisplayName = "All Visible Windows Ordered"),
 	TopLevel			UMETA(DisplayName = "Top Level Windows"),
-	InteractiveTopLevel UMETA(DisplayName = "Interactive Top Level Windows")
+	InteractiveTopLevel UMETA(DisplayName = "Interactive Top Level Windows"),
+	AllChildWindows		UMETA(DisplayName = "All Child Windows")
 };
 
 USTRUCT(BlueprintType)

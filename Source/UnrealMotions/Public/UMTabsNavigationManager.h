@@ -18,8 +18,17 @@ public:
 	FUMTabsNavigationManager();
 	~FUMTabsNavigationManager();
 
+	/**
+	 * Returns the singleton instance of the Tabs Navigation Manager.
+	 * Creates a new instance if one doesn't exist.
+	 * @return Reference to the UMTabsNavigationManager singleton instance
+	 */
 	static FUMTabsNavigationManager& Get();
 
+	/**
+	 * Checks if the Tabs Navigation Manager singleton has been initialized.
+	 * @return true if the manager has been initialized, false otherwise
+	 */
 	static bool IsInitialized();
 
 	/**
@@ -45,20 +54,29 @@ public:
 	 * Registers UI commands for Major Tab Navigation (last tab and tabs 1-9).
 	 * @param MainFrameContext The binding context to register commands in
 	 */
-	void AddMajorTabsNavigationCommandsToList(TSharedPtr<FBindingContext> MainFrameContext);
+	void AddMajorTabsNavigationCommandsToList(
+		TSharedPtr<FBindingContext> MainFrameContext);
 
 	/**
 	 * Registers UI commands for Minor Tab Navigation (last tab and tabs 1-9).
 	 * @param MainFrameContext The binding context to register commands in
 	 */
-
-	void AddMinorTabsNavigationCommandsToList(TSharedPtr<FBindingContext> MainFrameContext);
+	void AddMinorTabsNavigationCommandsToList(
+		TSharedPtr<FBindingContext> MainFrameContext);
 
 	/**
 	 * Maps registered tab navigation commands to their handlers.
 	 * @param CommandList List to bind the tab navigation actions to
 	 */
-	void MapTabCommands(const TSharedRef<FUICommandList>& CommandList, const TArray<TSharedPtr<FUICommandInfo>>& CommandInfo, bool bIsMajorTab);
+	void MapTabCommands(const TSharedRef<FUICommandList>& CommandList,
+		const TArray<TSharedPtr<FUICommandInfo>>& CommandInfo, bool bIsMajorTab);
+
+	/**
+	 * Registers necessary Slate event handlers after the engine initialization.
+	 * Start listening to OnActiveTabChanged, OnTabForegrounded & OnFocusChanging.
+	 * Called after FSlateApplication delegates PostEngineInit.
+	 */
+	void RegisterSlateEvents();
 
 	/**
 	 * Being called when a new Minor Tab is being activated.
@@ -68,7 +86,8 @@ public:
 	 * @param NewActiveTab the newly to be set tab.
 	 * @note Unreal incorrectly passes the internal delegate params in an inverted order. I've countered it with flipping the values again to compensate.
 	 */
-	void OnActiveTabChanged(TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
+	void OnActiveTabChanged(
+		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
 
 	/**
 	 * Being called when a new Minor or Major Tab is being foregrounded.
@@ -78,13 +97,21 @@ public:
 	 * @param PrevActiveTab the currently set, old tab.
 	 * @note In this case, Unreal passes the delegate params in the correctly documented order. So we keep it as is (firstly new tab, then old tab).
 	 */
-	void OnTabForegrounded(TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
+	void OnTabForegrounded(
+		TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
 
 	/**
-	 * Called after FSlateApplication delegates PostEngineInit.
-	 * This is where we will register our Tab Tracking mechanism and such.
+	 * Called when focus changes between widgets in the editor.
+	 * @param FocusEvent Event data for the focus change
+	 * @param OldWidgetPath Widget path before focus change
+	 * @param OldWidget Previously focused widget
+	 * @param NewWidgetPath Widget path after focus change
+	 * @param NewWidget Newly focused widget
 	 */
-	void RegisterSlateEvents();
+	void OnFocusChanged(
+		const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
+		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
+		const TSharedPtr<SWidget>& NewWidget);
 
 	/**
 	 * Command handler to focus a specific tab in the active window's tab well.
@@ -93,6 +120,25 @@ public:
 	 * @see MapTabCommands For the keybinding configuration
 	 */
 	void MoveToTabIndex(int32 TabIndex, bool bIsMajorTab);
+
+	/**
+	 * Activates a specific tab within a SDockingTabWell widget.
+	 * @param DockingTabWell The tab well containing the tabs
+	 * @param TabIndex Index of tab to focus (1-based, 0 selects last tab)
+	 */
+	void FocusTabIndex(const TSharedPtr<SWidget>& DockingTabWell, int32 TabIndex);
+
+	/**
+	 * Adds navigation commands for cycling between tabs to the binding context.
+	 * @param MainFrameContext The binding context to register cycle commands in
+	 */
+	void RegisterCycleTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
+
+	/**
+	 * Maps the next/previous tab navigation commands to their respective actions.
+	 * @param CommandList The command list to map the actions to
+	 */
+	void MapCycleTabsNavigation(const TSharedRef<FUICommandList>& CommandList);
 
 	/**
 	 * Cycles between tabs back and forth. Hotkeys can be held to continuously
@@ -111,6 +157,28 @@ public:
 	bool ValidateTargetTab(TSharedPtr<SWidget>& OutTab, bool bIsMajorTab);
 
 	/**
+	 * Updates the currently tracked tab (major or minor).
+	 * @param NewTab The tab to set as current
+	 */
+	void SetCurrentTab(const TSharedPtr<SDockTab>& NewTab);
+
+	/**
+	 * Gets the active major tab in the current window.
+	 * @param OutMajorTab Output parameter to store the found major tab
+	 * @return true if a valid major tab was found
+	 */
+	bool GetActiveMajorTab(TWeakPtr<SDockTab>& OutMajorTab);
+
+	/**
+	 * Prints debug information about a tab.
+	 * @param Tab Tab to debug
+	 * @param bDebugVisualTabRole Whether to debug visual or regular tab role
+	 * @param DelegateType String indicating which delegate triggered the debug
+	 */
+	void DebugTab(const TSharedPtr<SDockTab>& Tab,
+		bool bDebugVisualTabRole, FString DelegateType);
+
+	/**
 	 * Validates that the parent wiget for the targeted tab is valid and is
 	 * indeed a SDockingTabWell. Return false otherwise.
 	 * @param InOutTabWell Serves as both the SDockingTab from which we will get the parent, and where we will store the SDockingTabWell.
@@ -118,18 +186,12 @@ public:
 	bool GetParentTabWellFromTab(
 		const TSharedPtr<SWidget>& Tab, TSharedPtr<SWidget>& TabWell);
 
-	void RegisterCycleTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
-
-	void MapNextPrevTabNavigation(const TSharedRef<FUICommandList>& CommandList);
-
-	void OnMouseButtonDown(const FPointerEvent& PointerEvent);
-
 	/**
-	 * Activates a specific tab within a SDockingTabWell widget.
-	 * @param DockingTabWell The tab well containing the tabs
-	 * @param TabIndex Index of tab to focus (1-based, 0 selects last tab)
+	 * Called when mouse button is pressed down, can be used to track tab changes.
+	 * Currently unused but kept for potential future use.
+	 * @param PointerEvent Event data for the mouse button press
 	 */
-	void FocusTabIndex(const TSharedPtr<SWidget>& DockingTabWell, int32 TabIndex);
+	void OnMouseButtonDown(const FPointerEvent& PointerEvent);
 
 	/**
 	 * Recursively searches a widget tree for a SDockingTabWell widget.
@@ -161,43 +223,44 @@ public:
 		const FString&			   TargetType,
 		int32					   Depth = 0);
 
-	// ** Not used currently */
+	/**
+	 * Configures the "FindAllTabWells" command and binds it to the input system.
+	 * Currently unused but kept for debugging purposes.
+	 * @param CommandList Command list to add the binding to
+	 * @param MainFrameContext Context to register the command in
+	 */
 	void SetupFindTabWells(TSharedRef<FUICommandList>& CommandList,
 		TSharedPtr<FBindingContext>					   MainFrameContext);
 
-	// ** Not used currently */
-	void FindAllTabWells();
-
-	/**
-	 * Debug tab properties, Role vs. Visual Role, Id, Title, etc.
-	 * @param Tab Target tab to debug.
-	 * @param bDebugVisualTabRole Should we debug the visual or non-visual role.
-	 * @param DelegateType From where this debug is being called (e.g. OnTabForegrounded, OnActiveTabChanged)
-	 */
-	void DebugTab(const TSharedPtr<SDockTab>& Tab,
-		bool bDebugVisualTabRole, FString DelegateType);
-
-	// ** Not used currently */
-	ENavSpecTabType GetNavigationSpecificTabType(const TSharedPtr<SDockTab>& Tab);
-
-	// ** Not used currently */
-	bool GetActiveMajorTab(TWeakPtr<SDockTab>& OutMajorTab);
-
-	// ** Not used currently */
-	/**
+	/** DEPRECATED
 	 * Return the last active non-major tab. Can be a Panel Tab, a Nomad Tab, etc.
 	 * @param OutNonMajorTab Where we will store the found tab (if any).
 	 */
 	bool GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNonMajorTab);
 
-	// ** Not used currently */
+	/**
+	 * Finds the root widget name based on the current major tab type.
+	 * Used to determine the appropriate widget tree root for tab well searches.
+	 * @param OutRootWidgetName Output parameter to store the found root widget name
+	 * @return true if a valid root widget name was found
+	 */
 	bool FindRootTargetWidgetName(FString& OutRootWidgetName);
 
-	void OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath, const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath, const TSharedPtr<SWidget>& NewWidget);
-
-	void SetNewCurrentTab(const TSharedPtr<SDockTab>& NewTab, bool bIsMajorTab);
-
 	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
+
+	/**
+	 * Finds and logs information about all tab wells in the current window.
+	 * Used for debugging tab layout and hierarchy.
+	 */
+	void FindAllTabWells();
+
+	/** DEPRECATED
+	 * Gets the type of tab for navigation-specific purposes.
+	 * Used to determine how to handle tab navigation for different tab types.
+	 * @param Tab The tab to check the type of
+	 * @return The navigation-specific tab type (LevelEditor, Toolkit, or None)
+	 */
+	ENavSpecTabType GetNavigationSpecificTabType(const TSharedPtr<SDockTab>& Tab);
 
 private:
 	static TSharedPtr<FUMTabsNavigationManager> TabsNavigationManager;

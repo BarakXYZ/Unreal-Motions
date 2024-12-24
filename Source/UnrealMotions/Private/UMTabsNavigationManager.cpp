@@ -1,25 +1,23 @@
-#include "UMTabsNavigationManager.h"
+#include "Interfaces/IMainFrameModule.h"
 #include "Framework/Commands/UICommandInfo.h"
-#include "GenericPlatform/GenericWindow.h"
-#include "Templates/SharedPointer.h"
-#include "UnrealMotions.h"
 #include "Widgets/Docking/SDockTab.h"
-#include "UMHelpers.h"
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
 // #include "BlueprintEditor.h"
 // #include "Subsystems/AssetEditorSubsystem.h"
 
-/* Main window representation of the app.
- * All other windows are children of it. */
-#include "Interfaces/IMainFrameModule.h"
+#include "UMHelpers.h"
+#include "UnrealMotions.h"
+#include "UMTabsNavigationManager.h"
 
-// DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, NoLogging, All); // Prod
-DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, Log, All); // Dev
+DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, NoLogging, All); // Prod
+// DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, Log, All); // Dev
 
 #define LOCTEXT_NAMESPACE "UMTabsNavigationManager"
 
-TSharedPtr<FUMTabsNavigationManager> FUMTabsNavigationManager::TabsNavigationManager = MakeShared<FUMTabsNavigationManager>();
+TSharedPtr<FUMTabsNavigationManager>
+	FUMTabsNavigationManager::TabsNavigationManager =
+		MakeShared<FUMTabsNavigationManager>();
 
 FUMTabsNavigationManager::FUMTabsNavigationManager()
 {
@@ -45,7 +43,7 @@ FUMTabsNavigationManager::FUMTabsNavigationManager()
 
 	// Register Next & Previous Tab Navigation
 	RegisterCycleTabNavigation(MainFrameContext);
-	MapNextPrevTabNavigation(CommandList);
+	MapCycleTabsNavigation(CommandList);
 
 	FCoreDelegates::OnPostEngineInit.AddRaw(
 		this, &FUMTabsNavigationManager::RegisterSlateEvents);
@@ -55,9 +53,10 @@ FUMTabsNavigationManager::FUMTabsNavigationManager()
 	FUnrealMotionsModule::GetOnUserMovedToNewWindow().AddRaw(
 		this, &FUMTabsNavigationManager::HandleOnUserMovedToNewWindow);
 
-	// Why this doesn't work?
+	// TODO: Why this doesn't work?
 	// FUnrealMotionsModule::GetOnUserMovedToNewWindow().AddSP(
-	// 	FUMTabsNavigationManager::TabsNavigationManager, &FUMTabsNavigationManager::HandleOnUserMovedToNewWindow);
+	// 	FUMTabsNavigationManager::TabsNavigationManager,
+	// 	&FUMTabsNavigationManager::HandleOnUserMovedToNewWindow);
 }
 
 FUMTabsNavigationManager::~FUMTabsNavigationManager()
@@ -71,7 +70,8 @@ FUMTabsNavigationManager& FUMTabsNavigationManager::Get()
 {
 	if (!FUMTabsNavigationManager::TabsNavigationManager.IsValid())
 	{
-		FUMTabsNavigationManager::TabsNavigationManager = MakeShared<FUMTabsNavigationManager>();
+		FUMTabsNavigationManager::TabsNavigationManager =
+			MakeShared<FUMTabsNavigationManager>();
 	}
 	return *FUMTabsNavigationManager::TabsNavigationManager;
 }
@@ -89,8 +89,10 @@ void FUMTabsNavigationManager::InitTabNavInputChords(
 		TabChords.Empty();
 	TabChords.Reserve(10);
 
-	const FKey NumberKeys[] = { EKeys::Zero, EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four,
-		EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine };
+	const FKey NumberKeys[] = {
+		EKeys::Zero, EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four,
+		EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine
+	};
 
 	// Setting by default to Control + Shift + 0-9
 	const EModifierKey::Type ModifierKeys = EModifierKey::FromBools(
@@ -103,8 +105,9 @@ void FUMTabsNavigationManager::InitTabNavInputChords(
 void FUMTabsNavigationManager::RemoveDefaultCommand(
 	FInputBindingManager& InputBindingManager, FInputChord Command)
 {
-	const TSharedPtr<FUICommandInfo> CheckCommand = InputBindingManager.GetCommandInfoFromInputChord(MainFrameContextName, Command,
-		false /* We want to check the current, not default command */);
+	const TSharedPtr<FUICommandInfo> CheckCommand =
+		InputBindingManager.GetCommandInfoFromInputChord(MainFrameContextName, Command,
+			false /* We want to check the current, not default command */);
 	if (CheckCommand.IsValid())
 		CheckCommand->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 }
@@ -121,7 +124,7 @@ void FUMTabsNavigationManager::MapTabCommands(
 	}
 }
 
-void FUMTabsNavigationManager::MapNextPrevTabNavigation(
+void FUMTabsNavigationManager::MapCycleTabsNavigation(
 	const TSharedRef<FUICommandList>& CommandList)
 {
 	CommandList->MapAction(CmdInfoNextMajorTab,
@@ -177,7 +180,7 @@ void FUMTabsNavigationManager::OnTabForegrounded(
 	DebugTab(NewActiveTab, true, "OnTabForegrounded");
 	if (NewActiveTab->GetVisualTabRole() == ETabRole::MajorTab)
 	{
-		SetNewCurrentTab(NewActiveTab, true);
+		SetCurrentTab(NewActiveTab);
 
 		FString LogNewMajorTab = FString::Printf(
 			TEXT("Tab Foregrounded: New Major Tab - Name: %s, ID: %d || Previous Tab - Name: %s, ID: %d"),
@@ -207,7 +210,7 @@ void FUMTabsNavigationManager::OnActiveTabChanged(
 	// FUMHelpers::NotifySuccess(FText::FromString(LogTabs), VisualLog);
 	DebugTab(NewActiveTab, true, "OnActiveTabChanged");
 
-	SetNewCurrentTab(NewActiveTab, false); // Set Minor Tab
+	SetCurrentTab(NewActiveTab); // Naturally Minor Tab
 
 	if (const TSharedPtr<FTabManager> TabManager =
 			NewActiveTab->GetTabManagerPtr())
@@ -215,7 +218,7 @@ void FUMTabsNavigationManager::OnActiveTabChanged(
 		if (const TSharedPtr<SDockTab> MajorTab =
 				FGlobalTabmanager::Get()->GetMajorTabForTabManager(TabManager.ToSharedRef()))
 		{
-			SetNewCurrentTab(MajorTab, true);
+			SetCurrentTab(MajorTab);
 			// Interesting
 			// TabManager->GetPrivateApi().GetParentWindow();
 		}
@@ -228,7 +231,7 @@ void FUMTabsNavigationManager::HandleOnUserMovedToNewWindow(
 	TWeakPtr<SDockTab> NewMajorTab = nullptr;
 	if (GetActiveMajorTab(NewMajorTab))
 	{
-		SetNewCurrentTab(NewMajorTab.Pin(), true);
+		SetCurrentTab(NewMajorTab.Pin());
 		return;
 	}
 }
@@ -247,7 +250,8 @@ void FUMTabsNavigationManager::OnMouseButtonDown(const FPointerEvent& PointerEve
 	// Set tab...
 }
 
-bool FUMTabsNavigationManager::ValidateTargetTab(TSharedPtr<SWidget>& OutTab, bool bIsMajorTab)
+bool FUMTabsNavigationManager::ValidateTargetTab(
+	TSharedPtr<SWidget>& OutTab, bool bIsMajorTab)
 {
 	if (bIsMajorTab && CurrMajorTab.IsValid())
 		OutTab = CurrMajorTab.Pin();
@@ -341,7 +345,8 @@ void FUMTabsNavigationManager::CycleTabs(bool bIsMajorTab, bool bIsNextTab)
 		if (Dock->IsForeground())
 		{
 			CurrIndex = i;
-			UE_LOG(LogUMTabsNavigation, Display, TEXT("Current Active Tab Index: %d"), i);
+			UE_LOG(LogUMTabsNavigation, Display,
+				TEXT("Current Active Tab Index: %d"), i);
 			break;
 		}
 	}
@@ -349,7 +354,8 @@ void FUMTabsNavigationManager::CycleTabs(bool bIsMajorTab, bool bIsNextTab)
 	if (CurrIndex == INDEX_NONE)
 		return;
 
-	CurrIndex = bIsNextTab ? (CurrIndex + 1) % TNum : (CurrIndex - 1 + TNum) % TNum;
+	CurrIndex =
+		bIsNextTab ? (CurrIndex + 1) % TNum : (CurrIndex - 1 + TNum) % TNum;
 
 	TSharedPtr<SDockTab> DockTab = StaticCastSharedRef<SDockTab>(
 		Tabs->GetChildAt(CurrIndex));
@@ -358,14 +364,6 @@ void FUMTabsNavigationManager::CycleTabs(bool bIsMajorTab, bool bIsNextTab)
 		// This will trigger OnActiveTabChanged if it's a minor tab, and will
 		// also trigger OnTabForegrounded for both Major & Minor tabs.
 		DockTab->ActivateInParent(ETabActivationCause::SetDirectly);
-
-		// FINAL EDIT: Not needed!
-		// This is semi-needed because some tabs aren't considered Major Tab
-		// by definition (for example "Editor Preferences") yet they can be
-		// docked as a Major Tab (near the Level Editor for example)
-		// So yet to figure this out completely.
-		// if (bIsMajorTab) // Minor tabs call the OnActive Delegate so auto-set.
-		// 	SetNewCurrentTab(DockTab, true);
 	}
 }
 
@@ -529,29 +527,27 @@ ENavSpecTabType FUMTabsNavigationManager::GetNavigationSpecificTabType(const TSh
 	{
 		FString TabId = Tab->GetLayoutIdentifier().ToString();
 		if (TabId.EndsWith(TEXT("Toolkit")))
-		{
 			return ENavSpecTabType::Toolkit;
-		}
 		else if (TabId.StartsWith(TEXT("LevelEditor")))
-		{
 			return ENavSpecTabType::LevelEditor;
-		}
 	}
 	return ENavSpecTabType::None;
 }
 
-void FUMTabsNavigationManager::SetNewCurrentTab(const TSharedPtr<SDockTab>& NewTab, bool bIsMajorTab)
+void FUMTabsNavigationManager::SetCurrentTab(const TSharedPtr<SDockTab>& NewTab)
 {
 	if (!NewTab.IsValid())
 	{
-		UE_LOG(LogUMTabsNavigation, Warning, TEXT("Attempted to set invalid tab as current"));
+		UE_LOG(LogUMTabsNavigation, Warning,
+			TEXT("Attempted to set invalid tab as current"));
 		return;
 	}
 
-	if (bIsMajorTab)
+	if (NewTab->GetVisualTabRole() == ETabRole::MajorTab)
 	{
 		FString PrevLabel = CurrMajorTab.IsValid() ? CurrMajorTab.Pin()->GetTabLabel().ToString() : TEXT("None");
-		UE_LOG(LogUMTabsNavigation, Log, TEXT("Set new major tab - Previous: %s, New: %s"),
+		UE_LOG(LogUMTabsNavigation, Log,
+			TEXT("Set new major tab - Previous: %s, New: %s"),
 			*PrevLabel, *NewTab->GetTabLabel().ToString());
 
 		CurrMajorTab = NewTab;
@@ -572,7 +568,8 @@ bool FUMTabsNavigationManager::TraverseWidgetTree(
 	const FString& TargetType, int32 SearchCount, int32 Depth)
 {
 	// Log the current widget and depth
-	UE_LOG(LogUMTabsNavigation, Display, TEXT("%s[Depth: %d] Checking widget: %s"),
+	UE_LOG(LogUMTabsNavigation, Display,
+		TEXT("%s[Depth: %d] Checking widget: %s"),
 		*FString::ChrN(Depth * 2, ' '), // Visual indentation
 		Depth, *ParentWidget->GetTypeAsString());
 
@@ -623,7 +620,8 @@ bool FUMTabsNavigationManager::TraverseWidgetTree(
 	int32					   Depth)
 {
 	// Log the current widget and depth
-	UE_LOG(LogUMTabsNavigation, Display, TEXT("%s[Depth: %d] Checking widget: %s"),
+	UE_LOG(LogUMTabsNavigation, Display,
+		TEXT("%s[Depth: %d] Checking widget: %s"),
 		*FString::ChrN(Depth * 2, ' '), // Visual indentation
 		Depth, *ParentWidget->GetTypeAsString());
 
@@ -646,37 +644,34 @@ bool FUMTabsNavigationManager::TraverseWidgetTree(
 		{
 			TSharedPtr<SWidget> Child = Children->GetChildAt(i);
 			if (TraverseWidgetTree(Child, OutWidget, TargetType, Depth + 1))
-			{
 				return true;
-			}
 		}
 	}
-
 	return false;
 }
 
 void FUMTabsNavigationManager::RegisterCycleTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext)
 {
 	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoNextMajorTab,
-		"CycleMajorTabNext", "Focus the next major tab",
-		"Moves to the next major tab",
+		"CycleMajorTabNext", "Cycle Next Major Tab",
+		"Move to the next major tab (if it exists)",
 		EUserInterfaceActionType::Button,
 		FInputChord(EModifierKey::Control, EKeys::RightBracket));
 
 	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoPrevMajorTab,
-		"CycleMajorTabPrevious", "Focus the previous major tab",
-		"Moves to the previous major tab",
+		"CycleMajorTabPrevious", "Cycle Previous Major Tab",
+		"Move to the previous major tab (if it exists)",
 		EUserInterfaceActionType::Button,
 		FInputChord(EModifierKey::Control, EKeys::LeftBracket));
 
 	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoNextMinorTab,
-		"CycleMinorTabNext", "Focus the next minor tab",
-		"Moves to the next minor tab",
+		"CycleMinorTabNext", "Cycle Next Minor Tab",
+		"Move to the next minor tab (if it exists)",
 		EUserInterfaceActionType::Button, FInputChord(EModifierKey::FromBools(true, false, true, false), EKeys::RightBracket));
 
 	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoPrevMinorTab,
-		"CycleMinorTabPrevious", "Focus the previous minor tab",
-		"Moves to the previous minor tab",
+		"CycleMinorTabPrevious", "Cycle Previous Minor Tab",
+		"Move to the previous minor tab (if it exists)",
 		EUserInterfaceActionType::Button, FInputChord(EModifierKey::FromBools(true, false, true, false), EKeys::LeftBracket));
 }
 
@@ -686,68 +681,98 @@ void FUMTabsNavigationManager::RegisterCycleTabNavigation(const TSharedPtr<FBind
  */
 void FUMTabsNavigationManager::AddMajorTabsNavigationCommandsToList(TSharedPtr<FBindingContext> MainFrameContext)
 {
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[0], "MoveToMajorTabLast", "Focus Major Last Tab",
-		"Moves to the major last tab", EUserInterfaceActionType::Button, TabChords[0]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[0],
+		"MoveToMajorTabLast", "Focus Major Last Tab",
+		"Activates the last major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[0]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[1], "MoveToMajorTab1", "Focus Major Tab 1",
-		"If exists, draws attention to major tab 1", EUserInterfaceActionType::Button, TabChords[1]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[1],
+		"MoveToMajorTab1", "Focus Major Tab 1",
+		"Activates the first major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[1]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[2], "MoveToMajorTab2", "Focus Major Tab 2",
-		"If exists, draws attention to major tab 2", EUserInterfaceActionType::Button, TabChords[2]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[2],
+		"MoveToMajorTab2", "Focus Major Tab 2",
+		"Activates the second major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[2]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[3], "MoveToMajorTab3", "Focus Major Tab 3",
-		"If exists, draws attention to major tab 3", EUserInterfaceActionType::Button, TabChords[3]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[3],
+		"MoveToMajorTab3", "Focus Major Tab 3",
+		"Activates the third major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[3]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[4], "MoveToMajorTab4", "Focus Major Tab 4",
-		"If exists, draws attention to major tab 4", EUserInterfaceActionType::Button, TabChords[4]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[4],
+		"MoveToMajorTab4", "Focus Major Tab 4",
+		"Activates the fourth major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[4]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[5], "MoveToMajorTab5", "Focus Major Tab 5",
-		"If exists, draws attention to major tab 5", EUserInterfaceActionType::Button, TabChords[5]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[5],
+		"MoveToMajorTab5", "Focus Major Tab 5",
+		"Activates the fifth major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[5]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[6], "MoveToMajorTab6", "Focus Major Tab 6",
-		"If exists, draws attention to major tab 6", EUserInterfaceActionType::Button, TabChords[6]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[6],
+		"MoveToMajorTab6", "Focus Major Tab 6",
+		"Activates the sixth major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[6]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[7], "MoveToMajorTab7", "Focus Major Tab 7",
-		"If exists, draws attention to major tab 7", EUserInterfaceActionType::Button, TabChords[7]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[7],
+		"MoveToMajorTab7", "Focus Major Tab 7",
+		"Activates the seventh major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[7]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[8], "MoveToMajorTab8", "Focus Major Tab 8",
-		"If exists, draws attention to major tab 8", EUserInterfaceActionType::Button, TabChords[8]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[8],
+		"MoveToMajorTab8", "Focus Major Tab 8",
+		"Activates the eighth major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[8]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[9], "MoveToMajorTab9", "Focus Major Tab 9",
-		"If exists, draws attention to major tab 9", EUserInterfaceActionType::Button, TabChords[9]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[9],
+		"MoveToMajorTab9", "Focus Major Tab 9",
+		"Activates the ninth major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[9]);
 }
 
 void FUMTabsNavigationManager::AddMinorTabsNavigationCommandsToList(TSharedPtr<FBindingContext> MainFrameContext)
 {
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[0], "MoveToMinorTabLast", "Focus Minor Last Tab",
-		"Moves to the last minor tab", EUserInterfaceActionType::Button, TabChords[0]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[0],
+		"MoveToMinorTabLast", "Focus Minor Last Tab",
+		"Activates the last minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[0]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[1], "MoveToMinorTab1", "Focus Minor Tab 1",
-		"If exists, draws attention to minor tab 1", EUserInterfaceActionType::Button, TabChords[1]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[1],
+		"MoveToMinorTab1", "Focus Minor Tab 1",
+		"Activates the first minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[1]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[2], "MoveToMinorTab2", "Focus Minor Tab 2",
-		"If exists, draws attention to minor tab 2", EUserInterfaceActionType::Button, TabChords[2]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[2],
+		"MoveToMinorTab2", "Focus Minor Tab 2",
+		"Activates the second minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[2]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[3], "MoveToMinorTab3", "Focus Minor Tab 3",
-		"If exists, draws attention to minor tab 3", EUserInterfaceActionType::Button, TabChords[3]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[3],
+		"MoveToMinorTab3", "Focus Minor Tab 3",
+		"Activates the third minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[3]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[4], "MoveToMinorTab4", "Focus Minor Tab 4",
-		"If exists, draws attention to minor tab 4", EUserInterfaceActionType::Button, TabChords[4]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[4],
+		"MoveToMinorTab4", "Focus Minor Tab 4",
+		"Activates the fourth minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[4]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[5], "MoveToMinorTab5", "Focus Minor Tab 5",
-		"If exists, draws attention to minor tab 5", EUserInterfaceActionType::Button, TabChords[5]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[5],
+		"MoveToMinorTab5", "Focus Minor Tab 5",
+		"Activates the fifth minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[5]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[6], "MoveToMinorTab6", "Focus Minor Tab 6",
-		"If exists, draws attention to minor tab 6", EUserInterfaceActionType::Button, TabChords[6]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[6],
+		"MoveToMinorTab6", "Focus Minor Tab 6",
+		"Activates the sixth minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[6]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[7], "MoveToMinorTab7", "Focus Minor Tab 7",
-		"If exists, draws attention to minor tab 7", EUserInterfaceActionType::Button, TabChords[7]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[7],
+		"MoveToMinorTab7", "Focus Minor Tab 7",
+		"Activates the seventh minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[7]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[8], "MoveToMinorTab8", "Focus Minor Tab 8",
-		"If exists, draws attention to minor tab 8", EUserInterfaceActionType::Button, TabChords[8]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[8],
+		"MoveToMinorTab8", "Focus Minor Tab 8",
+		"Activates the eighth minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[8]);
 
-	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[9], "MoveToMinorTab9", "Focus Minor Tab 9",
-		"If exists, draws attention to minor tab 9", EUserInterfaceActionType::Button, TabChords[9]);
+	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[9],
+		"MoveToMinorTab9", "Focus Minor Tab 9",
+		"Activates the ninth minor tab in the current tab well",
+		EUserInterfaceActionType::Button, TabChords[9]);
 }
 
 void FUMTabsNavigationManager::SetupFindTabWells(
@@ -760,8 +785,9 @@ void FUMTabsNavigationManager::SetupFindTabWells(
 		MainFrameContext.Get(),
 		CmdInfoFindAllTabWells,
 		"FindAllTabWells",
-		"Find all tab wells in the currently active window.",
-		"Find all tab wells in the currently active window.", EUserInterfaceActionType::Button, FindTabWellsChord);
+		"Find All Existing Tab Wells",
+		"Traverse the widget hierarchy and store all tab wells found.",
+		EUserInterfaceActionType::Button, FindTabWellsChord);
 
 	CommandList->MapAction(
 		CmdInfoFindAllTabWells,

@@ -2,6 +2,7 @@
 
 #include "UMWindowDebugger.h"
 #include "UMWindowsNavigationManager.h"
+#include "Framework/Docking/TabManager.h"
 #include "UMHelpers.h"
 
 // In the cpp file:
@@ -21,44 +22,92 @@ void UUMWindowDebugger::DebugAllWindows(
 		case EUMWindowQueryType::InteractiveTopLevel:
 			TopLevelWins = FSlateApplication::Get().GetInteractiveTopLevelWindows();
 			break;
-		default:
-			FSlateApplication::Get().GetAllVisibleWindowsOrdered(TopLevelWins);
+		case EUMWindowQueryType::AllChildWindows:
+			TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow();
+			if (!RootWin.IsValid())
+				return;
+			TopLevelWins = RootWin->GetChildWindows();
 			break;
 	}
 
 	for (const auto& Win : TopLevelWins)
 	{
-		FUMWindowDebugMap WindowInfo;
+		FUMWindowDebugMap WinInfo;
 
-		WindowInfo.PropertyMap.Add(TEXT("Title"), Win->GetTitle().ToString());
-		WindowInfo.PropertyMap.Add(TEXT("ID"), FString::FromInt(Win->GetId()));
-		WindowInfo.PropertyMap.Add(TEXT("bIsActive"), Win->IsActive() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("bIsVisible"), Win->IsVisible() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("bIsModal"), Win->IsModalWindow() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("bIsTopmost"), Win->IsTopmostWindow() ? TEXT("True") : TEXT("False"));
+		WinInfo.PropertyMap.Add(TEXT("Title"),
+			Win->GetTitle().ToString());
+
+		WinInfo.PropertyMap.Add(TEXT("ID"),
+			FString::FromInt(Win->GetId()));
+
+		WinInfo.PropertyMap.Add(TEXT("IsActive"),
+			Win->IsActive() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsVisible"),
+			Win->IsVisible() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsRegularWindow"),
+			Win->IsRegularWindow() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsModal"),
+			Win->IsModalWindow() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsTopmost"),
+			Win->IsTopmostWindow() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsWindowMinimized"),
+			Win->IsWindowMinimized() ? TEXT("True") : TEXT("False"));
+
 		if (auto UserFocus = Win->HasUserFocus(0))
 		{
 			FString FocusStr;
 			GetFocusCauseString(UserFocus.GetValue(), FocusStr);
-			WindowInfo.PropertyMap.Add(TEXT("UserFocusType"), FocusStr);
+			WinInfo.PropertyMap.Add(TEXT("UserFocusType"), FocusStr);
 		}
-		WindowInfo.PropertyMap.Add(TEXT("bHasActiveChildren"), Win->HasActiveChildren() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("bIsEnabled"), Win->IsEnabled() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("bIsMirror"), Win->IsMirrorWindow() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("bIsAccessible"), Win->IsAccessible() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("bIsMorphing"), Win->IsMorphing() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("bIsFocusedInitially"), Win->IsFocusedInitially() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("ActivationPolicy"), [&]() { FString PolicyStr; GetWindowActivationPolicyString(Win->ActivationPolicy(), PolicyStr); return PolicyStr; }());
-		WindowInfo.PropertyMap.Add(TEXT("Tag"), Win->GetTag().ToString());
-		WindowInfo.PropertyMap.Add(TEXT("ToolTip"),
+		WinInfo.PropertyMap.Add(TEXT("HasAnyUserFocus"),
+			Win->HasAnyUserFocus() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("HasAnyUserFocusOrFocusedDescendants"),
+			Win->HasAnyUserFocusOrFocusedDescendants() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("HasActiveChildren"),
+			Win->HasActiveChildren() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsEnabled"),
+			Win->IsEnabled() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsMirror"),
+			Win->IsMirrorWindow() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsAccessible"),
+			Win->IsAccessible() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsMorphing"),
+			Win->IsMorphing() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("IsFocusedInitially"),
+			Win->IsFocusedInitially() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("ActivationPolicy"),
+			[&]() { FString PolicyStr; GetWindowActivationPolicyString(Win->ActivationPolicy(), PolicyStr); return PolicyStr; }());
+
+		WinInfo.PropertyMap.Add(TEXT("Tag"),
+			Win->GetTag().ToString());
+
+		WinInfo.PropertyMap.Add(TEXT("ToolTip"),
 			Win->GetToolTip().IsValid() ? Win->GetToolTip()->GetContentWidget()->ToString() : TEXT("None"));
-		WindowInfo.PropertyMap.Add(TEXT("IsHDR"), Win->GetIsHDR() ? TEXT("True") : TEXT("False"));
-		WindowInfo.PropertyMap.Add(TEXT("Opacity"), FString::SanitizeFloat(Win->GetOpacity()));
+
+		WinInfo.PropertyMap.Add(TEXT("IsHDR"),
+			Win->GetIsHDR() ? TEXT("True") : TEXT("False"));
+
+		WinInfo.PropertyMap.Add(TEXT("Opacity"),
+			FString::SanitizeFloat(Win->GetOpacity()));
+
 		FString WindowModeStr;
 		GetWindowModeString(Win->GetWindowMode(), WindowModeStr);
-		WindowInfo.PropertyMap.Add(TEXT("WindowMode"), WindowModeStr);
+		WinInfo.PropertyMap.Add(TEXT("WindowMode"), WindowModeStr);
 
-		OutDebugInfo.Add(WindowInfo);
+		OutDebugInfo.Add(WinInfo);
 	}
 }
 
@@ -66,56 +115,128 @@ void UUMWindowDebugger::DebugActiveWindow(
 	TMap<FString, FString>& OutDebugInfo, EUMActiveWindowQueryType WinQueryType)
 {
 	FSlateApplication&	App = FSlateApplication::Get();
-	TSharedPtr<SWindow> ActiveWindow;
+	TSharedPtr<SWindow> Win;
 
 	switch (WinQueryType)
 	{
 		case EUMActiveWindowQueryType::ActiveTopLevel:
-			ActiveWindow = App.GetActiveTopLevelWindow();
+			Win = App.GetActiveTopLevelWindow();
 			break;
 		case EUMActiveWindowQueryType::ActiveTopLevelRegular:
-			ActiveWindow = App.GetActiveTopLevelRegularWindow();
+			Win = App.GetActiveTopLevelRegularWindow();
 			break;
 		case EUMActiveWindowQueryType::ActiveModal:
-			ActiveWindow = App.GetActiveModalWindow();
+			Win = App.GetActiveModalWindow();
 			break;
 		case EUMActiveWindowQueryType::VisibleMenu:
-			ActiveWindow = App.GetVisibleMenuWindow();
+			Win = App.GetVisibleMenuWindow();
 			break;
+		case EUMActiveWindowQueryType::RootWindow:
+			Win = FGlobalTabmanager::Get()->GetRootWindow();
+			break;
+
 		default:
-			ActiveWindow = App.GetActiveTopLevelWindow();
+			Win = App.GetActiveTopLevelWindow();
 			break;
 	}
 
-	if (ActiveWindow.IsValid())
+	if (Win.IsValid())
 	{
-		OutDebugInfo.Add(TEXT("Title"), ActiveWindow->GetTitle().ToString());
-		OutDebugInfo.Add(TEXT("ID"), FString::FromInt(ActiveWindow->GetId()));
-		OutDebugInfo.Add(TEXT("bIsActive"), ActiveWindow->IsActive() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("bIsVisible"), ActiveWindow->IsVisible() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("bIsModal"), ActiveWindow->IsModalWindow() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("bIsTopmost"), ActiveWindow->IsTopmostWindow() ? TEXT("True") : TEXT("False"));
-		if (auto UserFocus = ActiveWindow->HasUserFocus(0))
+		OutDebugInfo.Add(TEXT("Title"), Win->GetTitle().ToString());
+
+		OutDebugInfo.Add(TEXT("ID"), FString::FromInt(Win->GetId()));
+
+		OutDebugInfo.Add(TEXT("IsActive"),
+			Win->IsActive() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsVisible"),
+			Win->IsVisible() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsRegularWindow"),
+			Win->IsRegularWindow() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsModal"),
+			Win->IsModalWindow() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsTopmost"),
+			Win->IsTopmostWindow() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsWindowMinimized"),
+			Win->IsWindowMinimized() ? TEXT("True") : TEXT("False"));
+
+		if (auto UserFocus = Win->HasUserFocus(0))
 		{
 			FString FocusStr;
 			GetFocusCauseString(UserFocus.GetValue(), FocusStr);
 			OutDebugInfo.Add(TEXT("UserFocusType"), FocusStr);
 		}
-		OutDebugInfo.Add(TEXT("bHasActiveChildren"), ActiveWindow->HasActiveChildren() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("bIsEnabled"), ActiveWindow->IsEnabled() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("bIsMirror"), ActiveWindow->IsMirrorWindow() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("bIsAccessible"), ActiveWindow->IsAccessible() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("bIsMorphing"), ActiveWindow->IsMorphing() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("bIsFocusedInitially"), ActiveWindow->IsFocusedInitially() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("ActivationPolicy"), [&]() { FString PolicyStr; GetWindowActivationPolicyString(ActiveWindow->ActivationPolicy(), PolicyStr); return PolicyStr; }());
-		OutDebugInfo.Add(TEXT("Tag"), ActiveWindow->GetTag().ToString());
+
+		OutDebugInfo.Add(TEXT("HasAnyUserFocus"),
+			Win->HasAnyUserFocus() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("HasAnyUserFocusOrFocusedDescendants"),
+			Win->HasAnyUserFocusOrFocusedDescendants() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("HasActiveChildren"),
+			Win->HasActiveChildren() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsEnabled"),
+			Win->IsEnabled() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsMirror"),
+			Win->IsMirrorWindow() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsAccessible"),
+			Win->IsAccessible() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsMorphing"),
+			Win->IsMorphing() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("IsFocusedInitially"),
+			Win->IsFocusedInitially() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("ActivationPolicy"),
+			[&]() { FString PolicyStr; GetWindowActivationPolicyString(Win->ActivationPolicy(), PolicyStr); return PolicyStr; }());
+
+		OutDebugInfo.Add(TEXT("Tag"), Win->GetTag().ToString());
+
 		OutDebugInfo.Add(TEXT("ToolTip"),
-			ActiveWindow->GetToolTip().IsValid() ? ActiveWindow->GetToolTip()->GetContentWidget()->ToString() : TEXT("None"));
-		OutDebugInfo.Add(TEXT("IsHDR"), ActiveWindow->GetIsHDR() ? TEXT("True") : TEXT("False"));
-		OutDebugInfo.Add(TEXT("Opacity"), FString::SanitizeFloat(ActiveWindow->GetOpacity()));
+			Win->GetToolTip().IsValid() ? Win->GetToolTip()->GetContentWidget()->ToString() : TEXT("None"));
+
+		OutDebugInfo.Add(TEXT("IsHDR"),
+			Win->GetIsHDR() ? TEXT("True") : TEXT("False"));
+
+		OutDebugInfo.Add(TEXT("Opacity"),
+			FString::SanitizeFloat(Win->GetOpacity()));
+
 		FString WindowModeStr;
-		GetWindowModeString(ActiveWindow->GetWindowMode(), WindowModeStr);
-		OutDebugInfo.Add(TEXT("WindowMode"), WindowModeStr);
+		GetWindowModeString(Win->GetWindowMode(), WindowModeStr);
+		OutDebugInfo.Add(TEXT("WindowMode"),
+			WindowModeStr);
+
+		const TArray<TSharedRef<SWindow>> ChildWins = Win->GetChildWindows();
+		if (ChildWins.Num() > 0)
+		{
+			FString ChildWindowNames;
+			for (int32 i = 0; i < ChildWins.Num(); i++)
+			{
+				const auto& Child = ChildWins[i];
+				ChildWindowNames.Append(FString::Printf(TEXT("[%d] %s, "), i, *Child->GetTitle().ToString()));
+			}
+			// Remove trailing comma and space
+			if (!ChildWindowNames.IsEmpty())
+			{
+				ChildWindowNames.RemoveAt(ChildWindowNames.Len() - 2, 2);
+			}
+			OutDebugInfo.Add(TEXT("ChildWindows"), ChildWindowNames);
+		}
+		else
+		{
+			OutDebugInfo.Add(TEXT("ChildWindows"), TEXT("None"));
+		}
+
+		Win->GetWindowVisibility();
+		Win->GetVisibility();
 	}
 }
 

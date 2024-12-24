@@ -2,7 +2,9 @@
 #include "UMHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, NoLogging, All); // Prod
-																	// DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, Log, All); // Dev
+// DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, Log, All); // Dev
+
+// #define LOCTEXT_NAMESPACE "FUnrealMotionsModule"
 
 FUMOnUserMovedToNewWindow FUnrealMotionsModule::OnUserMovedToNewWindow;
 FUMOnUserMovedToNewTab	  FUnrealMotionsModule::OnUserMovedToNewTab;

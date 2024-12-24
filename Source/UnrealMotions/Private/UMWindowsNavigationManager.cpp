@@ -1,16 +1,12 @@
 
 #include "UMWindowsNavigationManager.h"
 #include "Framework/Commands/UICommandInfo.h"
-#include "GenericPlatform/GenericWindow.h"
-#include "Templates/SharedPointer.h"
-#include "Widgets/Docking/SDockTab.h"
 #include "UMHelpers.h"
-#include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Interfaces/IMainFrameModule.h"
 
-// DEFINE_LOG_CATEGORY_STATIC(LogUMWindowsNavigation, NoLogging, All); // Prod
-DEFINE_LOG_CATEGORY_STATIC(LogUMTWindowsNavigation, Log, All); // Dev
+DEFINE_LOG_CATEGORY_STATIC(LogUMWindowsNavigation, NoLogging, All); // Prod
+// DEFINE_LOG_CATEGORY_STATIC(LogUMTWindowsNavigation, Log, All); // Dev
 
 #define LOCTEXT_NAMESPACE "UMWindowsNavigationManager"
 
@@ -24,11 +20,7 @@ FUMWindowsNavigationManager::FUMWindowsNavigationManager()
 		MainFrameModule.GetMainFrameCommandBindings();
 	TSharedPtr<FBindingContext> MainFrameContext =
 		InputBindingManager.GetContextByName(MainFrameContextName);
-	/** We can know the name of the context by looking at the constructor
-	 * of the TCommands that its extending. e.g. SystemWideCommands, MainFrame...
-	 * */
 
-	// Register Cycle Window Navigation
 	RegisterCycleWindowsNavigation(MainFrameContext);
 	MapCycleWindowsNavigation(CommandList);
 
@@ -54,6 +46,24 @@ FUMWindowsNavigationManager& FUMWindowsNavigationManager::Get()
 bool FUMWindowsNavigationManager::IsInitialized()
 {
 	return FUMWindowsNavigationManager::WindowsNavigationManager.IsValid();
+}
+
+void FUMWindowsNavigationManager::MapCycleWindowsNavigation(
+	const TSharedRef<FUICommandList>& CommandList)
+{
+	CommandList->MapAction(CmdInfoCycleNextWindow,
+		FExecuteAction::CreateLambda(
+			[this]() { CycleNoneRootWindows(true); }),
+		EUIActionRepeatMode::RepeatEnabled);
+
+	CommandList->MapAction(CmdInfoCyclePrevWindow,
+		FExecuteAction::CreateLambda(
+			[this]() { CycleNoneRootWindows(false); }),
+		EUIActionRepeatMode::RepeatEnabled);
+
+	CommandList->MapAction(CmdInfoGotoRootWindow,
+		FExecuteAction::CreateLambda(
+			[this]() { ToggleRootWindow(); }));
 }
 
 void FUMWindowsNavigationManager::RegisterSlateEvents()
@@ -109,103 +119,120 @@ bool FUMWindowsNavigationManager::HasUserMovedToNewWindow(bool bSetNewWindow)
 	return false;
 }
 
-void FUMWindowsNavigationManager::MapCycleWindowsNavigation(
-	const TSharedRef<FUICommandList>& CommandList)
+void FUMWindowsNavigationManager::ToggleRootWindow()
 {
-	CommandList->MapAction(CmdInfoCycleNextWindow,
-		FExecuteAction::CreateLambda(
-			[this]() { CycleWindows(true); }),
-		EUIActionRepeatMode::RepeatEnabled);
+	const TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow();
+	if (!RootWin.IsValid())
+		return;
+	TArray<TSharedRef<SWindow>> ChildWins = RootWin->GetChildWindows();
 
-	CommandList->MapAction(CmdInfoCyclePrevWindow,
-		FExecuteAction::CreateLambda(
-			[this]() { CycleWindows(false); }),
-		EUIActionRepeatMode::RepeatEnabled);
-}
+	bool bHasVisibleWindows = false;
 
-// TODO: Save the states of the windows (i.e. maximized, position, etc.)
-// to restore them properly to the expected positions.
-// Also, we want to remember if the window was already minimized, to not
-// restore it by default (in the case where it was minimized)
-void FUMWindowsNavigationManager::ToggleNonRootWindowsState(bool bToggleMinimized)
-{
-	uint64 RootWinId = FGlobalTabmanager::Get()->GetRootWindow()->GetId();
-
-	TArray<uint64> WinIdsToCleanup;
-	for (const auto& Win : TrackedWindows)
-	{
-		if (!Win.Value.IsValid())
+	// NOTE: It's important for both loops to start from end to retain wins order.
+	for (int32 i = ChildWins.Num() - 1; i >= 0; --i)
+	{ // Minimize all non-root windows (bring root window to foreground)
+		const TSharedRef<SWindow>& Win = ChildWins[i];
+		// if (Win->IsRegularWindow() && !Win->IsWindowMinimized()
+		// 	&& !Win->GetTitle().IsEmpty())
+		if (Win->IsRegularWindow() && !Win->IsWindowMinimized())
 		{
-			WinIdsToCleanup.Add(Win.Key);
-			continue;
-		}
-		const TSharedPtr<SWindow>& PinnedWin = Win.Value.Pin();
-		if (PinnedWin->GetId() != RootWinId)
-		{
-			if (bToggleMinimized)
-				PinnedWin->Minimize();
-			else
-				PinnedWin->Restore();
+			Win->Minimize();
+			bHasVisibleWindows = true;
 		}
 	}
-	CleanupInvalidWindows(WinIdsToCleanup);
-}
 
-// Maybe it will be even more useful if we cycle through the windows
-// by their visibility rather than the time they we're first created honestly.
-// Harpoon like artchitecture will be more useful for moving between windows
-// in determined order.
-void FUMWindowsNavigationManager::CycleWindows(bool bIsNextWindow)
-{
-	const uint64 RootWinId = FGlobalTabmanager::Get()->GetRootWindow()->GetId();
-	auto		 ActiveWin = FSlateApplication::Get().GetActiveTopLevelRegularWindow();
-
-	if (!ActiveWin.IsValid())
+	if (bHasVisibleWindows)
 	{
-		FUMHelpers::NotifySuccess(
-			FText::FromString("Current Window is NOT valid."));
+		ActivateWindow(RootWin.ToSharedRef());
 		return;
 	}
 
-	uint64		   ActiveWinId = ActiveWin->GetId();
-	TArray<uint64> CleanupWindowIds;
+	// If no visible windows were found; we're assuming the user intention is
+	// to bring all non-root windows to the foreground, thus restoring them.
+	int32 LastFoundChildWinIndex{ INDEX_NONE };
 
-	auto SetActiveWindow = [this, RootWinId](
-							   const TTuple<uint64, TWeakPtr<SWindow>>& Win) {
-		ToggleNonRootWindowsState(Win.Value.Pin()->GetId() == RootWinId);
-		Win.Value.Pin()->BringToFront();
-	};
-
-	if (!TrackedWindows.Find(ActiveWinId))
-		TrackedWindows.Add(ActiveWinId, ActiveWin);
-
-	bool bFoundActive = false;
-	for (auto It = TrackedWindows.CreateConstIterator(); It; ++It)
+	for (int32 i{ ChildWins.Num() - 1 }; i >= 0; --i)
 	{
-		if (!It->Value.IsValid())
-			CleanupWindowIds.Add(It->Key);
-		else if (bFoundActive)
+		if (ChildWins[i]->IsRegularWindow()) // All wins are minimized (checked)
 		{
-			SetActiveWindow(*It);
-			bFoundActive = false;
+			ChildWins[i]->Restore();
+			// Last active win will be the last found regular win (retain order)
+			LastFoundChildWinIndex = i;
 		}
-		else if (It->Key == ActiveWinId)
-			bFoundActive = true;
 	}
+	if (LastFoundChildWinIndex != INDEX_NONE)
+		ActivateWindow(ChildWins[LastFoundChildWinIndex]);
+}
 
-	CleanupInvalidWindows(CleanupWindowIds);
-	if (bFoundActive)
-		SetActiveWindow(*TrackedWindows.CreateConstIterator());
+// NOTE: Kept here some commented methods for future reference.
+void FUMWindowsNavigationManager::ActivateWindow(const TSharedRef<SWindow> Window)
+{
+	FSlateApplication& App = FSlateApplication::Get();
+	Window->BringToFront(true);
+	TSharedRef<SWidget> WinContent = Window->GetContent();
+	// FWindowDrawAttentionParameters DrawParams(
+	// 	EWindowDrawAttentionRequestType::UntilActivated);
+	// Window->DrawAttention(DrawParams);
+	// Window->ShowWindow();
+	// Window->FlashWindow(); // Amazing way to visually indicate activated wins!
+
+	App.ClearAllUserFocus(); // This is really important to actually draw focus
+	App.SetAllUserFocus(
+		WinContent, EFocusCause::SetDirectly);
+	App.SetKeyboardFocus(WinContent);
+	FWidgetPath WidgetPath;
+	App.FindPathToWidget(WinContent, WidgetPath);
+	App.SetAllUserFocusAllowingDescendantFocus(
+		WidgetPath, EFocusCause::Mouse);
+
+	// FUMHelpers::AddDebugMessage(FString::Printf(
+	// 	TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
+}
+
+void FUMWindowsNavigationManager::CycleNoneRootWindows(bool bIsNextWindow)
+{
+	const TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow();
+	if (!RootWin.IsValid() || !RootWin->HasActiveChildren())
+		return;
+	TArray<TSharedRef<SWindow>> ChildWins = RootWin->GetChildWindows();
+
+	int32		   Cursor{ 0 };
+	TArray<uint64> VisWinIndexes;
+
+	for (const TSharedRef<SWindow>& Win : ChildWins)
+	{
+		if (Win->IsRegularWindow() && !Win->GetTitle().IsEmpty()
+			&& !Win->IsActive() && !Win->IsWindowMinimized())
+		{
+			if (bIsNextWindow)
+			{
+				ActivateWindow(Win);
+				return;
+			}
+			VisWinIndexes.Add(Cursor);
+		}
+		++Cursor;
+	}
+	if (!VisWinIndexes.IsEmpty())
+	{
+		for (const int32 WinIndex : VisWinIndexes)
+		{
+			ChildWins[WinIndex]->BringToFront();
+		}
+		ActivateWindow(ChildWins[VisWinIndexes[VisWinIndexes.Num() - 1]]);
+	}
 }
 
 void FUMWindowsNavigationManager::CleanupInvalidWindows(
-	TArray<uint64> CleanupWindowsIds)
+	TArray<uint64> WinIdsToCleanup)
 {
-	for (const auto& Key : CleanupWindowsIds)
+	if (WinIdsToCleanup.Num() == 0)
+		return;
+	for (const auto& Key : WinIdsToCleanup)
 		TrackedWindows.Remove(Key);
 	FString Log = FString::Printf(
-		TEXT("Cleaned: %d Invalid Windows"), CleanupWindowsIds.Num());
-	FUMHelpers::NotifySuccess(FText::FromString(Log));
+		TEXT("Cleaned: %d Invalid Windows"), WinIdsToCleanup.Num());
+	FUMHelpers::NotifySuccess(FText::FromString(Log), VisualLog);
 };
 
 const TMap<uint64, TWeakPtr<SWindow>>& FUMWindowsNavigationManager::GetTrackedWindows()
@@ -216,16 +243,20 @@ const TMap<uint64, TWeakPtr<SWindow>>& FUMWindowsNavigationManager::GetTrackedWi
 void FUMWindowsNavigationManager::RegisterCycleWindowsNavigation(const TSharedPtr<FBindingContext>& MainFrameContext)
 {
 	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoCycleNextWindow,
-		"CycleWindowNext", "Focus the next window",
-		"Moves to the next window",
+		"CycleNoneRootWindowNext", "Cycle None-Root Window Next",
+		"Tries to cycle to the next none-root window.",
 		EUserInterfaceActionType::Button,
-		FInputChord(
-			EModifierKey::FromBools(true, false, true, false), EKeys::Period));
+		FInputChord(EModifierKey::Control, EKeys::Period));
 
 	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoCyclePrevWindow,
-		"CycleWindowPrevious", "Focus the previous window",
-		"Moves to the previous window",
+		"CycleNoneRootWindowPrevious", "Cycle None-Root Window Previous",
+		"Tries to cycle to the previous none-root window.",
 		EUserInterfaceActionType::Button,
-		FInputChord(
-			EModifierKey::FromBools(true, false, true, false), EKeys::Comma));
+		FInputChord(EModifierKey::Control, EKeys::Comma));
+
+	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoGotoRootWindow,
+		"ToggleRootWindowForeground", "Toggle Root-Window Foreground",
+		"Toggle between root window and other windows. Minimizes non-root windows to focus root, or vice versa.",
+		EUserInterfaceActionType::Button,
+		FInputChord(EModifierKey::Control, EKeys::Slash));
 }
