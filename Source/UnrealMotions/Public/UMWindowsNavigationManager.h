@@ -29,7 +29,8 @@ public:
 	 * Sets up commands for cycling between windows and toggling the root window.
 	 * @param MainFrameContext The binding context for the main frame where the commands will be registered
 	 */
-	void RegisterCycleWindowsNavigation(const TSharedPtr<FBindingContext>& MainFrameContext);
+	void RegisterCycleWindowsNavigation(
+		const TSharedPtr<FBindingContext>& MainFrameContext);
 
 	/**
 	 * Maps the window navigation commands to their respective functions in the command list.
@@ -99,7 +100,6 @@ public:
 	 * @return Constant reference to the map of window IDs to window pointers
 	 */
 	const TMap<uint64, TWeakPtr<SWindow>>& GetTrackedWindows();
-
 
 private:
 	static TSharedPtr<FUMWindowsNavigationManager> WindowsNavigationManager;

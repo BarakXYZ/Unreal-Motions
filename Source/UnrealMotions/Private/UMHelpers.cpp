@@ -135,8 +135,8 @@ void FUMHelpers::RemoveAllStringsFromScreen()
 
 void FUMHelpers::SetPluginConfigFile()
 {
-	FString PluginConfigDir = FPaths::ProjectPluginsDir() / TEXT("ErgonomicsXYZ") / TEXT("Config");
-	FString ConfigPath = PluginConfigDir / TEXT("DefaultErgonomicsXYZ.ini");
+	FString PluginConfigDir = FPaths::ProjectPluginsDir() / TEXT("UnrealMotions") / TEXT("Config");
+	FString ConfigPath = PluginConfigDir / TEXT("DefaultUnrealMotions.ini");
 
 	// Use platform-specific path separators
 	FPaths::MakeStandardFilename(ConfigPath);

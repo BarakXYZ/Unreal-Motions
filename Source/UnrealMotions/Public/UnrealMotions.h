@@ -18,6 +18,8 @@ public:
 	static FUMOnUserMovedToNewWindow& GetOnUserMovedToNewWindow();
 	static FUMOnUserMovedToNewTab&	  GetOnUserMovedToNewTab();
 
+	void AddConfigNavigationHJKL();
+
 private:
 	static FUMOnUserMovedToNewWindow OnUserMovedToNewWindow;
 	static FUMOnUserMovedToNewTab	 OnUserMovedToNewTab;

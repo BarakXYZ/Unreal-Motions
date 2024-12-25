@@ -22,7 +22,7 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 {
 	GENERATED_BODY()
 
-	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Initialize(FSubsystemCollectionBase& Collction) override;
 	virtual void Deinitialize() override;
 
 	void OnPreInputKeyDown(const FKeyEvent& KeyEvent);
@@ -31,9 +31,11 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	UFUNCTION(BlueprintCallable, Category = "Vim Editor Subsystem")
 	void ToggleVim(bool bEnabled);
 
+	void SwitchVimModes(const FKey& KeyPressed);
+
 	EUMHelpersLogMethod UMHelpersLogMethod = EUMHelpersLogMethod::PrintToScreen;
 	FDelegateHandle		PreInputKeyDownDelegateHandle;
 	EVimMode			VimMode = EVimMode::Insert;
-	bool				bVisualLog = false;
-	bool				bConsoleLog = false;
+	bool				bVisualLog{ true };
+	bool				bConsoleLog{ false };
 };
