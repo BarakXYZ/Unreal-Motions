@@ -1,3 +1,5 @@
+#include "UMTabsNavigationManager.h"
+
 #include "Interfaces/IMainFrameModule.h"
 #include "Framework/Commands/UICommandInfo.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -8,7 +10,6 @@
 
 #include "UMHelpers.h"
 #include "UnrealMotions.h"
-#include "UMTabsNavigationManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, NoLogging, All); // Prod
 // DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, Log, All); // Dev

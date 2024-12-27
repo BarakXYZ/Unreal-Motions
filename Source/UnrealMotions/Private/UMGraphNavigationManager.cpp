@@ -1,6 +1,7 @@
+#include "UMGraphNavigationManager.h"
+
 #include "Layout/PaintGeometry.h"
 #include "Subsystems/AssetEditorSubsystem.h"
-#include "UMGraphNavigationManager.h"
 #include "GraphEditor.h"
 #include "UMHelpers.h"
 #include "Framework/Application/SlateApplication.h"

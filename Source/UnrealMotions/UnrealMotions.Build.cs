@@ -44,6 +44,8 @@ public class UnrealMotions : ModuleRules
 				"EditorSubsystem",
 				"Kismet",
 				"UMG",
+				"StatusBar",
+				"ToolMenus",
 				// "Core",
 				// "LevelEditor",
 				// ... add private dependencies that you statically link with here ...	

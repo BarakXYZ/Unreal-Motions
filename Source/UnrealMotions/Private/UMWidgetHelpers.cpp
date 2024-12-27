@@ -1,6 +1,5 @@
-#include "Widgets/Accessibility/SlateCoreAccessibleWidgets.h"
-
 #include "UMWidgetHelpers.h"
+#include "Widgets/Accessibility/SlateCoreAccessibleWidgets.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMWidgetHelpers, NoLogging, All); // Prod
 // DEFINE_LOG_CATEGORY_STATIC(LogUMWidgetHelpers, Log, All); // Dev

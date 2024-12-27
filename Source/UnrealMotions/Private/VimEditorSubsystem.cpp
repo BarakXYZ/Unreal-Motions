@@ -41,15 +41,11 @@ void UVimEditorSubsystem::ToggleVim(bool bEnable)
 	{
 		if (bEnable)
 		{
-			TSharedRef<FUMInputPreProcessor> InputProcessor =
-				MakeShared<FUMInputPreProcessor>();
 			// Only bind if not already bound
 			if (!PreInputKeyDownDelegateHandle.IsValid())
 			{
 				FSlateApplication& App = FSlateApplication::Get();
-				IInputInterface*   InputInterface = App.GetInputInterface();
-				// App.SetInputManager();
-				App.RegisterInputPreProcessor(InputProcessor);
+
 				PreInputKeyDownDelegateHandle =
 					App.OnApplicationPreInputKeyDownListener().AddUObject(
 						this, &UVimEditorSubsystem::OnPreInputKeyDown);
@@ -57,7 +53,7 @@ void UVimEditorSubsystem::ToggleVim(bool bEnable)
 			}
 			else
 				OutLog += "Delegate is already bound. Skipping.";
-			VimMode = EVimMode::Insert;
+			// VimMode = EVimMode::Insert;
 		}
 		else
 		{
@@ -79,111 +75,5 @@ void UVimEditorSubsystem::OnPreInputKeyDown(const FKeyEvent& KeyEvent)
 {
 	FSlateApplication& App = FSlateApplication::Get();
 	FKey			   KeyPressed = KeyEvent.GetKey();
-	SwitchVimModes(KeyPressed);
-	if (VimMode == EVimMode::Normal)
-	{
-		if (KeyPressed == EKeys::H)
-		{
-			FKeyEvent LeftKeyEvent(
-				EKeys::Left,
-				FModifierKeysState(),
-				0,	   // User index
-				false, // Is repeat
-				0,	   // Character code
-				0	   // Key code
-			);
-			App.ProcessKeyDownEvent(LeftKeyEvent);
-		}
-		else if (KeyPressed == EKeys::J)
-		{
-			FKeyEvent DownKeyEvent(
-				EKeys::Down,
-				FModifierKeysState(),
-				0,	   // User index
-				false, // Is repeat
-				0,	   // Character code
-				0	   // Key code
-			);
-			App.ProcessKeyDownEvent(DownKeyEvent);
-		}
-		else if (KeyPressed == EKeys::K)
-		{
-			FKeyEvent UpKeyEvent(
-				EKeys::Up,
-				FModifierKeysState(),
-				0,	   // User index
-				false, // Is repeat
-				0,	   // Character code
-				0	   // Key code
-			);
-			App.ProcessKeyDownEvent(UpKeyEvent);
-		}
-		else if (KeyPressed == EKeys::L)
-		{
-			FKeyEvent RightKeyEvent(
-				EKeys::Right,
-				FModifierKeysState(),
-				0,	   // User index
-				false, // Is repeat
-				0,	   // Character code
-				0	   // Key code
-			);
-			App.ProcessKeyDownEvent(RightKeyEvent);
-		}
-		else if (KeyPressed == EKeys::D && KeyEvent.IsControlDown())
-		{
-			for (int32 i = 0; i < 6; ++i)
-			{
-				FKeyEvent DownKeyEvent(
-					EKeys::Down,
-					FModifierKeysState(),
-					0,	   // User index
-					false, // Is repeat
-					0,	   // Character code
-					0	   // Key code
-				);
-				App.ProcessKeyDownEvent(DownKeyEvent);
-			}
-		}
-		else if (KeyPressed == EKeys::U && KeyEvent.IsControlDown())
-		{
-			for (int32 i = 0; i < 6; ++i)
-			{
-				FKeyEvent UpKeyEvent(
-					EKeys::Up,
-					FModifierKeysState(),
-					0,	   // User index
-					false, // Is repeat
-					0,	   // Character code
-					0	   // Key code
-				);
-				App.ProcessKeyDownEvent(UpKeyEvent);
-			}
-		}
-	}
-}
-
-void UVimEditorSubsystem::SwitchVimModes(const FKey& KeyPressed)
-{
-	if (KeyPressed == EKeys::Escape)
-	{
-		SetMode(EVimMode::Normal);
-	}
-	else if (VimMode == EVimMode::Normal && KeyPressed == EKeys::I)
-	{
-		SetMode(EVimMode::Insert);
-	}
-	else if (VimMode == EVimMode::Normal && KeyPressed == EKeys::V)
-	{
-		SetMode(EVimMode::Visual);
-	}
-}
-
-void UVimEditorSubsystem::SetMode(EVimMode NewMode)
-{
-	if (VimMode != NewMode)
-	{
-		VimMode = NewMode;
-		FUMHelpers::NotifySuccess(FText::FromString(UEnum::GetValueAsString(NewMode)), bVisualLog);
-	}
+	// SwitchVimModes(KeyPressed);
 }

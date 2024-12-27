@@ -6,14 +6,6 @@
 #include "UMHelpers.h"
 #include "VimEditorSubsystem.generated.h"
 
-UENUM(BlueprintType)
-enum class EVimMode : uint8
-{
-	Normal UMETA(DisplayName = "Normal"),
-	Insert UMETA(DisplayName = "Insert"),
-	Visual UMETA(DisplayName = "Visual"),
-};
-
 /**
  *
  */
@@ -26,16 +18,14 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	virtual void Deinitialize() override;
 
 	void OnPreInputKeyDown(const FKeyEvent& KeyEvent);
+
 	void DetectVimMode(const FKeyEvent& KeyEvent);
-	void SetMode(EVimMode NewMode);
+
 	UFUNCTION(BlueprintCallable, Category = "Vim Editor Subsystem")
 	void ToggleVim(bool bEnabled);
 
-	void SwitchVimModes(const FKey& KeyPressed);
-
 	EUMHelpersLogMethod UMHelpersLogMethod = EUMHelpersLogMethod::PrintToScreen;
 	FDelegateHandle		PreInputKeyDownDelegateHandle;
-	EVimMode			VimMode = EVimMode::Insert;
 	bool				bVisualLog{ true };
 	bool				bConsoleLog{ false };
 };
