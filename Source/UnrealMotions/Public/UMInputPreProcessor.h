@@ -84,6 +84,14 @@ public:
 	/** Unregisters a specific callback */
 	void UnregisterOnVimModeChanged(const void* CallbackOwner);
 
+	void NavigateTo(const FKeyEvent& InKeyEvent);
+	void NavigateTo(const EKeys InKey);
+
+	void GoLeft();
+	void GoDown();
+	void GoUp();
+	void GoRight();
+
 	// Trie Root Node
 	FTrieNode* TrieRoot = nullptr;
 
@@ -92,6 +100,7 @@ public:
 
 private:
 	static TSharedPtr<FUMInputPreProcessor> InputPreProcessor;
+	bool									bIgnoreKeyDown{ false };
 	EUMHelpersLogMethod						UMHelpersLogMethod{ EUMHelpersLogMethod::PrintToScreen };
 	EVimMode								VimMode{ EVimMode::Insert };
 

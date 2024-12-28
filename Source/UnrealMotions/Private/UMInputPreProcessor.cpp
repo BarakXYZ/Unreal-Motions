@@ -11,16 +11,6 @@ TSharedPtr<FUMInputPreProcessor>
 FUMInputPreProcessor::FUMInputPreProcessor()
 {
 	InitializeKeyBindings();
-	// UStatusBarSubsystem* StatusBarSubsystem = GEditor->GetEditorSubsystem<UStatusBarSubsystem>();
-
-	// FWidgetDrawerConfig MyDrawerConfig("VIM");
-	// MyDrawerConfig.ButtonText = FText::FromString("My Custom Notifier!");
-	// // MyDrawerConfig.Icon = FSlateIcon(); // Optional: If you have a custom icon
-	// MyDrawerConfig.ToolTipText = FText::FromString("Click to see My Custom Notifier Panel");
-	// StatusBarSubsystem->RegisterDrawer(
-	// 	FName("MainMenu.StatusBar"),
-	// 	MoveTemp(MyDrawerConfig),
-	// 	5);
 }
 FUMInputPreProcessor::~FUMInputPreProcessor()
 {
@@ -95,6 +85,7 @@ void FUMInputPreProcessor::ResetSequence()
 		if (ParentWindow.IsValid())
 			ParentWindow->RemoveOverlaySlot(BufferVisualizer.Pin().ToSharedRef());
 	}
+	// FUMHelpers::NotifySuccess(FText::FromString("Reset Sequence"));
 }
 
 // Initialize Key Bindings in the Trie
@@ -115,6 +106,26 @@ void FUMInputPreProcessor::InitializeKeyBindings()
 		[]() {
 			UE_LOG(LogTemp, Log, TEXT("Callback triggered for Space + K!"));
 		});
+
+	AddKeyBinding(
+		{ EKeys::H },
+		this,
+		&FUMInputPreProcessor::GoLeft);
+
+	AddKeyBinding(
+		{ EKeys::J },
+		this,
+		&FUMInputPreProcessor::GoDown);
+
+	AddKeyBinding(
+		{ EKeys::K },
+		this,
+		&FUMInputPreProcessor::GoUp);
+
+	AddKeyBinding(
+		{ EKeys::L },
+		this,
+		&FUMInputPreProcessor::GoRight);
 }
 
 template <typename ObjectType>
@@ -147,17 +158,52 @@ void FUMInputPreProcessor::AddKeyBinding(const TArray<FKey>& Sequence, TFunction
 void FUMInputPreProcessor::Callback_JumpNotification()
 {
 	FUMHelpers::NotifySuccess(FText::FromString("Jump Notification <3"));
+	GoDown();
 }
 
 bool FUMInputPreProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// InKeyEvent.GetKeyCodea
+	if (bIgnoreKeyDown)
+	{
+		// FUMHelpers::NotifySuccess(FText::FromString("HandleKeyDownEvent Dummy"));
+		bIgnoreKeyDown = false;
+		return false; // We have to pass false in order for unreal to actually
+					  // process the fake event! Need to still work on this.
+	}
+	// FUMHelpers::NotifySuccess(FText::FromString("HandleKeyDownEvent Prod"));
+	// if (InKeyEvent.GetKey() == EKeys::J)
+	// {
+	// 	GoDown();
+	// 	return true;
+	// }
+	// else if (InKeyEvent.GetKey() == EKeys::K)
+	// {
+	// 	bIgnoreKeyDown = true;
+	// 	GoUp();
+	// 	return true;
+	// }
+	// else if (InKeyEvent.GetKey() == EKeys::H)
+	// {
+	// 	bIgnoreKeyDown = true;
+	// 	GoLeft();
+	// 	return true;
+	// }
+	// else if (InKeyEvent.GetKey() == EKeys::L)
+	// {
+	// 	bIgnoreKeyDown = true;
+	// 	GoRight();
+	// 	return true;
+	// }
+
 	SwitchVimModes(InKeyEvent);
 	if (VimMode != EVimMode::Normal)
 		return false; // Pass on the handling to Unreal native.
 
 	// Process the key input using the trie
-	const FKey& KeyPressed = InKeyEvent.GetKey();
+	// const FKey& KeyPressed = InKeyEvent.GetKey();
+	FKey KeyPressed = InKeyEvent.GetKey();
 
 	// If leader key is pressed, show the buffer visualizer
 	if (KeyPressed == EKeys::SpaceBar && CurrentBuffer.IsEmpty())
@@ -192,6 +238,8 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 
 	// Check for sequence completion
 	ProcessKeySequence(KeyPressed);
+
+	// NavigateTo(InKeyEvent);
 
 	// FUMHelpers::NotifySuccess();
 	return true;
@@ -252,56 +300,92 @@ bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateAp
 	return false;
 }
 
-// if (VimMode == EVimMode::Normal)
-// {
-// 	if (KeyPressed == EKeys::H)
-// 	{
-// 		FKeyEvent LeftKeyEvent(
-// 			EKeys::Left,
-// 			FModifierKeysState(),
-// 			0,	   // User index
-// 			false, // Is repeat
-// 			0,	   // Character code
-// 			0	   // Key code
-// 		);
-// 		App.ProcessKeyDownEvent(LeftKeyEvent);
-// 	}
-// 	else if (KeyPressed == EKeys::J)
-// 	{
-// 		FKeyEvent DownKeyEvent(
-// 			EKeys::Down,
-// 			FModifierKeysState(),
-// 			0,	   // User index
-// 			false, // Is repeat
-// 			0,	   // Character code
-// 			0	   // Key code
-// 		);
-// 		App.ProcessKeyDownEvent(DownKeyEvent);
-// 	}
-// 	else if (KeyPressed == EKeys::K)
-// 	{
-// 		FKeyEvent UpKeyEvent(
-// 			EKeys::Up,
-// 			FModifierKeysState(),
-// 			0,	   // User index
-// 			false, // Is repeat
-// 			0,	   // Character code
-// 			0	   // Key code
-// 		);
-// 		App.ProcessKeyDownEvent(UpKeyEvent);
-// 	}
-// 	else if (KeyPressed == EKeys::L)
-// 	{
-// 		FKeyEvent RightKeyEvent(
-// 			EKeys::Right,
-// 			FModifierKeysState(),
-// 			0,	   // User index
-// 			false, // Is repeat
-// 			0,	   // Character code
-// 			0	   // Key code
-// 		);
-// 		App.ProcessKeyDownEvent(RightKeyEvent);
-// 	}
+void FUMInputPreProcessor::NavigateTo(const FKeyEvent& InKeyEvent)
+{
+	FSlateApplication& App = FSlateApplication::Get();
+	const FKey&		   InKey = InKeyEvent.GetKey();
+	FKey			   OutKey; // Change to FKey instead of EKeys
+
+	// Compare against the key name instead of direct FKey comparison
+	if (InKey == EKeys::H)
+		OutKey = FKey(EKeys::Left); // Create FKey from EKeys
+	else if (InKey == EKeys::J)
+		OutKey = FKey(EKeys::Down);
+	else if (InKey == EKeys::K)
+		OutKey = FKey(EKeys::Up);
+	else if (InKey == EKeys::L)
+		OutKey = FKey(EKeys::Right);
+	else
+		return;
+
+	// Create new key event using the same structure as InKeyEvent
+	FKeyEvent MappedKeyEvent(
+		OutKey,
+		InKeyEvent.GetModifierKeys(), // Copy modifier state from input event
+		InKeyEvent.GetUserIndex(),
+		InKeyEvent.IsRepeat(),
+		InKeyEvent.GetCharacter(),
+		InKeyEvent.GetKeyCode());
+	App.ProcessKeyDownEvent(MappedKeyEvent);
+}
+
+void FUMInputPreProcessor::GoLeft()
+{
+	bIgnoreKeyDown = true;
+	FKeyEvent DownKeyEvent(
+		EKeys::Left,
+		FModifierKeysState(),
+		0,	   // User index
+		false, // Is repeat
+		0,	   // Character code
+		0	   // Key code
+	);
+	FSlateApplication::Get().ProcessKeyDownEvent(DownKeyEvent);
+}
+
+void FUMInputPreProcessor::GoDown()
+{
+	bIgnoreKeyDown = true;
+	FKeyEvent DownKeyEvent(
+		EKeys::Down,
+		FModifierKeysState(),
+		0,	   // User index
+		false, // Is repeat
+		0,	   // Character code
+		0	   // Key code
+	);
+	FSlateApplication::Get().ProcessKeyDownEvent(DownKeyEvent);
+}
+
+void FUMInputPreProcessor::GoUp()
+{
+	bIgnoreKeyDown = true;
+	FKeyEvent DownKeyEvent(
+		EKeys::Up,
+		FModifierKeysState(),
+		0,	   // User index
+		false, // Is repeat
+		0,	   // Character code
+		0	   // Key code
+	);
+	FSlateApplication::Get().ProcessKeyDownEvent(DownKeyEvent);
+}
+
+void FUMInputPreProcessor::GoRight()
+{
+	bIgnoreKeyDown = true;
+	FKeyEvent DownKeyEvent(
+		EKeys::Right,
+		FModifierKeysState(),
+		0,	   // User index
+		false, // Is repeat
+		0,	   // Character code
+		0	   // Key code
+	);
+	FSlateApplication::Get().ProcessKeyDownEvent(DownKeyEvent);
+	// FUMHelpers::NotifySuccess(FText::FromString("Go Right!"));
+}
+
 // 	else if (KeyPressed == EKeys::D && KeyEvent.IsControlDown())
 // 	{
 // 		for (int32 i = 0; i < 6; ++i)

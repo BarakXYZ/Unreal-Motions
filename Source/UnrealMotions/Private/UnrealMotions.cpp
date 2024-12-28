@@ -41,6 +41,8 @@ void FUnrealMotionsModule::BindPostEngineInitDelegates()
 {
 	// Register our custom InputPreProcessor to intercept user input.
 	FSlateApplication& App = FSlateApplication::Get();
+	// InputProcessor = MakeShared<FUMInputPreProcessor>();
+	// App.RegisterInputPreProcessor(InputProcessor);
 	App.RegisterInputPreProcessor(FUMInputPreProcessor::Get());
 }
 
