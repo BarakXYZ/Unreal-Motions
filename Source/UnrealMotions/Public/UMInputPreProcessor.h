@@ -17,6 +17,8 @@ enum class EVimMode : uint8
 	Visual UMETA(DisplayName = "Visual"),
 };
 
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnVimModeChanged, const EVimMode);
+
 // Trie Node Structure
 struct FTrieNode
 {
@@ -47,6 +49,10 @@ public:
 
 	virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override;
 
+	static TSharedPtr<FUMInputPreProcessor> Get();
+	static void								Initialize();
+	static bool								IsInitialized();
+
 	void SwitchVimModes(const FKeyEvent& InKeyEvent);
 
 	void SetMode(EVimMode NewMode);
@@ -70,6 +76,14 @@ public:
 	// Reset the input sequence
 	void ResetSequence();
 
+	FOnVimModeChanged& GetOnVimModeChanged();
+
+	/** Registers a callback for Vim mode changes */
+	void RegisterOnVimModeChanged(TFunction<void(const EVimMode)> Callback);
+
+	/** Unregisters a specific callback */
+	void UnregisterOnVimModeChanged(const void* CallbackOwner);
+
 	// Trie Root Node
 	FTrieNode* TrieRoot = nullptr;
 
@@ -77,12 +91,15 @@ public:
 	TArray<FKey> CurrentSequence;
 
 private:
-	EUMHelpersLogMethod UMHelpersLogMethod{ EUMHelpersLogMethod::PrintToScreen };
-	EVimMode			VimMode{ EVimMode::Insert };
+	static TSharedPtr<FUMInputPreProcessor> InputPreProcessor;
+	EUMHelpersLogMethod						UMHelpersLogMethod{ EUMHelpersLogMethod::PrintToScreen };
+	EVimMode								VimMode{ EVimMode::Insert };
 
 	FWidgetDrawerConfig			  MyDrawerConfig{ TEXT("VIM") };
 	TWeakPtr<SUMBufferVisualizer> BufferVisualizer; // Pointer to the visualizer
 	FString						  CurrentBuffer;	// Current buffer contents
+
+	FOnVimModeChanged OnVimModeChanged;
 
 	bool bVisualLog{ true };
 	bool bConsoleLog{ false };

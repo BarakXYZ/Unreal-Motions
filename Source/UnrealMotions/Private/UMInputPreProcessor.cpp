@@ -2,7 +2,11 @@
 #include "UMHelpers.h"
 #include "StatusBarSubsystem.h"
 #include "Editor.h"
+#include "UObject/UnrealNames.h"
 // #include "WidgetDrawerConfig.h"
+
+TSharedPtr<FUMInputPreProcessor>
+	FUMInputPreProcessor::InputPreProcessor = nullptr;
 
 FUMInputPreProcessor::FUMInputPreProcessor()
 {
@@ -20,6 +24,26 @@ FUMInputPreProcessor::FUMInputPreProcessor()
 }
 FUMInputPreProcessor::~FUMInputPreProcessor()
 {
+}
+
+void FUMInputPreProcessor::Initialize()
+{
+	if (!InputPreProcessor)
+	{
+		InputPreProcessor = MakeShared<FUMInputPreProcessor>();
+	}
+}
+
+bool FUMInputPreProcessor::IsInitialized()
+{
+	return InputPreProcessor.IsValid();
+}
+
+TSharedPtr<FUMInputPreProcessor> FUMInputPreProcessor::Get()
+{
+	// Always ensure initialization first
+	Initialize();
+	return InputPreProcessor;
 }
 
 void FUMInputPreProcessor::Tick(
@@ -198,6 +222,22 @@ void FUMInputPreProcessor::SetMode(EVimMode NewMode)
 		FUMHelpers::NotifySuccess(
 			FText::FromString(UEnum::GetValueAsString(NewMode)), bVisualLog);
 	}
+	OnVimModeChanged.Broadcast(NewMode);
+}
+
+FOnVimModeChanged& FUMInputPreProcessor::GetOnVimModeChanged()
+{
+	return OnVimModeChanged;
+}
+
+void FUMInputPreProcessor::RegisterOnVimModeChanged(TFunction<void(const EVimMode)> Callback)
+{
+	OnVimModeChanged.AddLambda(Callback);
+}
+
+void FUMInputPreProcessor::UnregisterOnVimModeChanged(const void* CallbackOwner)
+{
+	OnVimModeChanged.RemoveAll(CallbackOwner);
 }
 
 bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)

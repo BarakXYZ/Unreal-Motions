@@ -1,7 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "SUMStatusBarWidget.h"
-
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
@@ -10,12 +7,14 @@
 
 #define LOCTEXT_NAMESPACE "UMStatusBarWidget"
 
+EVimMode SUMStatusBarWidget::StaticCurrVimMode = EVimMode::Insert;
+
 void SUMStatusBarWidget::Construct(const FArguments& InArgs)
 {
 	ChildSlot
 		[SNew(SButton)
 				.ContentPadding(FMargin(6.0f, 0.0f))
-				.ToolTipText_Lambda([this]() { return GetStatusBarTooltip(); })
+				.ToolTipText(this, &SUMStatusBarWidget::GetStatusBarTooltip)
 				.ButtonStyle(FAppStyle::Get(), "SimpleButton")
 				.OnClicked(InArgs._OnClicked)
 					[SNew(SHorizontalBox)
@@ -23,66 +22,83 @@ void SUMStatusBarWidget::Construct(const FArguments& InArgs)
 							.AutoWidth()
 							.VAlign(VAlign_Center)
 							.HAlign(HAlign_Center)
-								[SNew(SImage)
-										.Image_Lambda([this]() { return GetStatusBarIcon(); })]
+								[SAssignNew(StatusBarImage, SImage)
+										.Image(this, &SUMStatusBarWidget::GetCurrentStatusBarIcon)]
 						+ SHorizontalBox::Slot()
 							.AutoWidth()
 							.VAlign(VAlign_Center)
 							.Padding(FMargin(5, 0, 0, 0))
-								[SNew(STextBlock)
+								[SAssignNew(StatusBarText, STextBlock)
 										.TextStyle(&FAppStyle::Get().GetWidgetStyle<FTextBlockStyle>("NormalText"))
-										.Text_Lambda([this]() { return GetStatusBarText(); })]]];
+										.Text(this, &SUMStatusBarWidget::GetStatusBarText)]]];
+
+	if (FUMInputPreProcessor::Get())
+	{
+		// Update the icon when the on vim mode changed.
+		FUMInputPreProcessor::Get()->RegisterOnVimModeChanged(
+			[this](const EVimMode CurrentVimMode) {
+				UpdateStatusBar(CurrentVimMode);
+			});
+	}
 }
 
-const FSlateBrush* SUMStatusBarWidget::GetStatusBarIcon() const
+SUMStatusBarWidget::~SUMStatusBarWidget()
 {
-	// if (UnsavedAssetTracker->GetUnsavedAssetNum() == 0)
-	// {
-	// 	return FAppStyle::GetBrush("Assets.AllSaved");
-	// }
-	// else if (UnsavedAssetTracker->GetWarningNum() > 0)
-	// {
-	// 	return FAppStyle::GetBrush("Assets.UnsavedWarning");
-	// }
-	// else
-	// {
-	return FAppStyle::GetBrush("Assets.Unsaved");
-	// }
+	if (FUMInputPreProcessor::IsInitialized())
+	{
+		FUMInputPreProcessor::Get()->UnregisterOnVimModeChanged(this);
+	}
+}
+
+void SUMStatusBarWidget::UpdateStatusBar(const EVimMode CurrentVimMode)
+{
+	if (StatusBarImage.IsValid())
+	{
+		StatusBarImage->Invalidate(EInvalidateWidget::Layout);
+	}
+	StaticCurrVimMode = CurrentVimMode;
+}
+
+FVimModeInfo SUMStatusBarWidget::GetVimModeInfo(EVimMode Mode) const
+{
+	switch (Mode)
+	{
+		case EVimMode::Normal:
+			return {
+				FAppStyle::GetBrush("TextureEditor.GreenChannel.Small"),
+				LOCTEXT("Normal_Mode", "Normal")
+			};
+		case EVimMode::Visual:
+			return {
+				FAppStyle::GetBrush("TextureEditor.RedChannel.Small"),
+				LOCTEXT("Visual_Mode", "Visual")
+			};
+		case EVimMode::Insert:
+		default:
+			return {
+				FAppStyle::GetBrush("TextureEditor.AlphaChannel.Small"),
+				LOCTEXT("Insert_Mode", "Insert")
+			};
+	}
+}
+
+const FSlateBrush* SUMStatusBarWidget::GetCurrentStatusBarIcon() const
+{
+	return GetVimModeInfo(StaticCurrVimMode).Icon;
 }
 
 FText SUMStatusBarWidget::GetStatusBarText() const
 {
-	// if (UnsavedAssetTracker->GetUnsavedAssetNum() == 0)
-	// {
-	// return LOCTEXT("All_Saved", "All Saved");  // Reference
-	return LOCTEXT("Unreal_Motions", "Unreal Motions");
-	// }
-	// return FText::Format(LOCTEXT("Unsaved Assets", "{0} Unsaved"), UnsavedAssetTracker->GetUnsavedAssetNum());
+	return FText::Format(
+		LOCTEXT("Mode_Status", "Unreal Motions [{0}]"),
+		GetVimModeInfo(StaticCurrVimMode).DisplayText);
 }
 
 FText SUMStatusBarWidget::GetStatusBarTooltip() const
 {
-	// if (UnsavedAssetTracker->GetUnsavedAssetNum() == 0)
-	// {
-	// return LOCTEXT("Assets_All_Saved_Tooltip", "All assets in the project have been saved.");  // Reference
-	return LOCTEXT("Unreal_Motions_Tooltip", "Current Vim Mode <3");
-	// }
-	// else if (UnsavedAssetTracker->GetWarningNum() > 0)
-	// {
-	// 	return LOCTEXT("Asset_Unsaved_Warning_Tooltip", "Warning: There are currently unsaved assets that have a conflict in Revision Control");
-	// }
-	// else
-	// {
-	// 	const int32 UnsavedAssetNum = UnsavedAssetTracker->GetUnsavedAssetNum();
-	// 	if (UnsavedAssetNum <= 1)
-	// 	{
-	// 		return FText::Format(LOCTEXT("Single_Asset_Unsaved_Tooltip", "There is currently {0} asset that is unsaved in this project. Press to initiate save."), UnsavedAssetNum);
-	// 	}
-	// 	else
-	// 	{
-	// 		return FText::Format(LOCTEXT("Asset_Unsaved_Tooltip", "There are currently {0} assets that are unsaved in this project. Press to initiate save."), UnsavedAssetNum);
-	// 	}
-	// }
+	return FText::Format(
+		LOCTEXT("Mode_Tooltip", "Current Vim Mode: {0}"),
+		GetVimModeInfo(StaticCurrVimMode).DisplayText);
 }
 
 #undef LOCTEXT_NAMESPACE

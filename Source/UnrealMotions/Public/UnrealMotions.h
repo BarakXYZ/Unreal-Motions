@@ -24,17 +24,6 @@ public:
 	static FUMOnUserMovedToNewTab&	  GetOnUserMovedToNewTab();
 
 	void BindPostEngineInitDelegates();
-	void RegisterInputPreProcessor(FSlateApplication& App);
-
-	/** Called after ToolMenus become available, to register our custom status bar. */
-	void RegisterMenus();
-	void RegisterMenuExtensions();
-
-	void				AddMenu(FMenuBarBuilder& MenuBarBuilder);
-	void				AddMenu(FToolBarBuilder& ToolBarBuilder);
-	void				FillMenu(FMenuBuilder& MenuBuilder);
-	void				OnButtonClicked();
-	FWidgetDrawerConfig CreateGlobalDrawerConfig();
 
 private:
 	static FUMOnUserMovedToNewWindow OnUserMovedToNewWindow;
