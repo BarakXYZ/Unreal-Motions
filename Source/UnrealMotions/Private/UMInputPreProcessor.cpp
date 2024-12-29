@@ -1,16 +1,21 @@
 #include "UMInputPreProcessor.h"
+#include "Editor.h"
+#include "Engine/GameInstance.h"
 #include "UMHelpers.h"
 #include "StatusBarSubsystem.h"
-#include "Editor.h"
-#include "UObject/UnrealNames.h"
 // #include "WidgetDrawerConfig.h"
 
 TSharedPtr<FUMInputPreProcessor>
 	FUMInputPreProcessor::InputPreProcessor = nullptr;
 
+FOnUMPreProcessorInputInit FUMInputPreProcessor::OnUMPreProcessorInputInit;
+
+bool FUMInputPreProcessor::bNativeInputHandling = { false };
+
 FUMInputPreProcessor::FUMInputPreProcessor()
 {
-	InitializeKeyBindings();
+	OnUMPreProcessorInputInit.AddLambda(
+		[this]() { InitializeKeyBindings(); });
 }
 FUMInputPreProcessor::~FUMInputPreProcessor()
 {
@@ -21,6 +26,7 @@ void FUMInputPreProcessor::Initialize()
 	if (!InputPreProcessor)
 	{
 		InputPreProcessor = MakeShared<FUMInputPreProcessor>();
+		OnUMPreProcessorInputInit.Broadcast();
 	}
 }
 
@@ -42,51 +48,122 @@ void FUMInputPreProcessor::Tick(
 }
 
 // Process the current key sequence
-bool FUMInputPreProcessor::ProcessKeySequence(const FKey& Key)
+bool FUMInputPreProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// Add the key to the current sequence
-	CurrentSequence.Add(Key);
+	// 1) Add this key to current sequence
+	CurrentSequence.Add(GetChordFromKeyEvent(InKeyEvent));
 
-	// Traverse the trie to check for matches
+	// 2) Traverse the trie
 	FTrieNode* CurrentNode = TrieRoot;
-	for (const FKey& SequenceKey : CurrentSequence)
+	for (const FInputChord& SequenceKey : CurrentSequence)
 	{
 		if (!CurrentNode->Children.Contains(SequenceKey))
 		{
-			// No match found; reset sequence
-			ResetSequence();
+			// No match found
+			ResetSequence(SlateApp);
 			return false;
 		}
 		CurrentNode = CurrentNode->Children[SequenceKey];
 	}
 
-	// If a callback exists at this node, execute it
-	if (CurrentNode->Callback)
+	// 3) Found a node, check for a callback
+	if (CurrentNode->CallbackType != EUMCallbackType::None)
 	{
-		// CurrentNode->Callback(CurrentSequence);
-		CurrentNode->Callback();
-		ResetSequence(); // Reset the sequence after executing the callback
+		switch (CurrentNode->CallbackType)
+		{
+			case EUMCallbackType::NoParam:
+				if (CurrentNode->NoParamCallback)
+					CurrentNode->NoParamCallback();
+				break;
+
+			case EUMCallbackType::KeyEventParam:
+				if (CurrentNode->KeyEventCallback)
+					CurrentNode->KeyEventCallback(SlateApp, InKeyEvent);
+				break;
+
+			case EUMCallbackType::SequenceParam:
+				if (CurrentNode->SequenceCallback)
+					CurrentNode->SequenceCallback(SlateApp, CurrentSequence);
+				break;
+
+			default:
+				break;
+		}
+
+		// 4) Reset sequence after invoking the callback
+		ResetSequence(SlateApp);
 		return true;
 	}
 
-	// Allow partial matches
+	// Partial match is still valid; do not reset
 	return true;
 }
 
 // Reset the input sequence
-void FUMInputPreProcessor::ResetSequence()
+void FUMInputPreProcessor::ResetSequence(FSlateApplication& SlateApp)
 {
+	OnResetSequence.Broadcast();
 	CurrentSequence.Empty();
 	CurrentBuffer.Empty();
+	ResetBufferVisualizer(SlateApp);
+	// FUMHelpers::NotifySuccess(FText::FromString("Reset Sequence"));
+}
+
+void FUMInputPreProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
+{
 	if (BufferVisualizer.IsValid())
 	{
 		TSharedPtr<SWindow> ParentWindow =
-			FSlateApplication::Get().FindWidgetWindow(
+			SlateApp.FindWidgetWindow(
 				BufferVisualizer.Pin().ToSharedRef());
 		if (ParentWindow.IsValid())
 			ParentWindow->RemoveOverlaySlot(BufferVisualizer.Pin().ToSharedRef());
 	}
-	// FUMHelpers::NotifySuccess(FText::FromString("Reset Sequence"));
+}
+
+FTrieNode* FUMInputPreProcessor::FindOrCreateTrieNode(
+	const TArray<FInputChord>& Sequence)
+{
+	FTrieNode* Current = TrieRoot;
+	for (const FInputChord& Key : Sequence)
+	{
+		if (!Current->Children.Contains(Key))
+		{
+			Current->Children.Add(Key, new FTrieNode());
+		}
+		Current = Current->Children[Key];
+	}
+	return Current;
+}
+
+// 1) No-Parameter
+void FUMInputPreProcessor::AddKeyBinding_NoParam(
+	const TArray<FInputChord>& Sequence,
+	TFunction<void()>		   Callback)
+{
+	FTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	Node->NoParamCallback = MoveTemp(Callback);
+	Node->CallbackType = EUMCallbackType::NoParam;
+}
+
+// 2) Single FKeyEvent param
+void FUMInputPreProcessor::AddKeyBinding_KeyEvent(
+	const TArray<FInputChord>&									   Sequence,
+	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback)
+{
+	FTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	Node->KeyEventCallback = MoveTemp(Callback);
+	Node->CallbackType = EUMCallbackType::KeyEventParam;
+}
+
+// 3) TArray<FInputChord> param
+void FUMInputPreProcessor::AddKeyBinding_Sequence(
+	const TArray<FInputChord>&												 Sequence,
+	TFunction<void(FSlateApplication& SlateApp, const TArray<FInputChord>&)> Callback)
+{
+	FTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	Node->SequenceCallback = MoveTemp(Callback);
+	Node->CallbackType = EUMCallbackType::SequenceParam;
 }
 
 // Initialize Key Bindings in the Trie
@@ -94,104 +171,54 @@ void FUMInputPreProcessor::InitializeKeyBindings()
 {
 	// Create the root node
 	TrieRoot = new FTrieNode();
+	// WeakInputPreProcessor = InputPreProcessor.ToWeakPtr();
 
-	// Add the "space + j + n" binding
-	AddKeyBinding(
-		{ EKeys::SpaceBar, EKeys::J, EKeys::N },
-		this,
-		&FUMInputPreProcessor::Callback_JumpNotification);
-
-	// Add more bindings as needed
-	AddKeyBinding(
-		{ EKeys::SpaceBar, EKeys::K },
-		[]() {
-			UE_LOG(LogTemp, Log, TEXT("Callback triggered for Space + K!"));
+	AddKeyBinding_KeyEvent(
+		{ EKeys::I },
+		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+			SwitchVimModes(SlateApp, InKeyEvent);
 		});
 
-	AddKeyBinding(
-		{ EKeys::H },
-		this,
-		&FUMInputPreProcessor::GoLeft);
-
-	AddKeyBinding(
-		{ EKeys::J },
-		this,
-		&FUMInputPreProcessor::GoDown);
-
-	AddKeyBinding(
-		{ EKeys::K },
-		this,
-		&FUMInputPreProcessor::GoUp);
-
-	AddKeyBinding(
-		{ EKeys::L },
-		this,
-		&FUMInputPreProcessor::GoRight);
-}
-
-template <typename ObjectType>
-void FUMInputPreProcessor::AddKeyBinding(
-	const TArray<FKey>& Sequence, ObjectType* Object,
-	void (ObjectType::*MemberFunction)())
-{
-	AddKeyBinding(Sequence, [Object, MemberFunction]() {
-		(Object->*MemberFunction)();
-	});
-}
-
-void FUMInputPreProcessor::AddKeyBinding(
-	const TArray<FKey>& Sequence, TFunction<void()> Callback)
-{
-	// Start from the root of the trie
-	FTrieNode* CurrentNode = TrieRoot;
-
-	// Traverse or create nodes for the sequence
-	for (const FKey& Key : Sequence)
-	{
-		if (!CurrentNode->Children.Contains(Key))
-		{
-			CurrentNode->Children.Add(Key, new FTrieNode());
-		}
-		CurrentNode = CurrentNode->Children[Key];
-	}
-
-	// Assign the callback to the last node
-	CurrentNode->Callback = MoveTemp(Callback);
-}
-
-void FUMInputPreProcessor::Callback_JumpNotification()
-{
-	FUMHelpers::NotifySuccess(FText::FromString("Jump Notification <3"));
-	GoDown();
+	AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Shift, EKeys::V) },
+		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+			SwitchVimModes(SlateApp, InKeyEvent);
+		});
 }
 
 bool FUMInputPreProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// InKeyEvent.IsShiftDown();
-	// InKeyEvent.GetKey().IsModifierKey();
-
-	// InKeyEvent.GetKeyCodea
-	if (bIgnoreKeyDown)
+	// NOTE:
+	// When we call SlateApp.ProcessKeyDownEvent(), it will trigger another
+	// HandleKeyDownEvent call.
+	// We need to return false during that second pass to let Unreal Engine
+	// process the simulated key event.
+	// Otherwise, the simulated key press won't be handled by the engine.
+	if (bNativeInputHandling)
 	{
-		// FUMHelpers::NotifySuccess(FText::FromString("HandleKeyDownEvent Dummy"));
-		bIgnoreKeyDown = false;
-		return false; // We have to pass false in order for unreal to actually
-					  // process the fake event! Need to still work on this.
+		// FUMHelpers::NotifySuccess(FText::FromString(
+		// 	"HandleKeyDownEvent Dummy"));
+
+		bNativeInputHandling = false; // Resume manual handling from next event
+		// DebugKeyEvent(InKeyEvent);
+		return false;
 	}
 
-	// if (InKeyEvent.IsShiftDown() && InKeyEvent.IsKeyEvent())
-	// if (InKeyEvent.IsShiftDown() && !InKeyEvent.GetKey().IsModifierKey())
-	// 	FUMHelpers::NotifySuccess(FText::FromString("HandleKeyDownEvent Prod"));
+	// FUMHelpers::NotifySuccess(FText::FromString("HandleKeyDownEvent Prod"));
+	if (IsSimulateEscapeKey(SlateApp, InKeyEvent))
+		return true;
 
-	SwitchVimModes(InKeyEvent);
-	if (VimMode != EVimMode::Normal)
-		return false; // Pass on the handling to Unreal native.
+	if (IsVimSwitch(InKeyEvent)) // On switching modes, return true
+		return true;
 
-	// Process the key input using the trie
-	// const FKey& KeyPressed = InKeyEvent.GetKey();
+	if (VimMode == EVimMode::Insert) // Default
+		return false;				 // Pass on the handling to Unreal native.
+
+	if (TrackCountPrefix(InKeyEvent)) // User is currently counting, return.
+		return true;
+
 	FKey KeyPressed = InKeyEvent.GetKey();
-
 	// If leader key is pressed, show the buffer visualizer
 	if (KeyPressed == EKeys::SpaceBar && CurrentBuffer.IsEmpty())
 	{
@@ -223,30 +250,82 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 		BufferVisualizer.Pin()->UpdateBuffer(CurrentBuffer);
 	}
 
-	// Check for sequence completion
-	ProcessKeySequence(KeyPressed);
+	if (KeyPressed.IsModifierKey()) // Simply ignore
+		return true;				// or false?
 
-	// NavigateTo(InKeyEvent);
+	// if (VimMode == EVimMode::Visual)
+	// {
+	// 	// FUMHelpers::NotifySuccess(FText::FromString("Visual Process"));
+	// 	FModifierKeysState VisualModKeysState(
+	// 		true, true, // Always shift
+	// 		false, false, false, false, false, false, false);
+	// 	FKeyEvent VisualProcessesdKeyEvent(
+	// 		InKeyEvent.GetKey(),
+	// 		VisualModKeysState,
+	// 		InKeyEvent.GetUserIndex(),
+	// 		InKeyEvent.IsRepeat(),
+	// 		InKeyEvent.GetCharacter(),
+	// 		InKeyEvent.GetKeyCode());
+	// 	return ProcessKeySequence(SlateApp, VisualProcessesdKeyEvent);
+	// 	// return true;
+	// }
 
-	// FUMHelpers::NotifySuccess();
+	return ProcessKeySequence(SlateApp, InKeyEvent);
+	// return true;
+}
+
+bool FUMInputPreProcessor::IsVimSwitch(const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.GetKey() == EKeys::Escape)
+	{
+		SetMode(EVimMode::Normal);
+		return true;
+	}
+	return false;
+}
+
+bool FUMInputPreProcessor::TrackCountPrefix(const FKeyEvent& InKeyEvent)
+{
+	FString OutStr;
+	if (!GetStrDigitFromKey(InKeyEvent.GetKey(), OutStr))
+		return false;
+	OnCountPrefix.Broadcast(OutStr); // Build the buffer: 1 + 7 + 3 (173);
 	return true;
 }
 
-void FUMInputPreProcessor::SwitchVimModes(const FKeyEvent& InKeyEvent)
+void FUMInputPreProcessor::SwitchVimModes(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	const FKey& KeyPressed = InKeyEvent.GetKey();
-	if (KeyPressed == EKeys::Escape && InKeyEvent.IsShiftDown())
-	{
+
+	if (KeyPressed == EKeys::Escape)
 		SetMode(EVimMode::Normal);
-	}
-	else if (VimMode == EVimMode::Normal && KeyPressed == EKeys::I)
+
+	if (VimMode == EVimMode::Normal)
 	{
-		SetMode(EVimMode::Insert);
+		if (KeyPressed == EKeys::I)
+			SetMode(EVimMode::Insert);
+		if (KeyPressed == EKeys::V)
+			SetMode(EVimMode::Visual);
 	}
-	else if (VimMode == EVimMode::Normal && KeyPressed == EKeys::V)
+}
+
+bool FUMInputPreProcessor::IsSimulateEscapeKey(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.IsShiftDown() && InKeyEvent.GetKey() == EKeys::Escape)
 	{
-		SetMode(EVimMode::Visual);
+		FUMHelpers::NotifySuccess(FText::FromString("Simulate Escape"));
+		static const FKeyEvent EscapeEvent(
+			FKey(EKeys::Escape),
+			FModifierKeysState(),
+			0, 0, 0, 0);
+
+		bNativeInputHandling = true;
+		SlateApp.ProcessKeyDownEvent(EscapeEvent);
+		return true;
 	}
+	return false;
 }
 
 void FUMInputPreProcessor::SetMode(EVimMode NewMode)
@@ -275,6 +354,40 @@ void FUMInputPreProcessor::UnregisterOnVimModeChanged(const void* CallbackOwner)
 	OnVimModeChanged.RemoveAll(CallbackOwner);
 }
 
+FInputChord FUMInputPreProcessor::GetChordFromKeyEvent(
+	const FKeyEvent& InKeyEvent)
+{
+	const FModifierKeysState& ModState = InKeyEvent.GetModifierKeys();
+	return FInputChord(
+		InKeyEvent.GetKey(),	  // The key
+		ModState.IsShiftDown(),	  // bShift
+		ModState.IsControlDown(), // bCtrl
+		ModState.IsAltDown(),	  // bAlt
+		ModState.IsCommandDown()  // bCmd
+	);
+}
+
+void FUMInputPreProcessor::SimulateMultipleTabEvent(
+	FSlateApplication& SlateApp, int32 TimesToRepeat)
+{
+	FUMHelpers::NotifySuccess();
+	static const FKeyEvent TabEvent(
+		FKey(EKeys::Tab),
+		FModifierKeysState(),
+		0, 0, 0, 0);
+
+	for (int32 i{ 0 }; i < TimesToRepeat; ++i)
+	{
+		bNativeInputHandling = true;
+		SlateApp.ProcessKeyDownEvent(TabEvent);
+	}
+}
+
+void FUMInputPreProcessor::ToggleNativeInputHandling(const bool bNativeHandling)
+{
+	bNativeInputHandling = bNativeHandling;
+}
+
 bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
 	// TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
@@ -287,120 +400,78 @@ bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateAp
 	return false;
 }
 
-void FUMInputPreProcessor::NavigateTo(const FKeyEvent& InKeyEvent)
+bool FUMInputPreProcessor::GetStrDigitFromKey(const FKey& InKey, FString& OutStr)
 {
-	FSlateApplication& App = FSlateApplication::Get();
-	const FKey&		   InKey = InKeyEvent.GetKey();
-	FKey			   OutKey; // Change to FKey instead of EKeys
+	static const TMap<FKey, FString> KeyToStringDigits = {
+		{ EKeys::Zero, TEXT("0") },
+		{ EKeys::One, TEXT("1") },
+		{ EKeys::Two, TEXT("2") },
+		{ EKeys::Three, TEXT("3") },
+		{ EKeys::Four, TEXT("4") },
+		{ EKeys::Five, TEXT("5") },
+		{ EKeys::Six, TEXT("6") },
+		{ EKeys::Seven, TEXT("7") },
+		{ EKeys::Eight, TEXT("8") },
+		{ EKeys::Nine, TEXT("9") },
+	};
 
-	// Compare against the key name instead of direct FKey comparison
-	if (InKey == EKeys::H)
-		OutKey = FKey(EKeys::Left); // Create FKey from EKeys
-	else if (InKey == EKeys::J)
-		OutKey = FKey(EKeys::Down);
-	else if (InKey == EKeys::K)
-		OutKey = FKey(EKeys::Up);
-	else if (InKey == EKeys::L)
-		OutKey = FKey(EKeys::Right);
-	else
-		return;
+	const FString* FoundStr = KeyToStringDigits.Find(InKey);
+	if (FoundStr)
+	{
+		OutStr = *FoundStr;
+		return true;
+	}
+	return false;
+}
 
-	// Create new key event using the same structure as InKeyEvent
-	FKeyEvent MappedKeyEvent(
-		OutKey,
-		InKeyEvent.GetModifierKeys(), // Copy modifier state from input event
-		InKeyEvent.GetUserIndex(),
-		InKeyEvent.IsRepeat(),
+void FUMInputPreProcessor::DebugInvalidWeakPtr(EUMCallbackType CallbackType)
+{
+	switch (CallbackType)
+	{
+		case EUMCallbackType::None:
+			FUMHelpers::NotifySuccess(
+				FText::FromString("Invalid Weakptr _None"));
+			break;
+		case EUMCallbackType::NoParam:
+			FUMHelpers::NotifySuccess(
+				FText::FromString("Invalid Weakptr _NoParam"));
+			break;
+		case EUMCallbackType::KeyEventParam:
+			FUMHelpers::NotifySuccess(
+				FText::FromString("Invalid Weakptr _KeyEvent"));
+			break;
+		case EUMCallbackType::SequenceParam:
+			FUMHelpers::NotifySuccess(
+				FText::FromString("Invalid Weakptr _SequenceParam"));
+			break;
+	}
+}
+
+void FUMInputPreProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
+{
+	FString EventPath = "NONE";
+	if (InKeyEvent.GetEventPath())
+		EventPath = InKeyEvent.GetEventPath()->ToString();
+
+	// Causing crash
+	// FString WinTitle = InKeyEvent.GetWindow()->GetTitle().ToString();
+	// InKeyEvent.GetPlatformUserId().Get();
+
+	const FString LogStr = FString::Printf(
+		TEXT("Key: %s, Shift: %s, Ctrl: %s, Alt: %s, Cmd: %s, CharCode: %d, KeyCode: %d, UserIndex: %d, IsRepeat: %s, IsPointerEvent: %s, EventPath: %s, InputDeviceID: %d"),
+		*InKeyEvent.GetKey().ToString(),
+		InKeyEvent.IsShiftDown() ? TEXT("true") : TEXT("false"),
+		InKeyEvent.IsControlDown() ? TEXT("true") : TEXT("false"),
+		InKeyEvent.IsAltDown() ? TEXT("true") : TEXT("false"),
+		InKeyEvent.IsCommandDown() ? TEXT("true") : TEXT("false"),
 		InKeyEvent.GetCharacter(),
-		InKeyEvent.GetKeyCode());
-	App.ProcessKeyDownEvent(MappedKeyEvent);
-}
+		InKeyEvent.GetKeyCode(),
+		InKeyEvent.GetUserIndex(),
+		InKeyEvent.IsRepeat() ? TEXT("true") : TEXT("false"),
+		InKeyEvent.IsPointerEvent() ? TEXT("true") : TEXT("false"),
+		*EventPath,
+		InKeyEvent.GetInputDeviceId().GetId());
 
-void FUMInputPreProcessor::GoLeft()
-{
-	bIgnoreKeyDown = true;
-	FKeyEvent DownKeyEvent(
-		EKeys::Left,
-		FModifierKeysState(),
-		0,	   // User index
-		false, // Is repeat
-		0,	   // Character code
-		0	   // Key code
-	);
-	FSlateApplication::Get().ProcessKeyDownEvent(DownKeyEvent);
+	FUMHelpers::NotifySuccess(FText::FromString(LogStr));
+	UE_LOG(LogTemp, Warning, TEXT("%s"), *LogStr);
 }
-
-void FUMInputPreProcessor::GoDown()
-{
-	bIgnoreKeyDown = true;
-	FKeyEvent DownKeyEvent(
-		EKeys::Down,
-		FModifierKeysState(),
-		0,	   // User index
-		false, // Is repeat
-		0,	   // Character code
-		0	   // Key code
-	);
-	FSlateApplication::Get().ProcessKeyDownEvent(DownKeyEvent);
-}
-
-void FUMInputPreProcessor::GoUp()
-{
-	bIgnoreKeyDown = true;
-	FKeyEvent DownKeyEvent(
-		EKeys::Up,
-		FModifierKeysState(),
-		0,	   // User index
-		false, // Is repeat
-		0,	   // Character code
-		0	   // Key code
-	);
-	FSlateApplication::Get().ProcessKeyDownEvent(DownKeyEvent);
-}
-
-void FUMInputPreProcessor::GoRight()
-{
-	bIgnoreKeyDown = true;
-	FKeyEvent DownKeyEvent(
-		EKeys::Right,
-		FModifierKeysState(),
-		0,	   // User index
-		false, // Is repeat
-		0,	   // Character code
-		0	   // Key code
-	);
-	FSlateApplication::Get().ProcessKeyDownEvent(DownKeyEvent);
-	// FUMHelpers::NotifySuccess(FText::FromString("Go Right!"));
-}
-
-// 	else if (KeyPressed == EKeys::D && KeyEvent.IsControlDown())
-// 	{
-// 		for (int32 i = 0; i < 6; ++i)
-// 		{
-// 			FKeyEvent DownKeyEvent(
-// 				EKeys::Down,
-// 				FModifierKeysState(),
-// 				0,	   // User index
-// 				false, // Is repeat
-// 				0,	   // Character code
-// 				0	   // Key code
-// 			);
-// 			App.ProcessKeyDownEvent(DownKeyEvent);
-// 		}
-// 	}
-// 	else if (KeyPressed == EKeys::U && KeyEvent.IsControlDown())
-// 	{
-// 		for (int32 i = 0; i < 6; ++i)
-// 		{
-// 			FKeyEvent UpKeyEvent(
-// 				EKeys::Up,
-// 				FModifierKeysState(),
-// 				0,	   // User index
-// 				false, // Is repeat
-// 				0,	   // Character code
-// 				0	   // Key code
-// 			);
-// 			App.ProcessKeyDownEvent(UpKeyEvent);
-// 		}
-// 	}
-// }
