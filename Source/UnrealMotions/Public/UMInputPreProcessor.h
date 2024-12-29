@@ -6,6 +6,7 @@
 
 #include "UMHelpers.h"
 #include "WidgetDrawerConfig.h"
+#include "UMKeyEvent.h"
 
 class SBufferVisualizer;
 
@@ -23,7 +24,8 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnVimModeChanged, const EVimMode);
 struct FTrieNode
 {
 	TMap<FKey, FTrieNode*> Children; // Child nodes for each key
-	TFunction<void()>	   Callback; // Callback function to execute when a sequence matches
+	// TMap<FKeyEvent, FTrieNode*> Children; // This won't work because no matching function to call 'GetTypeHash'
+	TFunction<void()> Callback; // Callback function to execute when a sequence matches
 
 	~FTrieNode()
 	{

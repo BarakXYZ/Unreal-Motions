@@ -63,6 +63,7 @@ bool FUMInputPreProcessor::ProcessKeySequence(const FKey& Key)
 	// If a callback exists at this node, execute it
 	if (CurrentNode->Callback)
 	{
+		// CurrentNode->Callback(CurrentSequence);
 		CurrentNode->Callback();
 		ResetSequence(); // Reset the sequence after executing the callback
 		return true;
@@ -129,14 +130,17 @@ void FUMInputPreProcessor::InitializeKeyBindings()
 }
 
 template <typename ObjectType>
-void FUMInputPreProcessor::AddKeyBinding(const TArray<FKey>& Sequence, ObjectType* Object, void (ObjectType::*MemberFunction)())
+void FUMInputPreProcessor::AddKeyBinding(
+	const TArray<FKey>& Sequence, ObjectType* Object,
+	void (ObjectType::*MemberFunction)())
 {
 	AddKeyBinding(Sequence, [Object, MemberFunction]() {
 		(Object->*MemberFunction)();
 	});
 }
 
-void FUMInputPreProcessor::AddKeyBinding(const TArray<FKey>& Sequence, TFunction<void()> Callback)
+void FUMInputPreProcessor::AddKeyBinding(
+	const TArray<FKey>& Sequence, TFunction<void()> Callback)
 {
 	// Start from the root of the trie
 	FTrieNode* CurrentNode = TrieRoot;
@@ -164,6 +168,9 @@ void FUMInputPreProcessor::Callback_JumpNotification()
 bool FUMInputPreProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// InKeyEvent.IsShiftDown();
+	// InKeyEvent.GetKey().IsModifierKey();
+
 	// InKeyEvent.GetKeyCodea
 	if (bIgnoreKeyDown)
 	{
@@ -172,30 +179,10 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 		return false; // We have to pass false in order for unreal to actually
 					  // process the fake event! Need to still work on this.
 	}
-	// FUMHelpers::NotifySuccess(FText::FromString("HandleKeyDownEvent Prod"));
-	// if (InKeyEvent.GetKey() == EKeys::J)
-	// {
-	// 	GoDown();
-	// 	return true;
-	// }
-	// else if (InKeyEvent.GetKey() == EKeys::K)
-	// {
-	// 	bIgnoreKeyDown = true;
-	// 	GoUp();
-	// 	return true;
-	// }
-	// else if (InKeyEvent.GetKey() == EKeys::H)
-	// {
-	// 	bIgnoreKeyDown = true;
-	// 	GoLeft();
-	// 	return true;
-	// }
-	// else if (InKeyEvent.GetKey() == EKeys::L)
-	// {
-	// 	bIgnoreKeyDown = true;
-	// 	GoRight();
-	// 	return true;
-	// }
+
+	// if (InKeyEvent.IsShiftDown() && InKeyEvent.IsKeyEvent())
+	// if (InKeyEvent.IsShiftDown() && !InKeyEvent.GetKey().IsModifierKey())
+	// 	FUMHelpers::NotifySuccess(FText::FromString("HandleKeyDownEvent Prod"));
 
 	SwitchVimModes(InKeyEvent);
 	if (VimMode != EVimMode::Normal)
