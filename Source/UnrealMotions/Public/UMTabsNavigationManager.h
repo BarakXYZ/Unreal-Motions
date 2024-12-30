@@ -202,7 +202,7 @@ public:
 	 * @param Depth Current depth in the widget tree (used for logging)
 	 * @return true if OutWidgets >= SearchCount, or OutWidget > 0 if SearchCount is set to -1, false otherwise
 	 */
-	bool TraverseWidgetTree(
+	static bool TraverseWidgetTree(
 		const TSharedPtr<SWidget>& ParentWidget,
 		TArray<TWeakPtr<SWidget>>& OutWidgets,
 		const FString&			   TargetType,
@@ -217,7 +217,7 @@ public:
 	 * @param Depth Current depth in the widget tree (used for logging)
 	 * @return true if a widget was found, false otherwise
 	 */
-	bool TraverseWidgetTree(
+	static bool TraverseWidgetTree(
 		const TSharedPtr<SWidget>& ParentWidget,
 		TWeakPtr<SWidget>&		   OutWidget,
 		const FString&			   TargetType,
@@ -253,6 +253,9 @@ public:
 	 * Used for debugging tab layout and hierarchy.
 	 */
 	void FindAllTabWells();
+
+	static TWeakPtr<SDockTab> GetCurrentlySetMajorTab();
+	static bool				  RemoveActiveMajorTab();
 
 	/** DEPRECATED
 	 * Gets the type of tab for navigation-specific purposes.
@@ -297,7 +300,7 @@ public:
 	const FString			   SToolkit{ "SStandaloneAssetEditorToolkitHost" };
 	const FString			   SLvlEditor{ "SLevelEditor" };
 	TWeakPtr<SWindow>		   CurrWin{ nullptr }; // User for getting Maj Tab
-	TWeakPtr<SDockTab>		   CurrMajorTab{ nullptr };
+	static TWeakPtr<SDockTab>  CurrMajorTab;
 	TWeakPtr<SDockTab>		   CurrMinorTab{ nullptr };
 
 	bool VisualLog{ false };

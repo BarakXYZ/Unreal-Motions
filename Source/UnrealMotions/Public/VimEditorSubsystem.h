@@ -31,8 +31,41 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	void DeleteItem(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void ActivateNewInvokedTab(FSlateApplication& SlateApp, const TSharedPtr<SDockTab> NewTab);
+
+	/**
+	 * @brief Opens the Widget Reflector debugging tool and auto focus the debug
+	 * button for convenience.
+	 *
+	 * @details This function performs the following operations:
+	 * 1. Opens/activates the Widget Reflector tab
+	 * 2. Traverses widget hierarchy to locate specific UI elements
+	 * 3. Simulates user interactions to auto-focus the reflector
+	 *
+	 * @note The timer delay (150ms) may need adjustment on different platforms(?)
+	 */
+	void OpenWidgetReflector(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void OpenOutputLog();
+	void OpenContentBrowser(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void RemoveActiveMajorTab();
+
 	void OnResetSequence();
 	void OnCountPrefix(FString AddedCount);
+
+	FReply HandleDummyKeyChar(
+		const FGeometry& MyGeometry, const FCharacterEvent& InCharacterEvent)
+	{
+		return FReply::Handled();
+	}
+
+	FReply HandleDummyKeyDown(
+		const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+	{
+		return FReply::Handled();
+	}
+
+	DECLARE_DELEGATE_RetVal_TwoParams(FReply, FOnKeyDown, const FGeometry&, const FKeyEvent&);
 
 	TWeakObjectPtr<UVimEditorSubsystem> VimSubWeak{ nullptr };
 	TWeakPtr<FUMInputPreProcessor>		InputPP;

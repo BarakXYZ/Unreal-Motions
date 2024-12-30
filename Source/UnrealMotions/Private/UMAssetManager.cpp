@@ -5,8 +5,6 @@
 #include "Misc/PackagePath.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "Editor.h"
-// #include "Editor/EditorSubsystem.h"
-// #include "EditorSubsystem/AssetEditorSubsystem.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Accessibility/SlateCoreAccessibleWidgets.h"
 #include "Widgets/Notifications/SNotificationList.h"
@@ -76,7 +74,7 @@ void FUMAssetManager::MapAssetCommands(
 
 void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 {
-	FSlateApplication&		   App = FSlateApplication::Get();
+	FSlateApplication&		   SlateApp = FSlateApplication::Get();
 	FSlateNotificationManager& NoteMngr = FSlateNotificationManager::Get();
 
 	TArray<TSharedRef<SWindow>> NoteWins;
@@ -84,14 +82,14 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 	if (NoteWins.IsEmpty())
 		return;
 
-	// Toggle out if already focused on one of the notification items.
+	// Toggle (focus) OUT if already focused on one of the notification items.
 	for (const TSharedRef<SWindow>& Win : NoteWins)
 	{
 		if (Win->HasAnyUserFocusOrFocusedDescendants())
 		{
-			App.ClearAllUserFocus();
+			SlateApp.ClearAllUserFocus();
 			if (LastFocusedWidget.IsValid())
-				App.SetAllUserFocus(
+				SlateApp.SetAllUserFocus(
 					LastFocusedWidget.Pin(), EFocusCause::Navigation);
 			if (LastFocusedNotificationItem.IsValid())
 				ToggleNotificationVisualSelection(
@@ -100,7 +98,7 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 		}
 	}
 	// Store reference for later in case we want to toggle back to the last widget
-	LastFocusedWidget = App.GetUserFocusedWidget(0);
+	LastFocusedWidget = SlateApp.GetUserFocusedWidget(0);
 
 	// for (const TSharedRef<SWindow>& Win : NoteWins)
 	// {
@@ -162,9 +160,9 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 		if (!Button.IsValid())
 			return;
 		FUMHelpers::NotifySuccess(FText::FromString("Button Cast Successfully"));
-		App.ClearAllUserFocus();
+		SlateApp.ClearAllUserFocus();
 		// We use Navigation as the FocusCause to visually show the selection.
-		App.SetAllUserFocus(Button, EFocusCause::Navigation);
+		SlateApp.SetAllUserFocus(Button, EFocusCause::Navigation);
 	}
 
 	// UAssetEditorSubsystem* AssetEditorSubsystem =

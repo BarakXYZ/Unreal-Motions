@@ -2,8 +2,8 @@
 #include "UMWindowsNavigationManager.h"
 #include "Framework/Commands/UICommandInfo.h"
 #include "UMHelpers.h"
-#include "Framework/Application/SlateApplication.h"
 #include "Interfaces/IMainFrameModule.h"
+#include "Framework/Application/SlateApplication.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMWindowsNavigation, NoLogging, All); // Prod
 // DEFINE_LOG_CATEGORY_STATIC(LogUMTWindowsNavigation, Log, All); // Dev
@@ -167,7 +167,7 @@ void FUMWindowsNavigationManager::ToggleRootWindow()
 // NOTE: Kept here some commented methods for future reference.
 void FUMWindowsNavigationManager::ActivateWindow(const TSharedRef<SWindow> Window)
 {
-	FSlateApplication& App = FSlateApplication::Get();
+	FSlateApplication& SlateApp = FSlateApplication::Get();
 	Window->BringToFront(true);
 	TSharedRef<SWidget> WinContent = Window->GetContent();
 	// FWindowDrawAttentionParameters DrawParams(
@@ -176,13 +176,13 @@ void FUMWindowsNavigationManager::ActivateWindow(const TSharedRef<SWindow> Windo
 	// Window->ShowWindow();
 	// Window->FlashWindow(); // Amazing way to visually indicate activated wins!
 
-	App.ClearAllUserFocus(); // This is really important to actually draw focus
-	App.SetAllUserFocus(
+	SlateApp.ClearAllUserFocus(); // This is really important to actually draw focus
+	SlateApp.SetAllUserFocus(
 		WinContent, EFocusCause::SetDirectly);
-	App.SetKeyboardFocus(WinContent);
+	SlateApp.SetKeyboardFocus(WinContent);
 	FWidgetPath WidgetPath;
-	App.FindPathToWidget(WinContent, WidgetPath);
-	App.SetAllUserFocusAllowingDescendantFocus(
+	SlateApp.FindPathToWidget(WinContent, WidgetPath);
+	SlateApp.SetAllUserFocusAllowingDescendantFocus(
 		WidgetPath, EFocusCause::Mouse);
 
 	// FUMHelpers::AddDebugMessage(FString::Printf(
@@ -221,6 +221,30 @@ void FUMWindowsNavigationManager::CycleNoneRootWindows(bool bIsNextWindow)
 		}
 		ActivateWindow(ChildWins[VisWinIndexes[VisWinIndexes.Num() - 1]]);
 	}
+}
+
+bool FUMWindowsNavigationManager::FocusNextFrontmostWindow()
+{
+	FSlateApplication&			SlateApp = FSlateApplication::Get();
+	TArray<TSharedRef<SWindow>> Wins;
+
+	SlateApp.GetAllVisibleWindowsOrdered(Wins);
+	for (int32 i{ Wins.Num() - 1 }; i > 0; --i)
+	{
+		if (!Wins[i]->GetTitle().IsEmpty())
+		{
+			ActivateWindow(Wins[i]);
+			return true; // Found the next window
+		}
+	}
+
+	// If no windows we're found, try to bring focus to the root window
+	if (TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow())
+	{
+		ActivateWindow(RootWin.ToSharedRef());
+		return true;
+	}
+	return false;
 }
 
 void FUMWindowsNavigationManager::CleanupInvalidWindows(

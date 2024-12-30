@@ -20,6 +20,8 @@ TSharedPtr<FUMTabsNavigationManager>
 	FUMTabsNavigationManager::TabsNavigationManager =
 		MakeShared<FUMTabsNavigationManager>();
 
+TWeakPtr<SDockTab> FUMTabsNavigationManager::CurrMajorTab = nullptr;
+
 FUMTabsNavigationManager::FUMTabsNavigationManager()
 {
 	FInputBindingManager&		InputBindingManager = FInputBindingManager::Get();
@@ -232,6 +234,10 @@ void FUMTabsNavigationManager::HandleOnUserMovedToNewWindow(
 	TWeakPtr<SDockTab> NewMajorTab = nullptr;
 	if (GetActiveMajorTab(NewMajorTab))
 	{
+		FString TabName = NewMajorTab.Pin()->GetTabLabel().ToString();
+		FString TabType = NewMajorTab.Pin()->GetLayoutIdentifier().ToString();
+		FString DebugMsg = FString::Printf(TEXT("New Major Tab: %s, Type: %s"), *TabName, *TabType);
+		FUMHelpers::NotifySuccess(FText::FromString(DebugMsg));
 		SetCurrentTab(NewMajorTab.Pin());
 		return;
 	}
@@ -432,6 +438,21 @@ bool FUMTabsNavigationManager::FindRootTargetWidgetName(FString& OutRootWidgetNa
 	}
 }
 
+TWeakPtr<SDockTab> FUMTabsNavigationManager::GetCurrentlySetMajorTab()
+{
+	return CurrMajorTab.IsValid() ? CurrMajorTab : nullptr;
+}
+
+bool FUMTabsNavigationManager::RemoveActiveMajorTab()
+{
+	if (CurrMajorTab.IsValid())
+	{
+		CurrMajorTab.Pin()->RemoveTabFromParent();
+		return true;
+	}
+	return false;
+}
+
 void FUMTabsNavigationManager::FindAllTabWells()
 {
 	UE_LOG(LogUMTabsNavigation, Display, TEXT("Find All Tab Wells Started!"));
@@ -540,18 +561,20 @@ void FUMTabsNavigationManager::SetCurrentTab(const TSharedPtr<SDockTab>& NewTab)
 	if (!NewTab.IsValid())
 	{
 		UE_LOG(LogUMTabsNavigation, Warning,
-			TEXT("Attempted to set invalid tab as current"));
+			TEXT("Attempted to set an invalid tab as current"));
 		return;
 	}
 
 	if (NewTab->GetVisualTabRole() == ETabRole::MajorTab)
 	{
 		FString PrevLabel = CurrMajorTab.IsValid() ? CurrMajorTab.Pin()->GetTabLabel().ToString() : TEXT("None");
+
 		UE_LOG(LogUMTabsNavigation, Log,
 			TEXT("Set new major tab - Previous: %s, New: %s"),
 			*PrevLabel, *NewTab->GetTabLabel().ToString());
 
 		CurrMajorTab = NewTab;
+		CurrMajorTab.Pin()->GetDockArea();
 	}
 	else // Minor Tab
 	{

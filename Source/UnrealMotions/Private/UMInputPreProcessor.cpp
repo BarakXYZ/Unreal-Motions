@@ -15,7 +15,7 @@ bool FUMInputPreProcessor::bNativeInputHandling = { false };
 FUMInputPreProcessor::FUMInputPreProcessor()
 {
 	OnUMPreProcessorInputInit.AddLambda(
-		[this]() { InitializeKeyBindings(); });
+		[this]() { RegisterDefaultKeyBindings(); });
 }
 FUMInputPreProcessor::~FUMInputPreProcessor()
 {
@@ -54,7 +54,7 @@ bool FUMInputPreProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const
 	CurrentSequence.Add(GetChordFromKeyEvent(InKeyEvent));
 
 	// 2) Traverse the trie
-	FTrieNode* CurrentNode = TrieRoot;
+	FKeyChordTrieNode* CurrentNode = TrieRoot;
 	for (const FInputChord& SequenceKey : CurrentSequence)
 	{
 		if (!CurrentNode->Children.Contains(SequenceKey))
@@ -67,21 +67,21 @@ bool FUMInputPreProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const
 	}
 
 	// 3) Found a node, check for a callback
-	if (CurrentNode->CallbackType != EUMCallbackType::None)
+	if (CurrentNode->CallbackType != EUMKeyBindingCallbackType::None)
 	{
 		switch (CurrentNode->CallbackType)
 		{
-			case EUMCallbackType::NoParam:
+			case EUMKeyBindingCallbackType::NoParam:
 				if (CurrentNode->NoParamCallback)
 					CurrentNode->NoParamCallback();
 				break;
 
-			case EUMCallbackType::KeyEventParam:
+			case EUMKeyBindingCallbackType::KeyEventParam:
 				if (CurrentNode->KeyEventCallback)
 					CurrentNode->KeyEventCallback(SlateApp, InKeyEvent);
 				break;
 
-			case EUMCallbackType::SequenceParam:
+			case EUMKeyBindingCallbackType::SequenceParam:
 				if (CurrentNode->SequenceCallback)
 					CurrentNode->SequenceCallback(SlateApp, CurrentSequence);
 				break;
@@ -99,12 +99,12 @@ bool FUMInputPreProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const
 	return true;
 }
 
-// Reset the input sequence
 void FUMInputPreProcessor::ResetSequence(FSlateApplication& SlateApp)
 {
 	OnResetSequence.Broadcast();
 	CurrentSequence.Empty();
 	CurrentBuffer.Empty();
+	bIsCounting = false;
 	ResetBufferVisualizer(SlateApp);
 	// FUMHelpers::NotifySuccess(FText::FromString("Reset Sequence"));
 }
@@ -121,15 +121,15 @@ void FUMInputPreProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
 	}
 }
 
-FTrieNode* FUMInputPreProcessor::FindOrCreateTrieNode(
+FKeyChordTrieNode* FUMInputPreProcessor::FindOrCreateTrieNode(
 	const TArray<FInputChord>& Sequence)
 {
-	FTrieNode* Current = TrieRoot;
+	FKeyChordTrieNode* Current = TrieRoot;
 	for (const FInputChord& Key : Sequence)
 	{
 		if (!Current->Children.Contains(Key))
 		{
-			Current->Children.Add(Key, new FTrieNode());
+			Current->Children.Add(Key, new FKeyChordTrieNode());
 		}
 		Current = Current->Children[Key];
 	}
@@ -141,9 +141,9 @@ void FUMInputPreProcessor::AddKeyBinding_NoParam(
 	const TArray<FInputChord>& Sequence,
 	TFunction<void()>		   Callback)
 {
-	FTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	FKeyChordTrieNode* Node = FindOrCreateTrieNode(Sequence);
 	Node->NoParamCallback = MoveTemp(Callback);
-	Node->CallbackType = EUMCallbackType::NoParam;
+	Node->CallbackType = EUMKeyBindingCallbackType::NoParam;
 }
 
 // 2) Single FKeyEvent param
@@ -151,9 +151,9 @@ void FUMInputPreProcessor::AddKeyBinding_KeyEvent(
 	const TArray<FInputChord>&									   Sequence,
 	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback)
 {
-	FTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	FKeyChordTrieNode* Node = FindOrCreateTrieNode(Sequence);
 	Node->KeyEventCallback = MoveTemp(Callback);
-	Node->CallbackType = EUMCallbackType::KeyEventParam;
+	Node->CallbackType = EUMKeyBindingCallbackType::KeyEventParam;
 }
 
 // 3) TArray<FInputChord> param
@@ -161,16 +161,15 @@ void FUMInputPreProcessor::AddKeyBinding_Sequence(
 	const TArray<FInputChord>&												 Sequence,
 	TFunction<void(FSlateApplication& SlateApp, const TArray<FInputChord>&)> Callback)
 {
-	FTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	FKeyChordTrieNode* Node = FindOrCreateTrieNode(Sequence);
 	Node->SequenceCallback = MoveTemp(Callback);
-	Node->CallbackType = EUMCallbackType::SequenceParam;
+	Node->CallbackType = EUMKeyBindingCallbackType::SequenceParam;
 }
 
-// Initialize Key Bindings in the Trie
-void FUMInputPreProcessor::InitializeKeyBindings()
+void FUMInputPreProcessor::RegisterDefaultKeyBindings()
 {
 	// Create the root node
-	TrieRoot = new FTrieNode();
+	TrieRoot = new FKeyChordTrieNode();
 	// WeakInputPreProcessor = InputPreProcessor.ToWeakPtr();
 
 	AddKeyBinding_KeyEvent(
@@ -209,16 +208,20 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 	if (IsSimulateEscapeKey(SlateApp, InKeyEvent))
 		return true;
 
-	if (IsVimSwitch(InKeyEvent)) // On switching modes, return true
+	if (ShouldSwitchVimMode(SlateApp, InKeyEvent)) // Return true and reset
 		return true;
 
 	if (VimMode == EVimMode::Insert) // Default
 		return false;				 // Pass on the handling to Unreal native.
 
-	if (TrackCountPrefix(InKeyEvent)) // User is currently counting, return.
+	if (TrackCountPrefix(SlateApp, InKeyEvent)) // Return if currently counting.
 		return true;
 
 	FKey KeyPressed = InKeyEvent.GetKey();
+
+	if (KeyPressed.IsModifierKey()) // Simply ignore
+		return true;				// or false?
+	//
 	// If leader key is pressed, show the buffer visualizer
 	if (KeyPressed == EKeys::SpaceBar && CurrentBuffer.IsEmpty())
 	{
@@ -250,9 +253,6 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 		BufferVisualizer.Pin()->UpdateBuffer(CurrentBuffer);
 	}
 
-	if (KeyPressed.IsModifierKey()) // Simply ignore
-		return true;				// or false?
-
 	// if (VimMode == EVimMode::Visual)
 	// {
 	// 	// FUMHelpers::NotifySuccess(FText::FromString("Visual Process"));
@@ -274,23 +274,36 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 	// return true;
 }
 
-bool FUMInputPreProcessor::IsVimSwitch(const FKeyEvent& InKeyEvent)
+bool FUMInputPreProcessor::ShouldSwitchVimMode(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	if (InKeyEvent.GetKey() == EKeys::Escape)
 	{
-		SetMode(EVimMode::Normal);
+		SetMode(SlateApp, EVimMode::Normal);
+		ResetSequence(SlateApp);
 		return true;
 	}
 	return false;
 }
 
-bool FUMInputPreProcessor::TrackCountPrefix(const FKeyEvent& InKeyEvent)
+bool FUMInputPreProcessor::TrackCountPrefix(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	FString OutStr;
-	if (!GetStrDigitFromKey(InKeyEvent.GetKey(), OutStr))
+	// Skip if: not first key and not already counting, or any modifiers pressed
+	if ((!CurrentSequence.IsEmpty() && !bIsCounting)
+		|| InKeyEvent.GetModifierKeys().AnyModifiersDown())
 		return false;
-	OnCountPrefix.Broadcast(OutStr); // Build the buffer: 1 + 7 + 3 (173);
-	return true;
+
+	FString OutStr;
+	if (GetStrDigitFromKey(InKeyEvent.GetKey(), OutStr))
+	{
+		// FUMHelpers::NotifySuccess(FText::FromString("USER IS COUNTING"));
+		bIsCounting = true;
+		OnCountPrefix.Broadcast(OutStr);
+		return true;
+	}
+	ResetSequence(SlateApp);
+	return false;
 }
 
 void FUMInputPreProcessor::SwitchVimModes(
@@ -299,14 +312,14 @@ void FUMInputPreProcessor::SwitchVimModes(
 	const FKey& KeyPressed = InKeyEvent.GetKey();
 
 	if (KeyPressed == EKeys::Escape)
-		SetMode(EVimMode::Normal);
+		SetMode(SlateApp, EVimMode::Normal);
 
 	if (VimMode == EVimMode::Normal)
 	{
 		if (KeyPressed == EKeys::I)
-			SetMode(EVimMode::Insert);
+			SetMode(SlateApp, EVimMode::Insert);
 		if (KeyPressed == EKeys::V)
-			SetMode(EVimMode::Visual);
+			SetMode(SlateApp, EVimMode::Visual);
 	}
 }
 
@@ -328,7 +341,7 @@ bool FUMInputPreProcessor::IsSimulateEscapeKey(
 	return false;
 }
 
-void FUMInputPreProcessor::SetMode(EVimMode NewMode)
+void FUMInputPreProcessor::SetMode(FSlateApplication& SlateApp, const EVimMode NewMode)
 {
 	if (VimMode != NewMode)
 	{
@@ -336,6 +349,7 @@ void FUMInputPreProcessor::SetMode(EVimMode NewMode)
 		FUMHelpers::NotifySuccess(
 			FText::FromString(UEnum::GetValueAsString(NewMode)), bVisualLog);
 	}
+	ResetSequence(SlateApp);
 	OnVimModeChanged.Broadcast(NewMode);
 }
 
@@ -367,7 +381,7 @@ FInputChord FUMInputPreProcessor::GetChordFromKeyEvent(
 	);
 }
 
-void FUMInputPreProcessor::SimulateMultipleTabEvent(
+void FUMInputPreProcessor::SimulateMultiTabPresses(
 	FSlateApplication& SlateApp, int32 TimesToRepeat)
 {
 	FUMHelpers::NotifySuccess();
@@ -400,7 +414,26 @@ bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateAp
 	return false;
 }
 
-bool FUMInputPreProcessor::GetStrDigitFromKey(const FKey& InKey, FString& OutStr)
+void FUMInputPreProcessor::SimulateKeyPress(
+	FSlateApplication& SlateApp, const FKey& SimulatedKey)
+{
+	static const FKeyEvent SimulatedEvent(
+		SimulatedKey,
+		FModifierKeysState(),
+		0, 0, 0, 0);
+
+	bNativeInputHandling = true;
+	SlateApp.ProcessKeyDownEvent(SimulatedEvent);
+
+	// FCharacterEvent CharEvent(
+	// 	'I',
+	// 	FModifierKeysState(), 0, false);
+	// bNativeInputHandling = true;
+	// SlateApp.ProcessKeyCharEvent(CharEvent);
+}
+
+bool FUMInputPreProcessor::GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
+	int32 MinClamp, int32 MaxClamp)
 {
 	static const TMap<FKey, FString> KeyToStringDigits = {
 		{ EKeys::Zero, TEXT("0") },
@@ -416,31 +449,47 @@ bool FUMInputPreProcessor::GetStrDigitFromKey(const FKey& InKey, FString& OutStr
 	};
 
 	const FString* FoundStr = KeyToStringDigits.Find(InKey);
-	if (FoundStr)
+	if (!FoundStr)
 	{
-		OutStr = *FoundStr;
-		return true;
+		return false;
 	}
-	return false;
+
+	// Convert found string to number for clamping
+	int32 NumValue = FCString::Atoi(**FoundStr);
+
+	// Apply clamping if specified
+	if (MinClamp > 0 || MaxClamp > 0)
+	{
+		// If only min is specified, use the found number as max
+		const int32 EffectiveMax = (MaxClamp > 0) ? MaxClamp : NumValue;
+		// If only max is specified, use 0 as min
+		const int32 EffectiveMin = (MinClamp > 0) ? MinClamp : 0;
+
+		NumValue = FMath::Clamp(NumValue, EffectiveMin, EffectiveMax);
+	}
+
+	// Convert back to string
+	OutStr = FString::FromInt(NumValue);
+	return true;
 }
 
-void FUMInputPreProcessor::DebugInvalidWeakPtr(EUMCallbackType CallbackType)
+void FUMInputPreProcessor::DebugInvalidWeakPtr(EUMKeyBindingCallbackType CallbackType)
 {
 	switch (CallbackType)
 	{
-		case EUMCallbackType::None:
+		case EUMKeyBindingCallbackType::None:
 			FUMHelpers::NotifySuccess(
 				FText::FromString("Invalid Weakptr _None"));
 			break;
-		case EUMCallbackType::NoParam:
+		case EUMKeyBindingCallbackType::NoParam:
 			FUMHelpers::NotifySuccess(
 				FText::FromString("Invalid Weakptr _NoParam"));
 			break;
-		case EUMCallbackType::KeyEventParam:
+		case EUMKeyBindingCallbackType::KeyEventParam:
 			FUMHelpers::NotifySuccess(
 				FText::FromString("Invalid Weakptr _KeyEvent"));
 			break;
-		case EUMCallbackType::SequenceParam:
+		case EUMKeyBindingCallbackType::SequenceParam:
 			FUMHelpers::NotifySuccess(
 				FText::FromString("Invalid Weakptr _SequenceParam"));
 			break;

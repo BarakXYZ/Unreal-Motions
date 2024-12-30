@@ -72,7 +72,7 @@ public:
 	 * Handles focus management, window ordering, and ensuring proper activation state.
 	 * @param Window The window to activate
 	 */
-	void ActivateWindow(const TSharedRef<SWindow> Window);
+	static void ActivateWindow(const TSharedRef<SWindow> Window);
 
 	/**
 	 * Cycles through non-root windows in the specified direction.
@@ -95,6 +95,8 @@ public:
 	 */
 	void CleanupInvalidWindows(TArray<uint64> CleanupWindowsIds);
 
+	static bool FocusNextFrontmostWindow();
+
 	/**
 	 * Retrieves the map of currently tracked windows.
 	 * @return Constant reference to the map of window IDs to window pointers
@@ -113,5 +115,5 @@ private:
 
 	TWeakPtr<SWindow>				CurrWin{ nullptr };
 	TMap<uint64, TWeakPtr<SWindow>> TrackedWindows;
-	bool							VisualLog{ false };
+	bool							VisualLog{ true };
 };

@@ -1,9 +1,20 @@
 #include "VimEditorSubsystem.h"
+#include "Brushes/SlateColorBrush.h"
+#include "Chaos/Interface/PhysicsInterfaceWrapperShared.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Framework/Docking/TabManager.h"
+#include "Templates/SharedPointer.h"
 #include "UMHelpers.h"
 #include "UMInputPreProcessor.h"
+#include "Widgets/Docking/SDockTab.h"
+#include "UMWindowsNavigationManager.h"
+#include "UMTabsNavigationManager.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SSearchBox.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All); // Development
+static constexpr int32 MIN_REPEAT_COUNT = 1;
+static constexpr int32 MAX_REPEAT_COUNT = 999;
 
 TMap<FKey, FKey> UVimEditorSubsystem::VimToArrowKeys = {
 	{ EKeys::H, FKey(EKeys::Left) }, { EKeys::J, FKey(EKeys::Down) },
@@ -100,16 +111,21 @@ void UVimEditorSubsystem::ProcessVimNavigationInput(
 	FKeyEvent OutKeyEvent;
 	MapVimToArrowNavigation(InKeyEvent, OutKeyEvent);
 
-	// DebugKeyEvent(OutKeyEvent);
-
-	uint64 Count{ 1 }; // Single or multiple (minimum 1)
+	int32 Count = MIN_REPEAT_COUNT;
 	if (!CountBuffer.IsEmpty())
-		Count = FCString::Atoi(*CountBuffer);
+	{
+		Count = FMath::Clamp(
+			FCString::Atoi(*CountBuffer),
+			MIN_REPEAT_COUNT,
+			MAX_REPEAT_COUNT);
+	}
 
-	for (uint64 i{ 0 }; i < Count; ++i)
+	for (int32 i{ 0 }; i < Count; ++i)
 	{
 		FUMInputPreProcessor::ToggleNativeInputHandling(true);
 		SlateApp.ProcessKeyDownEvent(OutKeyEvent);
+		// FUMInputPreProcessor::SimulateKeyPress(
+		// SlateApp, FKey(EKeys::BackSpace));  // BackSpace might be useful
 	}
 }
 
@@ -152,6 +168,148 @@ void UVimEditorSubsystem::DeleteItem(
 	SlateApp.ProcessKeyDownEvent(DeleteEvent); // Will just block the entire process until the delete window is handled, thus not really helping.
 }
 
+void UVimEditorSubsystem::OpenWidgetReflector(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static const FName REFLECTOR = "WidgetReflector";
+
+	TSharedPtr<SDockTab> RefTab = // Invoke the Widget Reflector tab
+		FGlobalTabmanager::Get()->TryInvokeTab(FTabId(REFLECTOR));
+	ActivateNewInvokedTab(FSlateApplication::Get(), RefTab); // For proper focus
+
+	// FGlobalTabmanager::Get()->GetTabManagerForMajorTab(RefTab)->GetPrivateApi().GetLiveDockAreas();
+	TSharedPtr<SWindow> RefWin = RefTab->GetParentWindow();
+	if (!RefWin)
+		return;
+
+	// Fetching the first (maybe only) instance of this (parent of our target)
+	TWeakPtr<SWidget> FoundWidget;
+	if (!FUMTabsNavigationManager::TraverseWidgetTree(
+			RefWin, FoundWidget, "SToolBarButtonBlock"))
+		return;
+
+	// Locate the button within it
+	if (FUMTabsNavigationManager::TraverseWidgetTree(
+			FoundWidget.Pin(), FoundWidget, "SButton"))
+	{
+		TSharedPtr<SButton> Button =
+			StaticCastSharedPtr<SButton>(FoundWidget.Pin());
+		if (!Button)
+			return;
+		Button->SimulateClick(); // Will spawn a fetchable Menu Box (&& SWindow)
+
+		// Get this window so we can search for the final buttons within it
+		TArray<TSharedRef<SWindow>> ChildRefWins = RefWin->GetChildWindows();
+		if (ChildRefWins.Num() == 0)
+			return;
+
+		// Remove the annoying SearchBox that is taking focus from HJKL
+		if (FUMTabsNavigationManager::TraverseWidgetTree(
+				ChildRefWins[0], FoundWidget, "SSearchBox"))
+		{
+			// Won't work
+			// TSharedPtr<SHorizontalBox> ParentBox =
+			// 	StaticCastSharedPtr<SHorizontalBox>(
+			// 		FoundWidget.Pin()->GetParentWidget());
+			// if (ParentBox)
+			// {
+			// 	// ParentBox->RemoveSlot(FoundWidget.Pin().ToSharedRef());
+			// 	// ParentBox->SetEnabled(false);
+			// }
+
+			// Works but still catch 1 key!
+			TSharedPtr<SSearchBox> SearchBox =
+				StaticCastSharedPtr<SSearchBox>(FoundWidget.Pin());
+
+			// Maybe can try to clear the input from a reference?
+			// The problem is that it gets the characters from somewhere else
+			// the actual handling does work but the first key will always be
+			// received because it's being sent from outside.
+			// Need to understand from where it's getting the input.
+
+			SearchBox->SetOnKeyCharHandler(
+				FOnKeyChar::CreateUObject(
+					this, &UVimEditorSubsystem::HandleDummyKeyChar));
+
+			SearchBox->SetOnKeyDownHandler(
+				FOnKeyDown::CreateUObject(
+					this, &UVimEditorSubsystem::HandleDummyKeyDown));
+		}
+
+		// Find all menu entry buttons in the found window
+		TArray<TWeakPtr<SWidget>> FoundButtons;
+		if (!FUMTabsNavigationManager::TraverseWidgetTree(
+				ChildRefWins[0], FoundButtons, "SMenuEntryButton"))
+			return;
+
+		if (FoundButtons.Num() == 0 || !FoundButtons[1].IsValid())
+			return;
+		TSharedPtr<SButton> EntryButton = // SMenuEntry inherits from SButton
+			StaticCastSharedPtr<SButton>(FoundButtons[1].Pin());
+		if (!EntryButton.IsValid())
+			return;
+
+		bool bIsImmediatelyTriggered = InKeyEvent.IsShiftDown();
+
+		// We need a slight delay before drawing focus to this new button
+		FTimerHandle TimerHandle;
+		GEditor->GetTimerManager()->SetTimer(
+			TimerHandle,
+			[EntryButton, bIsImmediatelyTriggered]() {
+				FSlateApplication& SlateApp = FSlateApplication::Get();
+				SlateApp.ClearAllUserFocus();
+				if (bIsImmediatelyTriggered)
+					EntryButton->SimulateClick();
+				// TODO: This is fragile - let's add a manual focus visualizer
+				SlateApp.SetAllUserFocus(EntryButton, EFocusCause::Navigation);
+			},
+			0.01f, // 10ms delay seems to be enough (need to check on mac)
+			false  // Do not loop
+		);
+		FUMHelpers::NotifySuccess(FText::AsNumber(FoundButtons.Num()));
+	}
+}
+
+void UVimEditorSubsystem::OpenOutputLog()
+{
+	static const FName LOG = "OutputLog";
+	ActivateNewInvokedTab(FSlateApplication::Get(),
+		FGlobalTabmanager::Get()->TryInvokeTab(FTabId(LOG)));
+}
+
+void UVimEditorSubsystem::OpenContentBrowser(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static FString DEFAULT_TAB_INDEX = "1";
+	FString		   ContentBrowserId = "ContentBrowserTab";
+	FString		   TabNum;
+	if (FUMInputPreProcessor::GetStrDigitFromKey(
+			InKeyEvent.GetKey(), TabNum, 1, 4)) // Valid tabs are only 1-4
+		ContentBrowserId += TabNum;
+	else
+		ContentBrowserId += DEFAULT_TAB_INDEX;
+
+	ActivateNewInvokedTab(SlateApp,
+		FGlobalTabmanager::Get()->TryInvokeTab(FName(*ContentBrowserId)));
+}
+
+void UVimEditorSubsystem::ActivateNewInvokedTab(
+	FSlateApplication& SlateApp, const TSharedPtr<SDockTab> NewTab)
+{
+	SlateApp.ClearAllUserFocus(); // NOTE: In order to actually draw focus
+
+	if (TSharedPtr<SWindow> Win = NewTab->GetParentWindow())
+		FUMWindowsNavigationManager::ActivateWindow(Win.ToSharedRef());
+	NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
+}
+
+void UVimEditorSubsystem::RemoveActiveMajorTab()
+{
+	if (!FUMTabsNavigationManager::RemoveActiveMajorTab())
+		return;
+	FUMWindowsNavigationManager::FocusNextFrontmostWindow();
+}
+
 void UVimEditorSubsystem::BindCommands()
 {
 	using VimSub = UVimEditorSubsystem;
@@ -173,6 +331,36 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_KeyEvent(
 		{ EKeys::X },
 		VimSubWeak, &VimSub::DeleteItem);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::O, EKeys::W },
+		VimSubWeak, &VimSub::OpenWidgetReflector);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::O, FInputChord(EModifierKey::Shift, EKeys::W) },
+		VimSubWeak, &VimSub::OpenWidgetReflector);
+
+	Input.AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::O, EKeys::O },
+		VimSubWeak, &VimSub::OpenOutputLog);
+
+	//** Open Content Browsers 1-4 */
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::One },
+		VimSubWeak, &VimSub::OpenContentBrowser);
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Two },
+		VimSubWeak, &VimSub::OpenContentBrowser);
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Three },
+		VimSubWeak, &VimSub::OpenContentBrowser);
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Four },
+		VimSubWeak, &VimSub::OpenContentBrowser);
+
+	Input.AddKeyBinding_NoParam(
+		{ FInputChord(EModifierKey::Control, EKeys::W) },
+		VimSubWeak, &VimSub::RemoveActiveMajorTab);
 
 	//  Move HJKL
 	Input.AddKeyBinding_KeyEvent(
