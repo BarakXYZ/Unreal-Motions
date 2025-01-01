@@ -46,6 +46,7 @@ public class UnrealMotions : ModuleRules
 				"UMG",
 				"StatusBar",
 				"ToolMenus",
+				"SceneOutliner",
 				// "Core",
 				// "LevelEditor",
 				// ... add private dependencies that you statically link with here ...	

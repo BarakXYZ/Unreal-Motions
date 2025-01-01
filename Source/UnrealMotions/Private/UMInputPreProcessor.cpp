@@ -1,7 +1,7 @@
 #include "UMInputPreProcessor.h"
 #include "Editor.h"
 #include "Engine/GameInstance.h"
-#include "UMHelpers.h"
+#include "Framework/Application/SlateApplication.h"
 #include "StatusBarSubsystem.h"
 // #include "WidgetDrawerConfig.h"
 
@@ -183,11 +183,17 @@ void FUMInputPreProcessor::RegisterDefaultKeyBindings()
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		});
+	AddKeyBinding_KeyEvent(
+		{ EKeys::V },
+		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+			SwitchVimModes(SlateApp, InKeyEvent);
+		});
 }
 
 bool FUMInputPreProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// DebugKeyEvent(InKeyEvent);
 	// NOTE:
 	// When we call SlateApp.ProcessKeyDownEvent(), it will trigger another
 	// HandleKeyDownEvent call.
@@ -221,7 +227,7 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 
 	if (KeyPressed.IsModifierKey()) // Simply ignore
 		return true;				// or false?
-	//
+
 	// If leader key is pressed, show the buffer visualizer
 	if (KeyPressed == EKeys::SpaceBar && CurrentBuffer.IsEmpty())
 	{
@@ -255,23 +261,36 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 
 	// if (VimMode == EVimMode::Visual)
 	// {
-	// 	// FUMHelpers::NotifySuccess(FText::FromString("Visual Process"));
-	// 	FModifierKeysState VisualModKeysState(
-	// 		true, true, // Always shift
-	// 		false, false, false, false, false, false, false);
-	// 	FKeyEvent VisualProcessesdKeyEvent(
-	// 		InKeyEvent.GetKey(),
-	// 		VisualModKeysState,
-	// 		InKeyEvent.GetUserIndex(),
-	// 		InKeyEvent.IsRepeat(),
-	// 		InKeyEvent.GetCharacter(),
-	// 		InKeyEvent.GetKeyCode());
-	// 	return ProcessKeySequence(SlateApp, VisualProcessesdKeyEvent);
-	// 	// return true;
+	// 	FUMHelpers::NotifySuccess(FText::FromString("Visual Process"));
+	// 	TestVisual(SlateApp, InKeyEvent);
+	// 	return true;
+
+	// 	// FModifierKeysState VisualModKeysState(
+	// 	// 	true, true, // Always shift
+	// 	// 	false, false, false, false, false, false, true);
+
+	// 	// // Pass a pre shift
+	// 	// ToggleNativeInputHandling(true);
+	// 	// SimulateKeyPress(SlateApp, FKey(EKeys::LeftShift), VisualModKeysState);
+
+	// 	// FKeyEvent VisualProcessesdKeyEvent( // Craft the new always-shifted event
+	// 	// 	InKeyEvent.GetKey(),
+	// 	// 	VisualModKeysState,
+	// 	// 	InKeyEvent.GetUserIndex(),
+	// 	// 	InKeyEvent.IsRepeat(),
+	// 	// 	InKeyEvent.GetCharacter(),
+	// 	// 	InKeyEvent.GetKeyCode());
+	// 	// return ProcessKeySequence(SlateApp, VisualProcessesdKeyEvent);
 	// }
 
 	return ProcessKeySequence(SlateApp, InKeyEvent);
 	// return true;
+}
+
+bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// FUMHelpers::NotifySuccess(FText::FromString("Key up!"));
+	return true;
 }
 
 bool FUMInputPreProcessor::ShouldSwitchVimMode(
@@ -289,21 +308,112 @@ bool FUMInputPreProcessor::ShouldSwitchVimMode(
 bool FUMInputPreProcessor::TrackCountPrefix(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// Skip if: not first key and not already counting, or any modifiers pressed
+	// Skip processing if either:
+	// 1. This isn't the first key and we're not already in counting mode
+	// 2. Any modifier keys are pressed (since modifiers can also be symbols)
 	if ((!CurrentSequence.IsEmpty() && !bIsCounting)
 		|| InKeyEvent.GetModifierKeys().AnyModifiersDown())
 		return false;
 
 	FString OutStr;
+	// Check if the current key is a digit
 	if (GetStrDigitFromKey(InKeyEvent.GetKey(), OutStr))
 	{
-		// FUMHelpers::NotifySuccess(FText::FromString("USER IS COUNTING"));
-		bIsCounting = true;
-		OnCountPrefix.Broadcast(OutStr);
-		return true;
+		// If this is the first key in the sequence, start counting mode
+		// Example: User pressed "4" which could start "4h" command
+		if (CurrentSequence.IsEmpty())
+		{
+			bIsCounting = true;
+			OnCountPrefix.Broadcast(OutStr);
+			return true;
+		}
+		// Reject additional digits after initial input
+		// Example sequence: If user types "374oc3":
+		// 1. The "374" will be ignored.
+		// 2. Only "oc3" will be processed as a valid command
+		// 3. The "3" in "oc3" is treated as a direct keystroke,
+		//    not as part of the count buffer
+		// NOTE: Some commands will only check the direct keystroke
+		// for count values, ignoring the count buffer entirely
+		// and right after a valid command we will anyway reset all buffers,
+		// which means we end up fresh & clean.
+		return false;
 	}
-	ResetSequence(SlateApp);
 	return false;
+}
+
+void FUMInputPreProcessor::TestVisual(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// Modifier key state to simulate LeftShift being held
+	FModifierKeysState VisualModKeysState(
+		true, false, // Shift is held
+		false, false, false, false, false, false, true);
+
+	// Simulate LeftShift key press
+	FKeyEvent SimLeftShift(
+		FKey(EKeys::LeftShift),
+		VisualModKeysState,
+		0,	   // DeviceId
+		false, // IsRepeat
+		0,	   // CharacterCode
+		160	   // KeyCode
+	);
+
+	// Simulate LeftArrow key press
+	FKeyEvent SimLeftArrow(
+		FKey(EKeys::Left),
+		VisualModKeysState,
+		0,	   // DeviceId
+		false, // IsRepeat
+		0,	   // CharacterCode
+		39	   // KeyCode
+	);
+
+	FKeyEvent SimUpArrow(
+		FKey(EKeys::Up),
+		VisualModKeysState,
+		0,	   // DeviceId
+		false, // IsRepeat
+		0,	   // CharacterCode
+		39	   // KeyCode
+	);
+
+	// bNativeInputHandling = true;
+	// SlateApp.ProcessKeyDownEvent(SimLeftShift);
+
+	UWorld* EditorWorld = nullptr;
+
+	// Example: Get the “editor world context” if one is available.
+	if (GEditor)
+	{
+		// This returns the first world used by the Editor (the level you see open).
+		FWorldContext& EditorWorldContext = GEditor->GetEditorWorldContext();
+		EditorWorld = EditorWorldContext.World();
+	}
+
+	if (EditorWorld)
+	{
+		FTimerHandle TimerHandle;
+		EditorWorld->GetTimerManager().SetTimer(
+			TimerHandle,
+			FTimerDelegate::CreateLambda([this, SimLeftArrow, SimLeftShift, SimUpArrow]() {
+				FUMHelpers::NotifySuccess(FText::FromString("Key down delay!"));
+				FSlateApplication& SlateApp = FSlateApplication::Get();
+				bNativeInputHandling = true;
+				// SlateApp.ProcessKeyDownEvent(SimLeftArrow);
+				SlateApp.ProcessKeyDownEvent(SimUpArrow);
+
+				// SlateApp.ProcessKeyUpEvent(SimLeftArrow);
+				SlateApp.ProcessKeyUpEvent(SimUpArrow);
+				// SlateApp.ProcessKeyUpEvent(SimLeftShift);
+			}),
+			0.2f, // Delay
+			false // bLoop
+		);
+	}
+
+	// bNativeInputHandling = true;
+	// SlateApp.ProcessKeyDownEvent(SimLeftArrow);
 }
 
 void FUMInputPreProcessor::SwitchVimModes(
@@ -368,6 +478,18 @@ void FUMInputPreProcessor::UnregisterOnVimModeChanged(const void* CallbackOwner)
 	OnVimModeChanged.RemoveAll(CallbackOwner);
 }
 
+FKeyEvent FUMInputPreProcessor::GetKeyEventFromKey(
+	const FKey& InKey, bool bIsShiftDown)
+{
+	const FModifierKeysState ModKeys(bIsShiftDown, bIsShiftDown,
+		false, false, false, false, false, false, false);
+
+	return FKeyEvent(
+		InKey,
+		ModKeys,
+		0, false, 0, 0);
+}
+
 FInputChord FUMInputPreProcessor::GetChordFromKeyEvent(
 	const FKeyEvent& InKeyEvent)
 {
@@ -404,26 +526,28 @@ void FUMInputPreProcessor::ToggleNativeInputHandling(const bool bNativeHandling)
 
 bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
-	// TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	// if (FocusedWidget.IsValid())
-	// {
-	// 	FString WidgetName = FocusedWidget->ToString();
-	// 	FUMHelpers::NotifySuccess(FText::FromString(WidgetName));
-	// 	return false;
-	// }
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (FocusedWidget.IsValid())
+	{
+		FString WidgetName = FocusedWidget->ToString();
+		FUMHelpers::NotifySuccess(FText::FromString(WidgetName));
+		return false;
+	}
 	return false;
 }
 
 void FUMInputPreProcessor::SimulateKeyPress(
-	FSlateApplication& SlateApp, const FKey& SimulatedKey)
+	FSlateApplication& SlateApp, const FKey& SimulatedKey,
+	const FModifierKeysState& ModifierKeys)
 {
 	static const FKeyEvent SimulatedEvent(
 		SimulatedKey,
-		FModifierKeysState(),
+		ModifierKeys,
 		0, 0, 0, 0);
 
 	bNativeInputHandling = true;
 	SlateApp.ProcessKeyDownEvent(SimulatedEvent);
+	// SlateApp.ProcessKeyUpEvent(SimulatedEvent);
 
 	// FCharacterEvent CharEvent(
 	// 	'I',

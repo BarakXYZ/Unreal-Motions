@@ -95,6 +95,9 @@ private:
 	virtual bool HandleKeyDownEvent(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override;
 
+	/** Key up input */
+	virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override;
+
 	/**
 	 * Processes the current key sequence through the key binding trie structure
 	 * @param SlateApp - Reference to the Slate application instance
@@ -408,6 +411,8 @@ public:
 	static bool GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
 		int32 MinClamp = 0, int32 MaxClamp = 0);
 
+	static FKeyEvent GetKeyEventFromKey(const FKey& InKey, bool bIsShiftDown);
+
 	/**
 	 * Displays debug information when a weak pointer becomes invalid
 	 * @param CallbackType - The type of callback that contained the invalid ptr
@@ -422,7 +427,10 @@ public:
 	void DebugKeyEvent(const FKeyEvent& InKeyEvent);
 
 	static void SimulateKeyPress(
-		FSlateApplication& SlateApp, const FKey& SimulatedKey);
+		FSlateApplication& SlateApp, const FKey& SimulatedKey,
+		const FModifierKeysState& ModifierKeys = FModifierKeysState());
+
+	void TestVisual(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	//
 	/////////////////////////////////////////////////////////////////////////
@@ -461,6 +469,7 @@ private:
 
 	/** Count Command */
 	bool bIsCounting{ false };
+	bool bRequestFollowupReset{ false };
 
 public:
 	/** Event delegates */

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "EditorSubsystem.h"
 #include "Framework/Commands/InputBindingManager.h"
+#include "ISceneOutlinerTreeItem.h"
 #include "UMHelpers.h"
 #include "UMInputPreProcessor.h"
 #include "VimEditorSubsystem.generated.h"
@@ -65,14 +66,51 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 		return FReply::Handled();
 	}
 
+	int32 FindWidgetIndexInParent(
+		const TSharedRef<SWidget>& Widget);
+
+	void DebugTreeItem(const TSharedPtr<ISceneOutlinerTreeItem, ESPMode::ThreadSafe>& TreeItem, int32 Index);
+
+	void NavigateToFirstOrLastItem(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	bool MapVimToNavigationEvent(const FKeyEvent& InKeyEvent,
+		FNavigationEvent& OutNavigationEvent, bool bIsShiftDown);
+
+	void OnVimModeChanged(const EVimMode NewVimMode);
+
+	void Undo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void TrackVisualOffsetNavigation(const FKeyEvent& InKeyEvent);
+
+	void UpdateTreeViewSelectionOnExitVisualMode(FSlateApplication& SlateApp);
+
+	void GetCurrentTreeItemIndex(FSlateApplication&						 SlateApp,
+		const TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView,
+		const TSharedPtr<ISceneOutlinerTreeItem>&						 CurrItem);
+
+	bool GetListView(FSlateApplication& SlateApp, TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& OutListView);
+
+	void CaptureFirstTreeViewItemSelectionAndIndex(FSlateApplication& SlateApp);
+
+	void IsTreeViewVertical(FSlateApplication& SlateApp);
+
 	DECLARE_DELEGATE_RetVal_TwoParams(FReply, FOnKeyDown, const FGeometry&, const FKeyEvent&);
 
 	TWeakObjectPtr<UVimEditorSubsystem> VimSubWeak{ nullptr };
 	TWeakPtr<FUMInputPreProcessor>		InputPP;
 	EUMHelpersLogMethod					UMHelpersLogMethod = EUMHelpersLogMethod::PrintToScreen;
-	static TMap<FKey, FKey>				VimToArrowKeys;
 	FDelegateHandle						PreInputKeyDownDelegateHandle;
 	bool								bVisualLog{ true };
 	bool								bConsoleLog{ false };
 	FString								CountBuffer;
+	EVimMode							CurrentVimMode{ EVimMode::Insert };
+	FKeyEvent							LastNavigationDirection;
+	int32								VisualNavOffsetIndicator{ 0 };
+	struct FTreeViewItemInfo
+	{
+		TWeakPtr<ISceneOutlinerTreeItem> Item = nullptr;
+		int32							 Index = -1;
+	};
+	FTreeViewItemInfo FirstTreeViewItem;
 };
