@@ -79,6 +79,7 @@ void UVimEditorSubsystem::OnResetSequence()
 {
 	CountBuffer.Empty();
 }
+
 void UVimEditorSubsystem::OnCountPrefix(FString AddedCount)
 {
 	// Building the buffer -> "1" + "7" + "3" == "173"
@@ -95,14 +96,14 @@ void UVimEditorSubsystem::UpdateTreeViewSelectionOnExitVisualMode(
 		return;
 
 	const auto SelItems = ListView->GetSelectedItems();
-	if (SelItems.IsEmpty())
+	if (SelItems.IsEmpty() || !AnchorTreeViewItem.Item.IsValid())
 		return;
 
-	// Check if we should set selection on the first or last item
-	// in the selected item array. Using the nav offset, we can deduce the correct
-	// selection (x <= 0 first, else last)
+	// Commented out a deprecated method for deducing the new sel item.
+	// I've realized the simpler method afterwards, keeping it for reference.
 	TSharedPtr<ISceneOutlinerTreeItem> CurrItem =
-		VisualNavOffsetIndicator <= 0 ? SelItems[0] : SelItems.Last();
+		// VisualNavOffsetIndicator <= 0 ? SelItems[0] : SelItems.Last();
+		AnchorTreeViewItem.Item == SelItems[0] ? SelItems.Last() : SelItems[0];
 	ListView->ClearSelection();
 	ListView->SetItemSelection(CurrItem, true,
 		ESelectInfo::OnNavigation); // OnNavigation is important here to clear
@@ -125,12 +126,12 @@ void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 
 		case EVimMode::Visual:
 			VisualNavOffsetIndicator = 0;
-			CaptureFirstTreeViewItemSelectionAndIndex(SlateApp);
+			CaptureAnchorTreeViewItemSelectionAndIndex(SlateApp);
 			break;
 	}
 }
 
-void UVimEditorSubsystem::CaptureFirstTreeViewItemSelectionAndIndex(
+void UVimEditorSubsystem::CaptureAnchorTreeViewItemSelectionAndIndex(
 	FSlateApplication& SlateApp)
 {
 	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
@@ -140,11 +141,18 @@ void UVimEditorSubsystem::CaptureFirstTreeViewItemSelectionAndIndex(
 		if (SelItems.IsEmpty())
 			return;
 
-		int32		ItemIndex = INDEX_NONE;
-		int32		Cursor{ 0 };
 		const auto& FirstSelItem = SelItems[0];
+		if (SelItems.Num() > 1)
+		{
+			ListView->ClearSelection();
+			ListView->SetItemSelection(FirstSelItem,
+				true, ESelectInfo::OnNavigation);
+		}
 
-		for (const auto& Item : SelItems)
+		int32 ItemIndex = INDEX_NONE;
+		int32 Cursor{ 0 };
+
+		for (const auto& Item : ListView->GetItems())
 		{
 			if (Item == FirstSelItem)
 			{
@@ -155,10 +163,13 @@ void UVimEditorSubsystem::CaptureFirstTreeViewItemSelectionAndIndex(
 		}
 
 		if (ItemIndex == INDEX_NONE)
-			return;
+		{
+			AnchorTreeViewItem.Item = nullptr;
+			AnchorTreeViewItem.Index = -1;
+		}
 
-		FirstTreeViewItem.Item = FirstSelItem.ToWeakPtr();
-		FirstTreeViewItem.Index = ItemIndex;
+		AnchorTreeViewItem.Item = FirstSelItem.ToWeakPtr();
+		AnchorTreeViewItem.Index = ItemIndex;
 	}
 }
 
@@ -286,114 +297,89 @@ bool UVimEditorSubsystem::GetListView(FSlateApplication& SlateApp, TSharedPtr<SL
 void UVimEditorSubsystem::NavigateToFirstOrLastItem(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView = nullptr;
+	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
 	if (!GetListView(SlateApp, ListView))
 		return;
 
 	TArrayView<const TSharedPtr<ISceneOutlinerTreeItem, ESPMode::ThreadSafe>>
-		ListItems = ListView->GetItems();
-	if (ListItems.IsEmpty())
+		AllItems = ListView->GetItems();
+	if (AllItems.IsEmpty())
 		return;
 
-	bool		bIsShiftDown = InKeyEvent.IsShiftDown();
-	const auto& GotoItem =
-		bIsShiftDown ? ListItems.Last()
-					 : ListItems[0];
+	// if G, our goto item will be the last one, if gg, first
+	bool bIsShiftDown = InKeyEvent.IsShiftDown();
 
 	if (CurrentVimMode == EVimMode::Normal)
-		ListView->SetSelection(GotoItem, ESelectInfo::OnNavigation);
+	{
+		HandleNormalNavToFirstOrLast(ListView, AllItems, bIsShiftDown);
+	}
 	else // Has to be Visual Mode
 	{
-		const auto& SelItems = ListView->GetSelectedItems();
-		if (SelItems.IsEmpty())
-			return; // I think
+		HandleVisualNavToFirstOrLast(SlateApp, ListView, AllItems, bIsShiftDown);
+	}
+}
 
-		// Going from where we are to the beginning (gg) or end (G), we will
-		// consider the first item selected as the new first item (gg) or if going
-		// to the end (G), we will want the last item selected.
-		// NOTE: Not sure if this is actually stable!
-		const auto& NewFirstSelItem =
-			// bIsShiftDown ? SelItems.Last() : SelItems[0];
-			bIsShiftDown ? SelItems[0] : SelItems.Last();
+void UVimEditorSubsystem::HandleNormalNavToFirstOrLast(
+	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView,
+	TArrayView<const TSharedPtr<ISceneOutlinerTreeItem>>&	   AllItems,
+	bool													   bIsShiftDown)
+{
+	const auto& GotoItem =
+		bIsShiftDown ? AllItems.Last()
+					 : AllItems[0];
 
-		// Crash
-		// FUMHelpers::NotifySuccess(FText::FromString(FString::Printf(TEXT("Last: %s, First: %s"), *SelItems.Last()->GetDisplayString(), *SelItems[0]->GetDisplayString())));
-		// return;
+	ListView->SetSelection(GotoItem, ESelectInfo::OnNavigation);
+	ListView->RequestNavigateToItem(GotoItem, 0); // Does that work solo?
+}
 
-		// Check what's the index of that item, so we can calculate the delta
-		// distance we gonna execute on either gg/G (i.e. go to beginning or end)
-		int32 NewFirstSelItemIndex = INDEX_NONE;
-		int32 Cursor{ 1 }; // It make more sense to calculate in index 1
-		for (const auto& Item : ListItems)
-		{
-			// A way to know if something is a folder in outliner potentially!
-			// if (ListView->Private_IsItemSelectableOrNavigable(Item))
-			// {
-			if (Item == NewFirstSelItem)
-			{
-				NewFirstSelItemIndex = Cursor;
-				break;
-			}
-			++Cursor;
-			// }
-		}
-		if (NewFirstSelItemIndex == INDEX_NONE)
-			return; // Item was not found
+void UVimEditorSubsystem::HandleVisualNavToFirstOrLast(
+	FSlateApplication&										   SlateApp,
+	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView,
+	TArrayView<const TSharedPtr<ISceneOutlinerTreeItem>>&	   AllItems,
+	bool													   bIsShiftDown)
+{
+	const auto& SelItems = ListView->GetSelectedItems();
+	if (SelItems.IsEmpty())
+		return; // I think
 
-		ListView->ClearSelection(); // ??
-		VisualNavOffsetIndicator = 0;
-
-		// if (!FirstTreeViewItem.Item.IsValid())
-		// 	CaptureFirstTreeViewItemSelectionAndIndex(SlateApp);
-
-		int32 LoopIndex = bIsShiftDown
-			? ListItems.Num() - NewFirstSelItemIndex
-			: NewFirstSelItemIndex - 1;
-
-		for (int32 i{ 0 }; i < LoopIndex; ++i)
-		{
-			// if (ListView->Private_IsItemSelectableOrNavigable(Item))
-			// {
-			ProcessVimNavigationInput(SlateApp,
-				FUMInputPreProcessor::GetKeyEventFromKey(
-					// FKey(bIsShiftDown ? FKey(EKeys::J) : FKey(EKeys::K)),
-					// TODO: Determine if View is Vertical or Horizontal
-					FKey(bIsShiftDown ? FKey(EKeys::L) : FKey(EKeys::H)),
-					true));
-			// }
-		}
-		return;
-
-		int32 NewNavOffsetIndex = bIsShiftDown
-			? ListItems.Num() - NewFirstSelItemIndex
-			: 1 - NewFirstSelItemIndex;
-		VisualNavOffsetIndicator = NewNavOffsetIndex;
-
-		// UpdateTreeViewSelectionOnExitVisualMode(SlateApp);
-		ListView->ClearSelection();
-		// ListView->SetItemSelection(
-		// 	NewFirstSelItem, true, ESelectInfo::OnNavigation);
-		// ListView->Private_SelectRangeFromCurrentTo(GotoItem);
-		// for (const auto& Item : ListItems)
-		// {
-		// 	if (ListView->Private_IsItemSelectableOrNavigable(Item))
-		// 	{
-		// 		ProcessVimNavigationInput(SlateApp,
-		// 			FUMInputPreProcessor::GetKeyEventFromKey(
-		// 				FKey(bIsShiftDown ? FKey(EKeys::J) : FKey(EKeys::K)),
-		// 				true));
-		// 		ListView->SetItemSelection(
-		// 			Item,
-		// 			(bIsShiftDown
-		// 					? Cursor >= NewFirstSelItemIndex
-		// 					: Cursor <= NewFirstSelItemIndex),
-		// 			ESelectInfo::OnNavigation);
-		// 	}
-		// }
-		return;
+	if (!AnchorTreeViewItem.Item.IsValid())
+	{
+		CaptureAnchorTreeViewItemSelectionAndIndex(SlateApp);
+		FUMHelpers::NotifySuccess(FText::FromString(
+			"Capture Anchor was NOT valid. Now capturing..."));
 	}
 
-	ListView->RequestNavigateToItem(GotoItem, 0);
+	FKey NavKeyDirection = GetTreeNavigationDirection(ListView, bIsShiftDown);
+
+	int32	   TimesToNavigate{ 0 };
+	const auto IsAnchorToTheLeft = AnchorTreeViewItem.Item == SelItems[0];
+	if (bIsShiftDown) // Go to the end (G), go to the last index
+	{
+		TimesToNavigate = IsAnchorToTheLeft
+			? AllItems.Num() - (AnchorTreeViewItem.Index + 1) - (SelItems.Num() - 1)
+			: AllItems.Num() - (AnchorTreeViewItem.Index + 1) + (SelItems.Num() - 1);
+	}
+	else // Go to the start (gg)
+	{
+		// if 0, we are currently to the right of the selection (or at 0)
+		// else we are to the left (or at 0)
+		TimesToNavigate = IsAnchorToTheLeft
+			? AnchorTreeViewItem.Index + (SelItems.Num() - 1)
+			: (AnchorTreeViewItem.Index + 1) - SelItems.Num();
+	}
+
+	int32 DebugLoopNum{ 0 };
+	for (int32 i{ 0 }; i < TimesToNavigate; ++i)
+	{
+		ProcessVimNavigationInput(SlateApp,
+			FUMInputPreProcessor::GetKeyEventFromKey(
+				NavKeyDirection,
+				true));
+		++DebugLoopNum;
+	}
+	// FUMHelpers::NotifySuccess(FText::FromString(
+	// 	FString::Printf(TEXT("Times Navigated: %d, Anchor Index: %d"),
+	// 		DebugLoopNum, AnchorTreeViewItem.Index)));
 }
 
 void UVimEditorSubsystem::GetCurrentTreeItemIndex(FSlateApplication& SlateApp,
@@ -427,23 +413,19 @@ void UVimEditorSubsystem::ProcessVimNavigationInput(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView = nullptr;
-	if (CurrentVimMode == EVimMode::Visual)
-	{
-		if (!GetListView(SlateApp, ListView))
-			return;
-
-		TrackVisualOffsetNavigation(InKeyEvent);
-
-		FNavigationEvent NavEvent;
-		MapVimToNavigationEvent(InKeyEvent, NavEvent, true /** Shift Down */);
-
-		ListView->OnNavigation(
-			SlateApp.GetUserFocusedWidget(0)->GetCachedGeometry(), NavEvent);
+	if (!GetListView(SlateApp, ListView))
 		return;
-	}
 
-	FKeyEvent OutKeyEvent;
-	MapVimToArrowNavigation(InKeyEvent, OutKeyEvent);
+	// In Visual Mode, we want a constant simulation of Shift down for proper
+	// range selection. Else, we will just directly navigate to items.
+	const bool bShouldSimulateShiftDown{ CurrentVimMode == EVimMode::Visual };
+
+	FNavigationEvent NavEvent;
+	MapVimToNavigationEvent(InKeyEvent, NavEvent, bShouldSimulateShiftDown);
+
+	// Normal
+	// FKeyEvent OutKeyEvent;
+	// MapVimToArrowNavigation(InKeyEvent, OutKeyEvent);
 
 	int32 Count = MIN_REPEAT_COUNT;
 	if (!CountBuffer.IsEmpty())
@@ -453,16 +435,30 @@ void UVimEditorSubsystem::ProcessVimNavigationInput(
 			MIN_REPEAT_COUNT,
 			MAX_REPEAT_COUNT);
 	}
-	// else
-	// FUMHelpers::NotifySuccess(FText::FromString("Empty Buffer"));
 
-	// FUMHelpers::NotifySuccess(
-	// 	FText::FromString(FString::Printf(TEXT("Count: %d"), Count)));
 	for (int32 i{ 0 }; i < Count; ++i)
 	{
-		FUMInputPreProcessor::ToggleNativeInputHandling(true);
-		SlateApp.ProcessKeyDownEvent(OutKeyEvent);
+		const FNavigationReply NavReply =
+			ListView->OnNavigation( // Navigate to the next or previous item
+				SlateApp.GetUserFocusedWidget(0)->GetCachedGeometry(), NavEvent);
+
+		if (NavReply.GetBoundaryRule() != EUINavigationRule::Escape)
+			TrackVisualOffsetNavigation(InKeyEvent); // Only track if moving
+
+		// FUMInputPreProcessor::ToggleNativeInputHandling(true);
+		// SlateApp.ProcessKeyDownEvent(OutKeyEvent);
 	}
+}
+
+bool UVimEditorSubsystem::IsTreeViewVertical(
+	const TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView)
+{
+	const static FName AssetTileView = "SAssetTileView";
+
+	if (ListView.IsValid())
+		if (!ListView->GetType().IsEqual(AssetTileView))
+			return true;
+	return false;
 }
 
 void UVimEditorSubsystem::Undo(
@@ -490,13 +486,12 @@ void UVimEditorSubsystem::DebugTreeItem(
 void UVimEditorSubsystem::DeleteItem(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// EKeys::Delete;
+	// TODO: Delegate to switch Vim mode to Normal
 	FKeyEvent DeleteEvent(
 		FKey(EKeys::Delete),
 		FModifierKeysState(),
 		0, 0, 0, 0);
 	FUMInputPreProcessor::ToggleNativeInputHandling(true);
-	// SlateApp.ProcessKeyDownEvent(DeleteEvent);
 	SlateApp.ProcessKeyDownEvent(DeleteEvent); // Will just block the entire process until the delete window is handled, thus not really helping.
 }
 
@@ -600,6 +595,43 @@ void UVimEditorSubsystem::OpenWidgetReflector(
 		);
 		FUMHelpers::NotifySuccess(FText::AsNumber(FoundButtons.Num()));
 	}
+}
+
+FKey UVimEditorSubsystem::GetTreeNavigationDirection(
+	const TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView, bool bGetForwardDirection)
+{
+	// Get the navigation direction key (HJKL -> Left, Down, Up or Right)
+	TArray<FKey> NavKeys;
+	if (IsTreeViewVertical(ListView))
+	{
+		NavKeys.Add(FKey(EKeys::J));
+		NavKeys.Add(FKey(EKeys::K));
+	}
+	else
+	{
+		NavKeys.Add(FKey(EKeys::L));
+		NavKeys.Add(FKey(EKeys::H));
+	}
+	return bGetForwardDirection ? NavKeys[0] : NavKeys[1];
+}
+
+void UVimEditorSubsystem::ScrollHalfPage(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static constexpr int32 SCROLL_NUM{ 6 };
+
+	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
+	if (!GetListView(SlateApp, ListView))
+		return;
+
+	bool			bScrollDown = InKeyEvent.GetKey() == EKeys::D;
+	const FKey		NavDirection = GetTreeNavigationDirection(ListView, bScrollDown);
+	const FKeyEvent KeyEvent =
+		FUMInputPreProcessor::GetKeyEventFromKey(NavDirection,
+			CurrentVimMode == EVimMode::Visual);
+
+	for (int32 i{ 0 }; i < SCROLL_NUM; ++i)
+		ProcessVimNavigationInput(SlateApp, KeyEvent);
 }
 
 void UVimEditorSubsystem::OpenOutputLog()
@@ -731,6 +763,14 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_KeyEvent(
 		{ EKeys::G, EKeys::G },
 		VimSubWeak, &VimSub::NavigateToFirstOrLastItem);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::U) },
+		VimSubWeak, &VimSub::ScrollHalfPage);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::D) },
+		VimSubWeak, &VimSub::ScrollHalfPage);
 
 	Input.AddKeyBinding_KeyEvent(
 		{ EKeys::U },
