@@ -206,3 +206,5 @@ void FUMAssetManager::RegisterAssetCommands(const TSharedPtr<FBindingContext>& M
 		FInputChord(EModifierKey::FromBools(true, true, false, false),
 			EKeys::P));
 }
+
+#undef LOCTEXT_NAMESPACE

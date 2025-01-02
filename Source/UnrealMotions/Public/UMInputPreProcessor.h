@@ -44,6 +44,8 @@ DECLARE_MULTICAST_DELEGATE(FUMOnResetSequence);
  */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnVimModeChanged, const EVimMode);
 
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnRequestVimModeChange, FSlateApplication&, const EVimMode);
+
 class FUMInputPreProcessor : public IInputProcessor
 {
 public:
@@ -106,6 +108,7 @@ private:
 	 */
 	bool ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+public:
 	/**
 	 * Changes the current Vim editing mode and broadcasts the change through the
 	 * mode change delegate
@@ -128,7 +131,6 @@ private:
 	 */
 	void SwitchVimModes(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-public:
 	/**
 	 * Returns a reference to the delegate for Vim mode change notifications
 	 * @return Reference to FOnVimModeChanged delegate that broadcasts mode changes
@@ -426,11 +428,16 @@ public:
 	 */
 	void DebugKeyEvent(const FKeyEvent& InKeyEvent);
 
+	/**
+	 * Simulates a key input using ProcessKeyDownEvent (SlateApplication).
+	 * Will toggle native handling to process the key correctly.
+	 * @param SlateApp - Reference to the Slate application instance
+	 * @param SimulatedKey - The key to simulate
+	 * @param ModifierKeys - Which modifiers should be simulated
+	 */
 	static void SimulateKeyPress(
 		FSlateApplication& SlateApp, const FKey& SimulatedKey,
 		const FModifierKeysState& ModifierKeys = FModifierKeysState());
-
-	void TestVisual(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	//
 	/////////////////////////////////////////////////////////////////////////
@@ -460,7 +467,7 @@ private:
 	static bool								bNativeInputHandling;
 
 	/** Input mode state */
-	EVimMode VimMode{ EVimMode::Insert };
+	static EVimMode VimMode;
 
 	/** Buffer */
 	TArray<FInputChord>			  CurrentSequence;	// Current Input Sequence
@@ -473,9 +480,10 @@ private:
 
 public:
 	/** Event delegates */
-	FOnVimModeChanged  OnVimModeChanged;
-	FUMOnCountPrefix   OnCountPrefix;
-	FUMOnResetSequence OnResetSequence;
+	FOnVimModeChanged			   OnVimModeChanged;
+	FUMOnCountPrefix			   OnCountPrefix;
+	FUMOnResetSequence			   OnResetSequence;
+	static FOnRequestVimModeChange OnRequestVimModeChange;
 
 	/** Logging configuration */
 	EUMHelpersLogMethod UMHelpersLogMethod{ EUMHelpersLogMethod::PrintToScreen };

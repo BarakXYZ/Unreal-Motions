@@ -4,7 +4,6 @@
 #include "Widgets/SWindow.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Modules/ModuleManager.h"
-#include "ToolMenus.h"
 #include "LevelEditor.h"
 
 #include "UMInputPreProcessor.h"

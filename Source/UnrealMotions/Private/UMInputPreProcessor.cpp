@@ -3,19 +3,29 @@
 #include "Engine/GameInstance.h"
 #include "Framework/Application/SlateApplication.h"
 #include "StatusBarSubsystem.h"
+#include "UMHelpers.h"
 // #include "WidgetDrawerConfig.h"
 
 TSharedPtr<FUMInputPreProcessor>
-	FUMInputPreProcessor::InputPreProcessor = nullptr;
+	FUMInputPreProcessor::InputPreProcessor{ nullptr };
+
+EVimMode FUMInputPreProcessor::VimMode{ EVimMode::Insert };
 
 FOnUMPreProcessorInputInit FUMInputPreProcessor::OnUMPreProcessorInputInit;
 
-bool FUMInputPreProcessor::bNativeInputHandling = { false };
+FOnRequestVimModeChange FUMInputPreProcessor::OnRequestVimModeChange;
+
+bool FUMInputPreProcessor::bNativeInputHandling{ false };
 
 FUMInputPreProcessor::FUMInputPreProcessor()
 {
 	OnUMPreProcessorInputInit.AddLambda(
 		[this]() { RegisterDefaultKeyBindings(); });
+
+	OnRequestVimModeChange.AddLambda(
+		[this](FSlateApplication& SlateApp, const EVimMode NewMode) {
+			SetMode(SlateApp, NewMode);
+		});
 }
 FUMInputPreProcessor::~FUMInputPreProcessor()
 {
@@ -194,6 +204,7 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// DebugKeyEvent(InKeyEvent);
+
 	// NOTE:
 	// When we call SlateApp.ProcessKeyDownEvent(), it will trigger another
 	// HandleKeyDownEvent call.
@@ -206,7 +217,6 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 		// 	"HandleKeyDownEvent Dummy"));
 
 		bNativeInputHandling = false; // Resume manual handling from next event
-		// DebugKeyEvent(InKeyEvent);
 		return false;
 	}
 
@@ -258,30 +268,6 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 	{
 		BufferVisualizer.Pin()->UpdateBuffer(CurrentBuffer);
 	}
-
-	// if (VimMode == EVimMode::Visual)
-	// {
-	// 	FUMHelpers::NotifySuccess(FText::FromString("Visual Process"));
-	// 	TestVisual(SlateApp, InKeyEvent);
-	// 	return true;
-
-	// 	// FModifierKeysState VisualModKeysState(
-	// 	// 	true, true, // Always shift
-	// 	// 	false, false, false, false, false, false, true);
-
-	// 	// // Pass a pre shift
-	// 	// ToggleNativeInputHandling(true);
-	// 	// SimulateKeyPress(SlateApp, FKey(EKeys::LeftShift), VisualModKeysState);
-
-	// 	// FKeyEvent VisualProcessesdKeyEvent( // Craft the new always-shifted event
-	// 	// 	InKeyEvent.GetKey(),
-	// 	// 	VisualModKeysState,
-	// 	// 	InKeyEvent.GetUserIndex(),
-	// 	// 	InKeyEvent.IsRepeat(),
-	// 	// 	InKeyEvent.GetCharacter(),
-	// 	// 	InKeyEvent.GetKeyCode());
-	// 	// return ProcessKeySequence(SlateApp, VisualProcessesdKeyEvent);
-	// }
 
 	return ProcessKeySequence(SlateApp, InKeyEvent);
 	// return true;
@@ -340,80 +326,6 @@ bool FUMInputPreProcessor::TrackCountPrefix(
 		return false;
 	}
 	return false;
-}
-
-void FUMInputPreProcessor::TestVisual(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
-{
-	// Modifier key state to simulate LeftShift being held
-	FModifierKeysState VisualModKeysState(
-		true, false, // Shift is held
-		false, false, false, false, false, false, true);
-
-	// Simulate LeftShift key press
-	FKeyEvent SimLeftShift(
-		FKey(EKeys::LeftShift),
-		VisualModKeysState,
-		0,	   // DeviceId
-		false, // IsRepeat
-		0,	   // CharacterCode
-		160	   // KeyCode
-	);
-
-	// Simulate LeftArrow key press
-	FKeyEvent SimLeftArrow(
-		FKey(EKeys::Left),
-		VisualModKeysState,
-		0,	   // DeviceId
-		false, // IsRepeat
-		0,	   // CharacterCode
-		39	   // KeyCode
-	);
-
-	FKeyEvent SimUpArrow(
-		FKey(EKeys::Up),
-		VisualModKeysState,
-		0,	   // DeviceId
-		false, // IsRepeat
-		0,	   // CharacterCode
-		39	   // KeyCode
-	);
-
-	// bNativeInputHandling = true;
-	// SlateApp.ProcessKeyDownEvent(SimLeftShift);
-
-	UWorld* EditorWorld = nullptr;
-
-	// Example: Get the “editor world context” if one is available.
-	if (GEditor)
-	{
-		// This returns the first world used by the Editor (the level you see open).
-		FWorldContext& EditorWorldContext = GEditor->GetEditorWorldContext();
-		EditorWorld = EditorWorldContext.World();
-	}
-
-	if (EditorWorld)
-	{
-		FTimerHandle TimerHandle;
-		EditorWorld->GetTimerManager().SetTimer(
-			TimerHandle,
-			FTimerDelegate::CreateLambda([this, SimLeftArrow, SimLeftShift, SimUpArrow]() {
-				FUMHelpers::NotifySuccess(FText::FromString("Key down delay!"));
-				FSlateApplication& SlateApp = FSlateApplication::Get();
-				bNativeInputHandling = true;
-				// SlateApp.ProcessKeyDownEvent(SimLeftArrow);
-				SlateApp.ProcessKeyDownEvent(SimUpArrow);
-
-				// SlateApp.ProcessKeyUpEvent(SimLeftArrow);
-				SlateApp.ProcessKeyUpEvent(SimUpArrow);
-				// SlateApp.ProcessKeyUpEvent(SimLeftShift);
-			}),
-			0.2f, // Delay
-			false // bLoop
-		);
-	}
-
-	// bNativeInputHandling = true;
-	// SlateApp.ProcessKeyDownEvent(SimLeftArrow);
 }
 
 void FUMInputPreProcessor::SwitchVimModes(

@@ -284,3 +284,5 @@ void FUMWindowsNavigationManager::RegisterCycleWindowsNavigation(const TSharedPt
 		EUserInterfaceActionType::Button,
 		FInputChord(EModifierKey::Control, EKeys::Slash));
 }
+
+#undef LOCTEXT_NAMESPACE

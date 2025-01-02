@@ -1,10 +1,8 @@
 #include "UnrealMotions.h"
 #include "Framework/Application/SlateApplication.h"
-#include "SUMStatusBarWidget.h"
 
 #include "UMHelpers.h"
 #include "UMNavigationConfig.h"
-#include "UMBufferVisualizer.h"
 
 #include "UMStatusBarManager.h"
 
@@ -24,12 +22,18 @@ void FUnrealMotionsModule::StartupModule()
 	// TODO: Check in the config if the user wants this feature.
 	FUMStatusBarManager::Initialize();
 
-	TSharedRef<FUMNavigationConfig> UMNavConfig =
-		MakeShareable(new FUMNavigationConfig());
-	FSlateApplication::Get().SetNavigationConfig(UMNavConfig);
-
 	FCoreDelegates::OnPostEngineInit.AddRaw(
 		this, &FUnrealMotionsModule::BindPostEngineInitDelegates);
+
+	// NOTE: This will only change the in-game navigation config, so not really
+	// helpful.
+	// FCoreDelegates::OnPostEngineInit.AddLambda(
+	// 	[]() {
+	// 		TSharedRef<FUMNavigationConfig> UMNavConfig =
+	// 			MakeShareable(new FUMNavigationConfig());
+	// 		FSlateApplication::Get().SetNavigationConfig(UMNavConfig);
+	// 		FSlateApplication::Get().TryDumpNavigationConfig(UMNavConfig);
+	// 	});
 }
 
 void FUnrealMotionsModule::ShutdownModule()
@@ -41,8 +45,6 @@ void FUnrealMotionsModule::BindPostEngineInitDelegates()
 {
 	// Register our custom InputPreProcessor to intercept user input.
 	FSlateApplication& App = FSlateApplication::Get();
-	// InputProcessor = MakeShared<FUMInputPreProcessor>();
-	// App.RegisterInputPreProcessor(InputProcessor);
 	App.RegisterInputPreProcessor(FUMInputPreProcessor::Get());
 }
 

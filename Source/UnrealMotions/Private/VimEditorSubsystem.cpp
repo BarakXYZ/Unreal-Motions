@@ -1,5 +1,4 @@
 #include "VimEditorSubsystem.h"
-#include "Brushes/SlateColorBrush.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
 #include "Templates/SharedPointer.h"
@@ -11,14 +10,9 @@
 #include "UMTabsNavigationManager.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SSearchBox.h"
-#include "Widgets/Views/STableViewBase.h"
 #include "Widgets/Views/STreeView.h"
 #include "Editor/SceneOutliner/Public/SSceneOutliner.h"
-// #include "Editor/SceneOutliner/Public/ISceneOutlinerTreeItem.h"
 #include "ISceneOutlinerTreeItem.h"
-#include "Folder.h"
-#include "SceneOutlinerStandaloneTypes.h"
-#include "FolderTreeItem.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All); // Development
@@ -473,6 +467,50 @@ void UVimEditorSubsystem::Undo(
 			false, false, false, false, false));
 }
 
+void UVimEditorSubsystem::Enter(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static const FName		  ButtonType{ "SButton" };
+	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget || !FocusedWidget->GetType().IsEqual(ButtonType))
+	{
+		FUMHelpers::NotifySuccess(
+			FText::FromString(FString::Printf(TEXT("Not %s: %s"),
+				*ButtonType.ToString(), *FocusedWidget->GetTypeAsString())),
+			bVisualLog);
+		FUMInputPreProcessor::SimulateKeyPress(SlateApp,
+			FKey(EKeys::Enter),
+			FModifierKeysState());
+		return;
+	}
+	TSharedPtr<SButton> FocusedWidgetAsButton =
+		StaticCastSharedPtr<SButton>(FocusedWidget);
+	FocusedWidgetAsButton->SimulateClick();
+}
+
+void UVimEditorSubsystem::NavigateNextPrevious(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const auto& FocusedWidget = SlateApp.GetKeyboardFocusedWidget();
+	if (!FocusedWidget.IsValid())
+		return;
+
+	FWidgetPath CurrentPath;
+	if (!SlateApp.FindPathToWidget(FocusedWidget.ToSharedRef(), CurrentPath))
+		return;
+
+	// N = Next (aka Tab) | P = Previous (aka Shift + Tab)
+	const bool	 bIsForwardNavigation = InKeyEvent.GetKey() == EKeys::N;
+	const FReply NavigationReply =
+		FReply::Handled().SetNavigation(
+			bIsForwardNavigation ? EUINavigation::Next : EUINavigation::Previous,
+			ENavigationGenesis::Keyboard,
+			ENavigationSource::FocusedWidget);
+
+	FSlateApplication::Get().ProcessReply(CurrentPath, NavigationReply,
+		nullptr, nullptr);
+}
+
 void UVimEditorSubsystem::DebugTreeItem(
 	const TSharedPtr<ISceneOutlinerTreeItem, ESPMode::ThreadSafe>& TreeItem, int32 Index)
 {
@@ -487,6 +525,8 @@ void UVimEditorSubsystem::DeleteItem(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// TODO: Delegate to switch Vim mode to Normal
+
+	FUMInputPreProcessor::OnRequestVimModeChange.Broadcast(SlateApp, EVimMode::Normal);
 	FKeyEvent DeleteEvent(
 		FKey(EKeys::Delete),
 		FModifierKeysState(),
@@ -644,9 +684,10 @@ void UVimEditorSubsystem::OpenOutputLog()
 void UVimEditorSubsystem::OpenContentBrowser(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	static FString DEFAULT_TAB_INDEX = "1";
-	FString		   ContentBrowserId = "ContentBrowserTab";
-	FString		   TabNum;
+	const static FString DEFAULT_TAB_INDEX = "1";
+	FString				 ContentBrowserId = "ContentBrowserTab";
+	FString				 TabNum;
+
 	if (FUMInputPreProcessor::GetStrDigitFromKey(
 			InKeyEvent.GetKey(), TabNum, 1, 4)) // Valid tabs are only 1-4
 		ContentBrowserId += TabNum;
@@ -694,10 +735,6 @@ void UVimEditorSubsystem::BindCommands()
 
 	// ~ Commands ~ //
 	//
-	// Delete item - Simulate the Delete key (WIP)
-	Input.AddKeyBinding_KeyEvent(
-		{ EKeys::X },
-		VimSubWeak, &VimSub::DeleteItem);
 
 	Input.AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::W },
@@ -775,4 +812,25 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_KeyEvent(
 		{ EKeys::U },
 		VimSubWeak, &VimSub::Undo);
+
+	// Delete item - Simulate the Delete key (WIP)
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::X },
+		VimSubWeak, &VimSub::DeleteItem);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::D },
+		VimSubWeak, &VimSub::DeleteItem);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::Enter },
+		VimSubWeak, &VimSub::Enter);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::N) },
+		VimSubWeak, &VimSub::NavigateNextPrevious);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::P) },
+		VimSubWeak, &VimSub::NavigateNextPrevious);
 }

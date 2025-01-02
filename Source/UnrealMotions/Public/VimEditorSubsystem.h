@@ -402,6 +402,11 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	FKey GetTreeNavigationDirection(
 		const TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView, bool bGetForwardDirection);
 
+	void Enter(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void NavigateNextPrevious(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	DECLARE_DELEGATE_RetVal_TwoParams(FReply, FOnKeyDown, const FGeometry&, const FKeyEvent&);
 
 	TWeakObjectPtr<UVimEditorSubsystem> VimSubWeak{ nullptr };
