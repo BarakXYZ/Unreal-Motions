@@ -497,6 +497,7 @@ void UVimEditorSubsystem::HandleArrowKeysNavigation(
 	{
 		FUMInputPreProcessor::ToggleNativeInputHandling(true);
 		SlateApp.ProcessKeyDownEvent(OutKeyEvent);
+		SlateApp.ProcessKeyUpEvent(OutKeyEvent);
 		// SlateApp.ProcessReply();  // I want to try implementation with this
 	}
 	// Might help with soldifying focus?

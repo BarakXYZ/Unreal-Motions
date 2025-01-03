@@ -276,14 +276,27 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 }
 
 // TODO: Check this behavior
+// I think we must return up for the keys we're simulating!
+// That make sense, they essentially never return to be unpressed!
+// We're sending their input to Unreal native (for example, arrow)
+// but never actually sending the key-up, which makes them stay
+// down and continuously press(?) need to check.
+// We should also keep in mind that when trying ot navigate the viewport
+// when Normal mode is on we can't expend smooth traveling because we will have
+// hotkeys (like 'D') that are mapped to commands, which will block the navigation
+// So really navigation only can happen smoothly while in Insert mode.
+// Need to think about this more.
+// We should about giving navigation using different method so let's think about
+// that more. Maybe a specific mode desgined for navigation? TODO WIP OK THANK
 bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// FUMHelpers::NotifySuccess(FText::FromString("Key up!"));
 	// return true;
-	if (VimMode == EVimMode::Normal)
-		return true; // ??  Not sure
 
-	return false;
+	// if (VimMode == EVimMode::Normal)
+	// 	return true; // ??  Not sure
+
+	return false; // Seems to work fine for now.
 }
 
 bool FUMInputPreProcessor::ShouldSwitchVimMode(
@@ -474,7 +487,7 @@ void FUMInputPreProcessor::SimulateKeyPress(
 
 	bNativeInputHandling = true;
 	SlateApp.ProcessKeyDownEvent(SimulatedEvent);
-	// SlateApp.ProcessKeyUpEvent(SimulatedEvent);
+	SlateApp.ProcessKeyUpEvent(SimulatedEvent);
 
 	// FCharacterEvent CharEvent(
 	// 	'I',
