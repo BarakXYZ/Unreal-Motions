@@ -1,5 +1,4 @@
 #include "VimEditorSubsystem.h"
-#include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
@@ -9,10 +8,12 @@
 #include "UMWindowsNavigationManager.h"
 #include "UMTabsNavigationManager.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SHyperlink.h"
 #include "Widgets/Input/SSearchBox.h"
 #include "Widgets/Views/STreeView.h"
 #include "Editor/SceneOutliner/Public/SSceneOutliner.h"
 #include "ISceneOutlinerTreeItem.h"
+#include "Input/Events.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All); // Development
@@ -39,6 +40,7 @@ static const TSet<FName> ValidWidgetNavigationTypes{
 
 void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+	FSlateApplication& SlateApp = FSlateApplication::Get();
 	const FConfigFile& ConfigFile = FUMHelpers::ConfigFile;
 	FString			   OutLog = "Vim Editor Subsystem Initialized: ";
 
@@ -57,10 +59,33 @@ void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	OutLog += bStartVim ? "Enabled by Config." : "Disabled by Config.";
 	FUMHelpers::NotifySuccess(FText::FromString(OutLog), bVisualLog);
 
+	VisModeManager = MakeShared<FUMVisualModeManager>();
+
 	VimSubWeak = this;
 	InputPP = FUMInputPreProcessor::Get().ToWeakPtr();
 	BindCommands();
 	Super::Initialize(Collection);
+
+	FCoreDelegates::OnPostEngineInit.AddLambda(
+		[this]() {
+			FSlateApplication&			   SlateApp = FSlateApplication::Get();
+			TSharedPtr<GenericApplication> PlatformApp =
+				SlateApp.GetPlatformApplication();
+			if (!PlatformApp.IsValid())
+			{
+				// Handle error: Slate/PlatformApp not valid
+				return;
+			}
+
+			// 1) Grab the current/original handler
+			TSharedPtr<FGenericApplicationMessageHandler> OriginGenericAppMessageHandler = PlatformApp->GetMessageHandler();
+
+			// 2) Create your chaining handler, passing in the old one
+			UMGenericAppMessageHandler = MakeShared<FUMGenericAppMessageHandler>(OriginGenericAppMessageHandler);
+
+			// 3) Now set the platform app’s active handler to your new one
+			PlatformApp->SetMessageHandler(UMGenericAppMessageHandler.ToSharedRef());
+		});
 }
 
 void UVimEditorSubsystem::Deinitialize()
@@ -106,22 +131,39 @@ void UVimEditorSubsystem::UpdateTreeViewSelectionOnExitVisualMode(
 
 void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
+	EVimMode PreviousMode = CurrentVimMode;
 	CurrentVimMode = NewVimMode;
+
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 
 	switch (CurrentVimMode)
 	{
 		case EVimMode::Normal:
+		{
+			if (PreviousMode == EVimMode::Visual
+				&& VisModeManager->IsVisualTextSelected(SlateApp))
+				FUMInputPreProcessor::SimulateKeyPress(SlateApp, EKeys::Escape);
+
+			UMGenericAppMessageHandler->ToggleBlockAllCharInput(true);
 			UpdateTreeViewSelectionOnExitVisualMode(SlateApp);
 			break;
-
+		}
 		case EVimMode::Insert:
+		{
+			// Slight delay before allowing character input
+			// to prevent 'i' from being entered into editable text fields
+			FTimerHandle TimerHandle;
+			GEditor->GetTimerManager()->SetTimer(
+				TimerHandle,
+				[this]() { UMGenericAppMessageHandler->ToggleBlockAllCharInput(false); }, 0.05f, false);
 			break;
-
+		}
 		case EVimMode::Visual:
+		{
 			VisualNavOffsetIndicator = 0;
 			CaptureAnchorTreeViewItemSelectionAndIndex(SlateApp);
 			break;
+		}
 	}
 }
 
@@ -194,14 +236,18 @@ void UVimEditorSubsystem::ToggleVim(bool bEnable)
 }
 
 bool UVimEditorSubsystem::MapVimToArrowNavigation(
-	const FKeyEvent& InKeyEvent, FKeyEvent& OutKeyEvent)
+	const FKeyEvent& InKeyEvent, FKeyEvent& OutKeyEvent, bool bIsShiftDown)
 {
+	FModifierKeysState ModKeysState(
+		bIsShiftDown, bIsShiftDown,
+		false, false, false, false, false, false, false);
+
 	const FKey* MappedKey = VimToArrowKeys.Find(InKeyEvent.GetKey());
 	if (!MappedKey)
 		return false;
 	OutKeyEvent = FKeyEvent(
 		*MappedKey,
-		InKeyEvent.GetModifierKeys(),
+		ModKeysState,
 		0,	   // User index
 		false, // Is repeat
 		0,	   // Character code
@@ -273,8 +319,8 @@ bool UVimEditorSubsystem::GetListView(FSlateApplication& SlateApp, TSharedPtr<SL
 		&& !ValidWidgetNavigationTypes.Find(
 			FName(FocusedWidget->GetTypeAsString().Left(9))))
 	{
-		FUMHelpers::NotifySuccess(
-			FText::FromString(FString::Printf(TEXT("Not a valid type: %s"), *FocusedWidget->GetTypeAsString())), bVisualLog);
+		// FUMHelpers::NotifySuccess(
+		// 	FText::FromString(FString::Printf(TEXT("Not a valid type: %s"), *FocusedWidget->GetTypeAsString())), bVisualLog);
 		return false;
 	}
 
@@ -291,29 +337,54 @@ bool UVimEditorSubsystem::GetListView(FSlateApplication& SlateApp, TSharedPtr<SL
 void UVimEditorSubsystem::NavigateToFirstOrLastItem(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	if (HandleTreeViewFirstOrLastItemNavigation(SlateApp, InKeyEvent))
+		return;
+	HandleArrowKeysNavigationToFirstOrLastItem(SlateApp, InKeyEvent);
+}
+
+void UVimEditorSubsystem::HandleArrowKeysNavigationToFirstOrLastItem(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static const int32 TIMES_TO_NAVIGATE{ 50 };
+	const FKeyEvent	   NavKeyEvent =
+		FUMInputPreProcessor::GetKeyEventFromKey(InKeyEvent.IsShiftDown()
+				? EKeys::J
+				: EKeys::K,
+			InKeyEvent.IsShiftDown());
+
+	for (int32 i{ 0 }; i < TIMES_TO_NAVIGATE; ++i)
+		HandleArrowKeysNavigation(SlateApp, NavKeyEvent);
+}
+
+bool UVimEditorSubsystem::HandleTreeViewFirstOrLastItemNavigation(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
 	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
 	if (!GetListView(SlateApp, ListView))
-		return;
+		return false;
 
 	TArrayView<const TSharedPtr<ISceneOutlinerTreeItem, ESPMode::ThreadSafe>>
 		AllItems = ListView->GetItems();
 	if (AllItems.IsEmpty())
-		return;
+		return true; // Maybe we want to return false in here? Need some testings
 
 	// if G, our goto item will be the last one, if gg, first
 	bool bIsShiftDown = InKeyEvent.IsShiftDown();
 
 	if (CurrentVimMode == EVimMode::Normal)
 	{
-		HandleNormalNavToFirstOrLast(ListView, AllItems, bIsShiftDown);
+		HandleTreeViewNormalModeFirstOrLastItemNavigation(
+			ListView, AllItems, bIsShiftDown);
 	}
 	else // Has to be Visual Mode
 	{
-		HandleVisualNavToFirstOrLast(SlateApp, ListView, AllItems, bIsShiftDown);
+		HandleTreeViewVisualModeFirstOrLastItemNavigation(
+			SlateApp, ListView, AllItems, bIsShiftDown);
 	}
+	return true;
 }
 
-void UVimEditorSubsystem::HandleNormalNavToFirstOrLast(
+void UVimEditorSubsystem::HandleTreeViewNormalModeFirstOrLastItemNavigation(
 	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView,
 	TArrayView<const TSharedPtr<ISceneOutlinerTreeItem>>&	   AllItems,
 	bool													   bIsShiftDown)
@@ -326,7 +397,7 @@ void UVimEditorSubsystem::HandleNormalNavToFirstOrLast(
 	ListView->RequestNavigateToItem(GotoItem, 0); // Does that work solo?
 }
 
-void UVimEditorSubsystem::HandleVisualNavToFirstOrLast(
+void UVimEditorSubsystem::HandleTreeViewVisualModeFirstOrLastItemNavigation(
 	FSlateApplication&										   SlateApp,
 	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView,
 	TArrayView<const TSharedPtr<ISceneOutlinerTreeItem>>&	   AllItems,
@@ -406,9 +477,39 @@ void UVimEditorSubsystem::TrackVisualOffsetNavigation(const FKeyEvent& InKeyEven
 void UVimEditorSubsystem::ProcessVimNavigationInput(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	if (HandleListViewNavigation(SlateApp, InKeyEvent))
+		return; // User is in a valid navigatable list view.
+
+	// Fallback is the default arrows simulation navigation
+	HandleArrowKeysNavigation(SlateApp, InKeyEvent);
+}
+
+void UVimEditorSubsystem::HandleArrowKeysNavigation(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	FKeyEvent OutKeyEvent;
+	MapVimToArrowNavigation(InKeyEvent, OutKeyEvent,
+		CurrentVimMode == EVimMode::Visual /* bIsShiftDown true if Visual */);
+
+	const int32 Count{ GetPracticalCountBuffer() };
+
+	for (int32 i{ 0 }; i < Count; ++i)
+	{
+		FUMInputPreProcessor::ToggleNativeInputHandling(true);
+		SlateApp.ProcessKeyDownEvent(OutKeyEvent);
+		// SlateApp.ProcessReply();  // I want to try implementation with this
+	}
+	// Might help with soldifying focus?
+	// if (TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0))
+	// 	SlateApp.SetAllUserFocus(FocusedWidget, EFocusCause::Navigation);
+}
+
+bool UVimEditorSubsystem::HandleListViewNavigation(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
 	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView = nullptr;
 	if (!GetListView(SlateApp, ListView))
-		return;
+		return false;
 
 	// In Visual Mode, we want a constant simulation of Shift down for proper
 	// range selection. Else, we will just directly navigate to items.
@@ -417,18 +518,7 @@ void UVimEditorSubsystem::ProcessVimNavigationInput(
 	FNavigationEvent NavEvent;
 	MapVimToNavigationEvent(InKeyEvent, NavEvent, bShouldSimulateShiftDown);
 
-	// Normal
-	// FKeyEvent OutKeyEvent;
-	// MapVimToArrowNavigation(InKeyEvent, OutKeyEvent);
-
-	int32 Count = MIN_REPEAT_COUNT;
-	if (!CountBuffer.IsEmpty())
-	{
-		Count = FMath::Clamp(
-			FCString::Atoi(*CountBuffer),
-			MIN_REPEAT_COUNT,
-			MAX_REPEAT_COUNT);
-	}
+	const int32 Count{ GetPracticalCountBuffer() };
 
 	for (int32 i{ 0 }; i < Count; ++i)
 	{
@@ -438,10 +528,20 @@ void UVimEditorSubsystem::ProcessVimNavigationInput(
 
 		if (NavReply.GetBoundaryRule() != EUINavigationRule::Escape)
 			TrackVisualOffsetNavigation(InKeyEvent); // Only track if moving
-
-		// FUMInputPreProcessor::ToggleNativeInputHandling(true);
-		// SlateApp.ProcessKeyDownEvent(OutKeyEvent);
 	}
+	return true;
+}
+
+int32 UVimEditorSubsystem::GetPracticalCountBuffer()
+{
+	if (!CountBuffer.IsEmpty())
+	{
+		return FMath::Clamp(
+			FCString::Atoi(*CountBuffer),
+			MIN_REPEAT_COUNT,
+			MAX_REPEAT_COUNT);
+	}
+	return MIN_REPEAT_COUNT;
 }
 
 bool UVimEditorSubsystem::IsTreeViewVertical(
@@ -470,22 +570,199 @@ void UVimEditorSubsystem::Undo(
 void UVimEditorSubsystem::Enter(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	static const FName		  ButtonType{ "SButton" };
-	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	if (!FocusedWidget || !FocusedWidget->GetType().IsEqual(ButtonType))
+	static const FName ButtonType{ "SButton" };
+
+	const TSharedPtr<SWidget> FocusedWidget =
+		// SlateApp.GetUserFocusedWidget(0);
+		SlateApp.GetKeyboardFocusedWidget();
+	if (!FocusedWidget)
+		return;
+
+	// FUMHelpers::NotifySuccess(
+	// 	FText::FromName(FocusedWidget->GetWidgetClass().GetWidgetType()));
+	const FName FocusedWidgetType =
+		FocusedWidget->GetWidgetClass().GetWidgetType();
+
+	if (FocusedWidgetType.IsEqual(ButtonType))
+	// || FocusedWidget->GetType().IsEqual(HyperlinkType))
 	{
+
+		TSharedPtr<SButton> FocusedWidgetAsButton =
+			StaticCastSharedPtr<SButton>(FocusedWidget);
+		// FocusedWidgetAsButton->SimulateClick();
+		// FocusedWidgetAsButton->SetOnClicked(
+		// 	FOnClicked::CreateLambda([]() { return FReply::Handled(); }));
+		// FocusedWidgetAsButton->SimulateClick();
+
+		FocusedWidgetAsButton->SetClickMethod(EButtonClickMethod::MouseDown);
+		SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef());
+
 		FUMHelpers::NotifySuccess(
-			FText::FromString(FString::Printf(TEXT("Not %s: %s"),
-				*ButtonType.ToString(), *FocusedWidget->GetTypeAsString())),
+			FText::FromString(FString::Printf(
+				TEXT("SButton Clicked! Text: %s, Type: %s, FocusedType: %s"),
+				*FocusedWidgetAsButton->GetAccessibleText().ToString(),
+				*ButtonType.ToString(),
+				*FocusedWidgetType.ToString())),
 			bVisualLog);
-		FUMInputPreProcessor::SimulateKeyPress(SlateApp,
-			FKey(EKeys::Enter),
-			FModifierKeysState());
+	}
+	else
+	{
+		// TSharedPtr<ITableRow>									  TableRow;
+		// TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
+		// if (GetListView(SlateApp, ListView))
+		// {
+		// 	TableRow =
+		// 		ListView->WidgetFromItem(ListView->GetSelectedItems()[0]);
+		// }
+		// FUMHelpers::NotifySuccess(
+		// 	FText::FromString(FString::Printf(TEXT("Not %s: %s"),
+		// 		*ButtonType.ToString(), *FocusedWidgetType.ToString())),
+		// 	bVisualLog);
+
+		// if (TableRow.IsValid())
+		// 	SimulateClickOnWidget(SlateApp, TableRow->AsWidget());
+		// else
+		SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef());
+		// SimulateAnalogClick(SlateApp, FocusedWidget);
 		return;
 	}
-	TSharedPtr<SButton> FocusedWidgetAsButton =
-		StaticCastSharedPtr<SButton>(FocusedWidget);
-	FocusedWidgetAsButton->SimulateClick();
+}
+
+void UVimEditorSubsystem::SimulateClickOnWidget(FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget, const FKey& EffectingButton)
+{
+
+	FWidgetPath WidgetPath;
+	if (!SlateApp.FindPathToWidget(Widget, WidgetPath))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("SimulateClickOnWidget: Failed to find widget path!"));
+		return;
+	}
+
+	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWindow.IsValid())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("SimulateClickOnWidget: No active window found!"));
+		return;
+	}
+
+	// Get the Native OS Window
+	TSharedPtr<FGenericWindow> NativeWindow = ActiveWindow->GetNativeWindow();
+	if (!NativeWindow.IsValid())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("SimulateClickOnWidget: Native window is invalid!"));
+		return;
+	}
+
+	// Get the geometry of the widget to determine its position
+	const FGeometry& WidgetGeometry = Widget->GetCachedGeometry();
+	const FVector2D	 WidgetScreenPosition = WidgetGeometry.GetAbsolutePosition();
+	const FVector2D	 WidgetSize = WidgetGeometry.GetLocalSize();
+	const FVector2D	 WidgetCenter = WidgetScreenPosition + (WidgetSize * 0.5f);
+
+	// Save the original cursor position that we will go back to after clicking
+	const FVector2D OriginalCursorPosition = SlateApp.GetCursorPos();
+
+	SlateApp.SetPlatformCursorVisibility(false); // Hides the micro mouse flicker
+	SlateApp.SetCursorPos(WidgetCenter);		 // Move to the widget's center
+
+	FPointerEvent MouseDownEvent( // Construct the click Pointer Event
+		0,						  // PointerIndex
+		WidgetCenter,			  // Current cursor position
+		WidgetCenter,			  // Last cursor position
+		TSet<FKey>(),			  // No buttons pressed
+		EffectingButton,
+		0.0f, // WheelDelta
+		FModifierKeysState());
+
+	// Simulate click (Up & Down)
+	SlateApp.ProcessMouseButtonDownEvent(NativeWindow, MouseDownEvent);
+	SlateApp.ProcessMouseButtonUpEvent(MouseDownEvent);
+
+	// Move the cursor back to its original position & toggle visibility on
+	SlateApp.SetCursorPos(OriginalCursorPosition);
+	SlateApp.SetPlatformCursorVisibility(true);
+}
+
+void UVimEditorSubsystem::SimulateRightClick(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid())
+		return;
+
+	TSharedPtr<ITableRow>									  TableRow;
+	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
+	if (GetListView(SlateApp, ListView))
+	{
+		TableRow =
+			ListView->WidgetFromItem(ListView->GetSelectedItems()[0]);
+	}
+
+	if (TableRow.IsValid())
+		SimulateClickOnWidget(
+			SlateApp, TableRow->AsWidget(), EKeys::RightMouseButton);
+	else
+		SimulateClickOnWidget(
+			SlateApp, FocusedWidget.ToSharedRef(), EKeys::RightMouseButton);
+}
+
+void UVimEditorSubsystem::SimulateAnalogClick(FSlateApplication& SlateApp, const TSharedPtr<SWidget>& Widget)
+{
+	if (!Widget.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SimulateAnalogClick: Widget is invalid!"));
+		return;
+	}
+
+	FWidgetPath WidgetPath;
+	if (!SlateApp.FindPathToWidget(Widget.ToSharedRef(), WidgetPath))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SimulateAnalogClick: Failed to find widget path!"));
+		return;
+	}
+
+	// Get the geometry of the widget to determine its position
+	const FGeometry& WidgetGeometry = Widget->GetCachedGeometry();
+	const FVector2D	 WidgetScreenPosition = WidgetGeometry.GetAbsolutePosition();
+	const FVector2D	 WidgetSize = WidgetGeometry.GetLocalSize();
+	const FVector2D	 WidgetCenter = WidgetScreenPosition + (WidgetSize * 0.5f);
+
+	// Create an FAnalogInputEvent to simulate an analog click
+	FAnalogInputEvent AnalogPressEvent(
+		EKeys::LeftMouseButton, // Key to simulate
+		FModifierKeysState(),	// No modifiers
+		0,						// UserIndex
+		false,					// Not a repeat
+		0,						// CharacterCode
+		0,						// KeyCode
+		1.0f					// Analog value (fully pressed)
+	);
+
+	// Process the analog press event
+	if (!SlateApp.ProcessAnalogInputEvent(AnalogPressEvent))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SimulateAnalogClick: Analog press event not handled!"));
+	}
+
+	// Create another event for releasing the analog key
+	FAnalogInputEvent AnalogReleaseEvent(
+		EKeys::LeftMouseButton, // Key to simulate
+		FModifierKeysState(),	// No modifiers
+		0,						// UserIndex
+		false,					// Not a repeat
+		0,						// CharacterCode
+		0,						// KeyCode
+		0.0f					// Analog value (fully released)
+	);
+
+	// Process the analog release event
+	if (!SlateApp.ProcessAnalogInputEvent(AnalogReleaseEvent))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SimulateAnalogClick: Analog release event not handled!"));
+	}
 }
 
 void UVimEditorSubsystem::NavigateNextPrevious(
@@ -659,13 +936,15 @@ void UVimEditorSubsystem::ScrollHalfPage(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	static constexpr int32 SCROLL_NUM{ 6 };
+	const bool			   bScrollDown = InKeyEvent.GetKey() == EKeys::D;
+	FKey				   NavDirection;
 
 	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
-	if (!GetListView(SlateApp, ListView))
-		return;
+	if (GetListView(SlateApp, ListView)) // Valid list view handling
+		NavDirection = GetTreeNavigationDirection(ListView, bScrollDown);
+	else // Fallback use arrows for navigation
+		NavDirection = FKey(bScrollDown ? EKeys::J : EKeys::K);
 
-	bool			bScrollDown = InKeyEvent.GetKey() == EKeys::D;
-	const FKey		NavDirection = GetTreeNavigationDirection(ListView, bScrollDown);
 	const FKeyEvent KeyEvent =
 		FUMInputPreProcessor::GetKeyEventFromKey(NavDirection,
 			CurrentVimMode == EVimMode::Visual);
@@ -698,6 +977,13 @@ void UVimEditorSubsystem::OpenContentBrowser(
 		FGlobalTabmanager::Get()->TryInvokeTab(FName(*ContentBrowserId)));
 }
 
+void UVimEditorSubsystem::OpenPreferences(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static const FName PREFERENCES = "EditorSettings";
+	ActivateNewInvokedTab(FSlateApplication::Get(),
+		FGlobalTabmanager::Get()->TryInvokeTab(FTabId(PREFERENCES)));
+}
+
 void UVimEditorSubsystem::ActivateNewInvokedTab(
 	FSlateApplication& SlateApp, const TSharedPtr<SDockTab> NewTab)
 {
@@ -713,6 +999,63 @@ void UVimEditorSubsystem::RemoveActiveMajorTab()
 	if (!FUMTabsNavigationManager::RemoveActiveMajorTab())
 		return;
 	FUMWindowsNavigationManager::FocusNextFrontmostWindow();
+}
+
+void UVimEditorSubsystem::TryFocusSearchBox(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static const FString SearchBoxType{ "SSearchBox" };
+	static const FString AssetSearchBoxType{ "SAssetSearchBox" };
+	static const FString FilterSearchBoxType{ "SFilterSearchBox" };
+	static const FString EditableTextType{ "SEditableText" };
+
+	const TSharedRef<FGlobalTabmanager> GTabMngr = FGlobalTabmanager::Get();
+	TSharedPtr<SDockTab>				ActiveMinorTab = GTabMngr->GetActiveTab();
+	TSharedPtr<SDockTab>				MajorTab =
+		GTabMngr->GetMajorTabForTabManager(
+			ActiveMinorTab->GetTabManagerPtr().ToSharedRef());
+
+	TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWin.IsValid() || !ActiveMinorTab.IsValid())
+		return;
+
+	TSharedPtr<SWidget> SearchInWidget;
+	// NOTE: This is actually returning an invalid window for some reason
+	// Currently fetching the window via SlateApp...
+	TSharedPtr<SWindow> MinorTabWin = ActiveMinorTab->GetParentWindow();
+
+	FWidgetPath WidgetPath;
+	if (!SlateApp.FindPathToWidget(ActiveMinorTab.ToSharedRef(), WidgetPath))
+		return;
+
+	// MinorTabWin = SlateApp.FindWidgetWindow(ActiveMinorTab.ToSharedRef(), WidgetPath);
+	MinorTabWin = SlateApp.FindWidgetWindow(ActiveMinorTab.ToSharedRef());
+	if (MinorTabWin.IsValid())
+	{
+		if (MinorTabWin.Get() == ActiveWin.Get())
+			SearchInWidget = ActiveMinorTab->GetContent();
+		else
+			SearchInWidget = ActiveWin->GetContent();
+	}
+	else
+	{
+		FUMHelpers::NotifySuccess(
+			FText::FromString("Minor tab window is not valid"), bVisualLog);
+		return;
+	}
+
+	// FUMHelpers::NotifySuccess(FText::FromString(FString::Printf(TEXT("Minor Tab: %s"), *ActiveMinorTab->GetTabLabel().ToString())), bVisualLog);
+
+	if (!SearchInWidget.IsValid())
+		return;
+
+	TWeakPtr<SWidget> SearchBox = nullptr;
+	if (!FUMTabsNavigationManager::TraverseWidgetTree(
+			// SearchInWidget, SearchBox, SearchBoxType))
+			SearchInWidget, SearchBox, EditableTextType))
+		return;
+
+	// FUMHelpers::NotifySuccess(FText::FromString(FString::Printf(TEXT("Found Type: %s"), *SearchBox.Pin()->GetTypeAsString())), bVisualLog);
+	SlateApp.SetAllUserFocus(SearchBox.Pin(), EFocusCause::Navigation);
 }
 
 void UVimEditorSubsystem::BindCommands()
@@ -747,6 +1090,10 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::O },
 		VimSubWeak, &VimSub::OpenOutputLog);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::O, EKeys::P },
+		VimSubWeak, &VimSub::OpenPreferences);
 
 	//** Open Content Browsers 1-4 */
 	Input.AddKeyBinding_KeyEvent(
@@ -833,4 +1180,12 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::P) },
 		VimSubWeak, &VimSub::NavigateNextPrevious);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::F) },
+		VimSubWeak, &VimSub::TryFocusSearchBox);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::R },
+		VimSubWeak, &VimSub::SimulateRightClick);
 }

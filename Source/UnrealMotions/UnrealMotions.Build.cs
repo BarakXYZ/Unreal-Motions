@@ -35,6 +35,7 @@ public class UnrealMotions : ModuleRules
 			new string[]
 			{
 				"CoreUObject",
+				"ApplicationCore",
 				"Engine",
 				"Slate",
 				"SlateCore",

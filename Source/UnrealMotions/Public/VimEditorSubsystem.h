@@ -6,6 +6,9 @@
 #include "ISceneOutlinerTreeItem.h"
 #include "UMHelpers.h"
 #include "UMInputPreProcessor.h"
+#include "UMGenericAppMessageHandler.h"
+#include "Framework/Application/SlateApplication.h"
+#include "UMVisualModeManager.h"
 #include "VimEditorSubsystem.generated.h"
 
 /**
@@ -72,6 +75,14 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	void ProcessVimNavigationInput(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	bool HandleListViewNavigation(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void HandleArrowKeysNavigation(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	int32 GetPracticalCountBuffer();
+
 	/**
 	 * ~ WIP ~
 	 * @brief Deletes the currently selected item.
@@ -132,6 +143,10 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	 * @param InKeyEvent Key event containing potential tab number
 	 */
 	void OpenContentBrowser(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void OpenPreferences(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void TryFocusSearchBox(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	/**
 	 * @brief Removes the currently active major tab.
@@ -217,6 +232,12 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	void NavigateToFirstOrLastItem(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void HandleArrowKeysNavigationToFirstOrLastItem(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	bool HandleTreeViewFirstOrLastItemNavigation(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	/**
 	 * @brief Handles navigation to first or last item in Normal mode.
 	 *
@@ -229,7 +250,7 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	 * @param AllItems Array of all items in the list
 	 * @param bIsShiftDown Whether shift key is pressed (G vs gg)
 	 */
-	void HandleNormalNavToFirstOrLast(
+	void HandleTreeViewNormalModeFirstOrLastItemNavigation(
 		TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView,
 		TArrayView<const TSharedPtr<ISceneOutlinerTreeItem>>&	   AllItems,
 		bool													   bIsShiftDown);
@@ -247,7 +268,7 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	 * @param AllItems Array of all items in list
 	 * @param bIsShiftDown Whether shift is held (G vs gg)
 	 */
-	void HandleVisualNavToFirstOrLast(
+	void HandleTreeViewVisualModeFirstOrLastItemNavigation(
 		FSlateApplication&										   SlateApp,
 		TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& ListView,
 		TArrayView<const TSharedPtr<ISceneOutlinerTreeItem>>&	   AllItems,
@@ -282,7 +303,7 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	 * @return true if mapping was successful, false if key wasn't mappable
 	 */
 	static bool MapVimToArrowNavigation(
-		const FKeyEvent& InKeyEvent, FKeyEvent& OutKeyEvent);
+		const FKeyEvent& InKeyEvent, FKeyEvent& OutKeyEvent, bool bIsShiftDown = false);
 
 	/**
 	 * @brief Handles Vim mode state changes.
@@ -404,6 +425,16 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	void Enter(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void SimulateClickOnWidget(
+		FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
+		const FKey& EffectingButton = EKeys::LeftMouseButton);
+
+	void SimulateRightClick(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void SimulateAnalogClick(
+		FSlateApplication& SlateApp, const TSharedPtr<SWidget>& Widget);
+
 	void NavigateNextPrevious(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
@@ -419,6 +450,12 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	EVimMode							CurrentVimMode{ EVimMode::Insert };
 	FKeyEvent							LastNavigationDirection;
 	int32								VisualNavOffsetIndicator{ 0 };
+
+	TSharedPtr<FUMGenericAppMessageHandler>		  UMGenericAppMessageHandler;
+	TSharedPtr<FGenericApplicationMessageHandler> OriginGenericAppMessageHandler;
+
+	TSharedPtr<FUMVisualModeManager> VisModeManager;
+
 	struct FTreeViewItemInfo
 	{
 		TWeakPtr<ISceneOutlinerTreeItem> Item = nullptr;

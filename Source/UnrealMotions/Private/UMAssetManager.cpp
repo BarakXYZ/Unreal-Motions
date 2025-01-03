@@ -1,3 +1,4 @@
+#include "UMAssetManager.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "Framework/Commands/UICommandInfo.h"
 #include "Framework/Application/SlateApplication.h"
@@ -15,7 +16,6 @@
 
 #include "UMHelpers.h"
 #include "UnrealMotions.h"
-#include "UMAssetManager.h"
 #include "UMWidgetHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMAssetManager, NoLogging, All); // Prod

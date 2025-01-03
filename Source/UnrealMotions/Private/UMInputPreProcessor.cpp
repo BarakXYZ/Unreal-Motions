@@ -4,6 +4,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "StatusBarSubsystem.h"
 #include "UMHelpers.h"
+
 // #include "WidgetDrawerConfig.h"
 
 TSharedPtr<FUMInputPreProcessor>
@@ -203,6 +204,7 @@ void FUMInputPreProcessor::RegisterDefaultKeyBindings()
 bool FUMInputPreProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// return false;
 	// DebugKeyEvent(InKeyEvent);
 
 	// NOTE:
@@ -273,10 +275,15 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 	// return true;
 }
 
+// TODO: Check this behavior
 bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// FUMHelpers::NotifySuccess(FText::FromString("Key up!"));
-	return true;
+	// return true;
+	if (VimMode == EVimMode::Normal)
+		return true; // ??  Not sure
+
+	return false;
 }
 
 bool FUMInputPreProcessor::ShouldSwitchVimMode(
@@ -287,6 +294,26 @@ bool FUMInputPreProcessor::ShouldSwitchVimMode(
 		SetMode(SlateApp, EVimMode::Normal);
 		ResetSequence(SlateApp);
 		return true;
+	}
+	// else if(InKeyEvent.GetKey() == EKeys::I && )
+	return false;
+}
+
+bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
+{
+	// return false;
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (FocusedWidget.IsValid())
+	{
+		const FSlateWidgetClassData ClassData = FocusedWidget->GetWidgetClass();
+		const FName					WidgetType = ClassData.GetWidgetType();
+		FSlateAttributeDescriptor	AttDesc = ClassData.GetAttributeDescriptor();
+		// AttDesc.DefaultSortOrder();
+		FString WidgetName = FocusedWidget->ToString();
+		FString DebugStr = FString::Printf(TEXT("Widget Type: %s, Widget Name: %s"), *WidgetType.ToString(), *WidgetName);
+		// FUMHelpers::NotifySuccess(FText::FromString(DebugStr));
+
+		return false;
 	}
 	return false;
 }
@@ -434,18 +461,6 @@ void FUMInputPreProcessor::SimulateMultiTabPresses(
 void FUMInputPreProcessor::ToggleNativeInputHandling(const bool bNativeHandling)
 {
 	bNativeInputHandling = bNativeHandling;
-}
-
-bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
-{
-	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	if (FocusedWidget.IsValid())
-	{
-		FString WidgetName = FocusedWidget->ToString();
-		FUMHelpers::NotifySuccess(FText::FromString(WidgetName));
-		return false;
-	}
-	return false;
 }
 
 void FUMInputPreProcessor::SimulateKeyPress(

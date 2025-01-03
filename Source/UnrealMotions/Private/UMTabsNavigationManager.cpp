@@ -445,8 +445,11 @@ TWeakPtr<SDockTab> FUMTabsNavigationManager::GetCurrentlySetMajorTab()
 
 bool FUMTabsNavigationManager::RemoveActiveMajorTab()
 {
-	if (CurrMajorTab.IsValid())
+	static const FString LevelEditorType{ "LevelEditor" };
+
+	if (CurrMajorTab.IsValid() && !CurrMajorTab.Pin()->GetLayoutIdentifier().ToString().Equals(LevelEditorType))
 	{
+		// FUMHelpers::NotifySuccess(FText::FromString(CurrMajorTab.Pin()->GetLayoutIdentifier().ToString()));
 		CurrMajorTab.Pin()->RemoveTabFromParent();
 		return true;
 	}

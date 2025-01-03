@@ -178,12 +178,12 @@ void FUMWindowsNavigationManager::ActivateWindow(const TSharedRef<SWindow> Windo
 
 	SlateApp.ClearAllUserFocus(); // This is really important to actually draw focus
 	SlateApp.SetAllUserFocus(
-		WinContent, EFocusCause::SetDirectly);
+		WinContent, EFocusCause::Navigation);
 	SlateApp.SetKeyboardFocus(WinContent);
 	FWidgetPath WidgetPath;
 	SlateApp.FindPathToWidget(WinContent, WidgetPath);
 	SlateApp.SetAllUserFocusAllowingDescendantFocus(
-		WidgetPath, EFocusCause::Mouse);
+		WidgetPath, EFocusCause::Navigation);
 
 	// FUMHelpers::AddDebugMessage(FString::Printf(
 	// 	TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));

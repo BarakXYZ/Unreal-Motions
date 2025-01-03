@@ -1,3 +1,5 @@
+#pragma once
+
 #include "CoreMinimal.h"					  // Core Unreal functionality
 #include "Widgets/SCompoundWidget.h"		  // For SCompoundWidget
 #include "Rendering/DrawElements.h"			  // For FSlateDrawElement
@@ -12,12 +14,28 @@ public:
 	SLATE_ARGUMENT(TOptional<FPaintGeometry>, CustomGeometry) // Custom geometry for debug
 	SLATE_END_ARGS()
 
+	/** Construct the widget with the provided arguments. */
 	void Construct(const FArguments& InArgs)
 	{
-		TargetWidget = InArgs._TargetWidget.Pin();
-		CustomGeometry = InArgs._CustomGeometry; // Store custom geometry if provided
+		TargetWidget = InArgs._TargetWidget;
+		CustomGeometry = InArgs._CustomGeometry;
 	}
 
+	/** Update the target widget dynamically. */
+	void SetTargetWidget(const TWeakPtr<SWidget>& NewTargetWidget)
+	{
+		TargetWidget = NewTargetWidget;
+		Invalidate(EInvalidateWidget::LayoutAndVolatility); // Ensure the widget updates its visual state
+	}
+
+	/** Update the custom geometry dynamically. */
+	void SetCustomGeometry(const TOptional<FPaintGeometry>& NewCustomGeometry)
+	{
+		CustomGeometry = NewCustomGeometry;
+		Invalidate(EInvalidateWidget::LayoutAndVolatility); // Ensure the widget updates its visual state
+	}
+
+	/** Paint the widget with a debug outline. */
 	virtual int32 OnPaint(
 		const FPaintArgs&		 Args,
 		const FGeometry&		 AllottedGeometry,
@@ -27,26 +45,27 @@ public:
 		const FWidgetStyle&		 InWidgetStyle,
 		bool					 bParentEnabled) const override
 	{
-		// Use custom geometry if provided
+		// Use custom geometry if provided; fallback to the target widget's geometry.
 		const FPaintGeometry TargetPaintGeometry = CustomGeometry.IsSet()
 			? CustomGeometry.GetValue()
 			: TargetWidget.IsValid() ? TargetWidget.Pin()->GetCachedGeometry().ToPaintGeometry()
 									 : AllottedGeometry.ToPaintGeometry();
 
-		// Draw a border or debug box
+		// Draw a border or debug box.
 		FSlateDrawElement::MakeBox(
 			OutDrawElements,
 			LayerId,
 			TargetPaintGeometry,
 			FCoreStyle::Get().GetBrush(TEXT("Debug.Border")),
 			ESlateDrawEffect::None,
-			FLinearColor::White // Use Red for the border color
+			// FLinearColor::Red		// Red border for debug visualization
+			FLinearColor::Yellow // Red border for debug visualization
 		);
 
 		return LayerId + 1;
 	}
 
 private:
-	TWeakPtr<SWidget>		  TargetWidget; // Widget to debug
-	TOptional<FPaintGeometry> CustomGeometry;
+	TWeakPtr<SWidget>		  TargetWidget;	  // Widget to debug
+	TOptional<FPaintGeometry> CustomGeometry; // Optional custom geometry
 };
