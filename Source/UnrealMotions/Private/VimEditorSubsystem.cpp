@@ -573,9 +573,9 @@ void UVimEditorSubsystem::Enter(
 {
 	static const FName ButtonType{ "SButton" };
 
-	const TSharedPtr<SWidget> FocusedWidget =
-		// SlateApp.GetUserFocusedWidget(0);
-		SlateApp.GetKeyboardFocusedWidget();
+	TSharedPtr<SWidget> FocusedWidget =
+		SlateApp.GetUserFocusedWidget(0);
+	// SlateApp.GetKeyboardFocusedWidget();
 	if (!FocusedWidget)
 		return;
 
@@ -585,18 +585,12 @@ void UVimEditorSubsystem::Enter(
 		FocusedWidget->GetWidgetClass().GetWidgetType();
 
 	if (FocusedWidgetType.IsEqual(ButtonType))
-	// || FocusedWidget->GetType().IsEqual(HyperlinkType))
 	{
-
 		TSharedPtr<SButton> FocusedWidgetAsButton =
 			StaticCastSharedPtr<SButton>(FocusedWidget);
-		// FocusedWidgetAsButton->SimulateClick();
-		// FocusedWidgetAsButton->SetOnClicked(
-		// 	FOnClicked::CreateLambda([]() { return FReply::Handled(); }));
-		// FocusedWidgetAsButton->SimulateClick();
-
-		FocusedWidgetAsButton->SetClickMethod(EButtonClickMethod::MouseDown);
-		SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef());
+		FocusedWidgetAsButton->SimulateClick();
+		// FocusedWidgetAsButton->SetClickMethod(EButtonClickMethod::MouseDown);
+		// SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef());
 
 		FUMHelpers::NotifySuccess(
 			FText::FromString(FString::Printf(
@@ -605,31 +599,19 @@ void UVimEditorSubsystem::Enter(
 				*ButtonType.ToString(),
 				*FocusedWidgetType.ToString())),
 			bVisualLog);
-	}
-	else
-	{
-		// TSharedPtr<ITableRow>									  TableRow;
-		// TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
-		// if (GetListView(SlateApp, ListView))
-		// {
-		// 	TableRow =
-		// 		ListView->WidgetFromItem(ListView->GetSelectedItems()[0]);
-		// }
-		// FUMHelpers::NotifySuccess(
-		// 	FText::FromString(FString::Printf(TEXT("Not %s: %s"),
-		// 		*ButtonType.ToString(), *FocusedWidgetType.ToString())),
-		// 	bVisualLog);
-
-		// if (TableRow.IsValid())
-		// 	SimulateClickOnWidget(SlateApp, TableRow->AsWidget());
-		// else
-		SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef());
-		// SimulateAnalogClick(SlateApp, FocusedWidget);
 		return;
 	}
+	// Will fetch and assign the item to Focused Widget (or not if not list view)
+	GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
+		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>());
+
+	SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef(),
+		EKeys::LeftMouseButton, true /* Double-Click */);
 }
 
-void UVimEditorSubsystem::SimulateClickOnWidget(FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget, const FKey& EffectingButton)
+void UVimEditorSubsystem::SimulateClickOnWidget(
+	FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
+	const FKey& EffectingButton, bool bIsDoubleClick)
 {
 
 	FWidgetPath WidgetPath;
@@ -678,9 +660,16 @@ void UVimEditorSubsystem::SimulateClickOnWidget(FSlateApplication& SlateApp, con
 		0.0f, // WheelDelta
 		FModifierKeysState());
 
-	// Simulate click (Up & Down)
-	SlateApp.ProcessMouseButtonDownEvent(NativeWindow, MouseDownEvent);
-	SlateApp.ProcessMouseButtonUpEvent(MouseDownEvent);
+	if (bIsDoubleClick)
+	{ // This will open things like assets, etc. (Tree view)
+		SlateApp.ProcessMouseButtonDoubleClickEvent(NativeWindow, MouseDownEvent);
+		SlateApp.ProcessMouseButtonUpEvent(MouseDownEvent); // needed?
+	}
+	else
+	{ // Simulate click (Up & Down)
+		SlateApp.ProcessMouseButtonDownEvent(NativeWindow, MouseDownEvent);
+		SlateApp.ProcessMouseButtonUpEvent(MouseDownEvent);
+	}
 
 	// Move the cursor back to its original position & toggle visibility on
 	SlateApp.SetCursorPos(OriginalCursorPosition);
@@ -694,20 +683,37 @@ void UVimEditorSubsystem::SimulateRightClick(
 	if (!FocusedWidget.IsValid())
 		return;
 
-	TSharedPtr<ITableRow>									  TableRow;
-	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
-	if (GetListView(SlateApp, ListView))
-	{
-		TableRow =
-			ListView->WidgetFromItem(ListView->GetSelectedItems()[0]);
-	}
+	// Will fetch and assign the item to Focused Widget (or not if not list view)
+	GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
+		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>());
 
-	if (TableRow.IsValid())
-		SimulateClickOnWidget(
-			SlateApp, TableRow->AsWidget(), EKeys::RightMouseButton);
-	else
-		SimulateClickOnWidget(
-			SlateApp, FocusedWidget.ToSharedRef(), EKeys::RightMouseButton);
+	SimulateClickOnWidget( // Will remain the original focused widget if no list
+		SlateApp, FocusedWidget.ToSharedRef(), EKeys::RightMouseButton);
+}
+
+bool UVimEditorSubsystem::GetSelectedTreeViewItemAsWidget(
+	FSlateApplication& SlateApp, TSharedPtr<SWidget>& OutWidget,
+	const TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>& OptionalListView)
+{
+	// Determine the ListView to use
+	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
+	if (OptionalListView.IsSet())
+		ListView = OptionalListView.GetValue();
+
+	else if (!GetListView(SlateApp, ListView)) // Fetch ListView if not provided
+		return false;
+
+	TArray<TSharedPtr<ISceneOutlinerTreeItem>> SelItems =
+		ListView->GetSelectedItems();
+	if (SelItems.IsEmpty() || !SelItems[0].IsValid())
+		return false;
+
+	TSharedPtr<ITableRow> TableRow = ListView->WidgetFromItem(SelItems[0]);
+	if (!TableRow.IsValid())
+		return false;
+
+	OutWidget = TableRow->AsWidget();
+	return true;
 }
 
 void UVimEditorSubsystem::SimulateAnalogClick(FSlateApplication& SlateApp, const TSharedPtr<SWidget>& Widget)

@@ -241,49 +241,21 @@ void FUMTabsNavigationManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 
 		CurrMajorTab = NewTab;
 
-		// 1. I'm afraid that this is needed for some internal stuff
-		// 2. Not sure how helpful it is because we still need to know if a new
-		// tab is created in order to navigate precisely.
-		// NewTab->SetOnTabClosed();
-		// NewTab->SetOnTabDraggedOverDockArea();
-		// NewTab->SetOnTabRelocated();
-
-		// All panel tabs live under Docking Area, so we should really search only
-		// inside it.
-		TWeakPtr<SWidget> DockingArea;
-		if (!TraverseWidgetTree(
-				CurrMajorTab.Pin()->GetContent(), DockingArea, "SDockingArea"))
-			return;
-
-		TWeakPtr<SWidget> Splitter;
-		if (!TraverseWidgetTree(
-				CurrMajorTab.Pin()->GetContent(), Splitter, "SSplitter"))
-			return;
-
 		// That seems to work pretty well!
-		TArray<TWeakPtr<SWidget>>
-			FoundPanelTabs;
-		if (TraverseWidgetTree(Splitter.Pin(), FoundPanelTabs, "SDockTab"))
-		{
-			for (const auto& Tab : FoundPanelTabs)
-			{
-				TSharedPtr<SDockTab> DockTab =
-					StaticCastSharedRef<SDockTab>(Tab.Pin().ToSharedRef());
-				// FUMHelpers::NotifySuccess(DockTab->GetTabLabel());
-				// DockTab->GetLayoutIdentifier();
-				// DockTab->GetId();
-			}
-			const int32 TabIndex = FMath::RandRange(0, FoundPanelTabs.Num() - 1);
-			if (const TSharedPtr<SDockTab> DockTab = StaticCastSharedRef<SDockTab>(FoundPanelTabs[TabIndex].Pin().ToSharedRef()))
-			{
-				FSlateApplication::Get().ClearAllUserFocus();
-				DockTab->ActivateInParent(ETabActivationCause::SetDirectly);
-				FSlateApplication::Get().SetAllUserFocus(
-					DockTab->GetContent(), EFocusCause::Navigation);
+		// TArray<TWeakPtr<SWidget>> FoundPanelTabs;
+		// if (TraverseWidgetTree(NewTab->GetContent(), FoundPanelTabs, "SDockTab"))
+		// {
+		// 	for (const auto& Tab : FoundPanelTabs)
+		// 	{
+		// 		TSharedPtr<SDockTab> DockTab =
+		// 			StaticCastSharedRef<SDockTab>(Tab.Pin().ToSharedRef());
+		// 		FUMHelpers::NotifySuccess(DockTab->GetTabLabel());
+		// 	}
+		// }
 
-				OnNewMajorTabChanged.Broadcast(CurrMajorTab, DockTab);
-			}
-		}
+		TWeakPtr<SWidget> FoundMinorTab;
+		if (!TraverseWidgetTree(NewTab->GetContent(), FoundMinorTab, "SDockTab"))
+			return;
 	}
 	else // Minor Tab
 	{
@@ -307,7 +279,7 @@ void FUMTabsNavigationManager::LogTabChange(const FString& TabType, const TWeakP
 		*TabType, *PrevLabel, *NewTab->GetTabLabel().ToString());
 
 	UE_LOG(LogUMTabsNavigation, Log, TEXT("%s"), *LogStr);
-	// FUMHelpers::NotifySuccess(FText::FromString(LogStr));
+	FUMHelpers::NotifySuccess(FText::FromString(LogStr));
 }
 
 void FUMTabsNavigationManager::HandleOnUserMovedToNewWindow(
@@ -316,7 +288,12 @@ void FUMTabsNavigationManager::HandleOnUserMovedToNewWindow(
 	TWeakPtr<SDockTab> NewMajorTab = nullptr;
 	if (GetActiveMajorTab(NewMajorTab))
 	{
+		FString TabName = NewMajorTab.Pin()->GetTabLabel().ToString();
+		FString TabType = NewMajorTab.Pin()->GetLayoutIdentifier().ToString();
+		FString DebugMsg = FString::Printf(TEXT("New Major Tab: %s, Type: %s"), *TabName, *TabType);
+		FUMHelpers::NotifySuccess(FText::FromString(DebugMsg));
 		SetCurrentTab(NewMajorTab.Pin().ToSharedRef());
+		return;
 	}
 }
 

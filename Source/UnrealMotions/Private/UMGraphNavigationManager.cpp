@@ -1,5 +1,6 @@
 #include "UMGraphNavigationManager.h"
 
+#include "ILevelEditor.h"
 #include "Layout/PaintGeometry.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "GraphEditor.h"
@@ -10,6 +11,9 @@
 #include "Styling/CoreStyle.h"
 #include "Rendering/DrawElements.h"
 #include "Widgets/SWindow.h"
+#include "Framework/Docking/TabManager.h"
+
+#include "UMTabsNavigationManager.h"
 
 FUMGraphNavigationManager::FUMGraphNavigationManager()
 {
@@ -17,6 +21,15 @@ FUMGraphNavigationManager::FUMGraphNavigationManager()
 	// 	StartDebugOnFocusChanged();
 	// });
 	StartDebugOnFocusChanged();
+	FUMTabsNavigationManager::Get().OnNewMajorTabChanged.AddLambda(
+		[this](TWeakPtr<SDockTab> MajorTab, TWeakPtr<SDockTab> MinorTab) {
+			// DrawDebugOutlineOnWidget(MinorTab.Pin()->GetContent());
+			// DrawDebugOutlineOnWidget(MajorTab.Pin()->GetContent());
+			// DrawDebugOutlineOnWidget(
+			// 	MinorTab.Pin()->GetParentWidget().ToSharedRef());
+			DrawDebugOutlineOnWidget(
+				MinorTab.Pin()->GetContent());
+		});
 }
 
 FUMGraphNavigationManager::~FUMGraphNavigationManager()
@@ -44,15 +57,19 @@ void FUMGraphNavigationManager::GetLastActiveEditor()
 {
 	UAssetEditorSubsystem* AssetEditorSubsystem =
 		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
-	TArray<UObject*> EditedAssets =
-		AssetEditorSubsystem->GetAllEditedAssets();
-	IAssetEditorInstance* ActiveEditorInstance = nullptr;
 
-	double ActivationTime{ 0 };
+	const TArray<UObject*> EditedAssets{ AssetEditorSubsystem->GetAllEditedAssets() };
+	IAssetEditorInstance*  ActiveEditorInstance{ nullptr };
+	double				   ActivationTime{ 0 };
+
+	// Seems to not be correct when some assets are in a separated window!
+	// But we can still match and fetch the currently edited asset by comparing
+	// against the major tab label or something
 	for (UObject* EditedAsset : EditedAssets)
 	{
 		IAssetEditorInstance* EditorInstance =
 			AssetEditorSubsystem->FindEditorForAsset(EditedAsset, false);
+
 		double CurrEditorActTime = EditorInstance->GetLastActivationTime();
 		if (CurrEditorActTime > ActivationTime)
 		{
@@ -65,18 +82,28 @@ void FUMGraphNavigationManager::GetLastActiveEditor()
 	if (!ActiveEditorInstance)
 		return;
 
-	FString OutStr = ActiveEditorInstance->GetEditorName().ToString()
-		+ ": " + ActiveEditorInstance->GetEditingAssetTypeName().ToString();
-	FUMHelpers::NotifySuccess(FText::FromString(OutStr));
+	// FString OutStr = ActiveEditorInstance->GetEditorName().ToString()
+	// 	+ ": " + ActiveEditorInstance->GetEditingAssetTypeName().ToString();
+	// FUMHelpers::NotifySuccess(FText::FromString(OutStr));
 
 	FAssetEditorToolkit* AssetEditorToolkit =
 		static_cast<FAssetEditorToolkit*>(ActiveEditorInstance);
-	if (AssetEditorToolkit)
-	{
-		FUMHelpers::NotifySuccess(
-			FText::FromName(AssetEditorToolkit->GetToolMenuName()));
-		AssetEditorToolkit->GetInlineContent(); // ?
-	}
+	if (!AssetEditorToolkit)
+		return;
+
+	FUMHelpers::NotifySuccess(
+		// FText::FromName(AssetEditorToolkit->GetToolkitName()));
+		AssetEditorToolkit->GetToolkitName());
+	AssetEditorToolkit->GetInlineContent(); // ???
+
+	AssetEditorToolkit->GetObjectsCurrentlyBeingEdited();
+
+	TSharedPtr<IToolkitHost> ToolkitHost = AssetEditorToolkit->GetToolkitHost();
+	ToolkitHost->GetActiveViewportSize();
+	UTypedElementCommonActions* Actions = ToolkitHost->GetCommonActions();
+
+	// TSharedPtr<FTabManager> TabManager =
+	// 	AssetEditorToolkit->GetTabManager(); // Not helpful
 }
 
 void FUMGraphNavigationManager::StartDebugOnFocusChanged()
@@ -93,39 +120,49 @@ void FUMGraphNavigationManager::DebugOnFocusChanged(
 	const FWidgetPath&		   WidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
+	// GetLastActiveEditor();
+
 	// if (!OldWidget.IsValid() || !NewWidget.IsValid())
 	// 	return;
 
 	// FString OldWidgetStr = "Old Widget: " + OldWidget->GetTypeAsString();
 	// FString NewWidgetStr = "New Widget: " + NewWidget->GetTypeAsString();
 
-	// DrawWidgetDebugOutline(NewWidget);
-
 	// If you only want to debug certain transitions, you can check that here.
 	// E.g. skipping invalid widget transitions, or ignoring certain types:
 	if (!NewWidget.IsValid())
-	{
 		return;
-	}
 
+	// We potentially want to have a few different overlay layers of debugging
+	// on top of each window:
+	// 1. For the entire Window
+	// 2. For the currently active Major Tab (that resides inside the Window)
+	// 3. For the currently active Minor Tab (that resides inside the Major Tab)
+	// 4. For the currently focused Widget (that resided inside the Minor Tab)
+
+	DrawDebugOutlineOnWidget(NewWidget.ToSharedRef());
+}
+
+void FUMGraphNavigationManager::DrawDebugOutlineOnWidget(
+	const TSharedRef<SWidget> InWidget)
+{
 	// Find the window in which this newly focused widget resides
+	// TSharedPtr<SWindow> FoundWindow =
+	// 	FSlateApplication::Get().FindWidgetWindow(InWidget);
 	TSharedPtr<SWindow> FoundWindow =
-		FSlateApplication::Get().FindWidgetWindow(NewWidget.ToSharedRef());
+		FSlateApplication::Get().GetActiveTopLevelWindow();
 	if (!FoundWindow.IsValid())
-	{
 		return; // Possibly a pop-up or something with no real window
-	}
+
+	// FUMHelpers::NotifySuccess(
+	// 	FText::FromString("Draw Debug Outline On Widget"));
 
 	// Ensure that window has an overlay
 	CreateOverlayIfNeeded(FoundWindow);
 
 	// Now highlight the new widget in that window
-	UpdateOverlayInWindow(FoundWindow, NewWidget);
+	UpdateOverlayInWindow(FoundWindow, InWidget);
 	return;
-
-	// Finally, update the overlay so it highlights the new widget.
-	// UpdateDebugOverlay(NewWidget);
-	// return;
 }
 
 void FUMGraphNavigationManager::OnWindowCreated(const TSharedRef<SWindow>& InNewWindow)
@@ -158,7 +195,6 @@ void FUMGraphNavigationManager::CreateOverlayIfNeeded(const TSharedPtr<SWindow>&
 		// FUMHelpers::NotifySuccess(FText::FromString("Window already exists: " + InWindow->GetTitle().ToString()));
 		return;
 	}
-
 	// FUMHelpers::NotifySuccess(FText::FromString("New Window Found: " + InWindow->GetTitle().ToString()));
 
 	// Create a new overlay
@@ -167,7 +203,7 @@ void FUMGraphNavigationManager::CreateOverlayIfNeeded(const TSharedPtr<SWindow>&
 			.InitialVisibility(EVisibility::HitTestInvisible);
 
 	// Add to the window's overlay with a large Z-order so it’s above typical overlays
-	InWindow->AddOverlaySlot(9999)
+	InWindow->AddOverlaySlot(999)
 		.HAlign(HAlign_Fill)
 		.VAlign(VAlign_Fill)
 			[NewOverlay.ToSharedRef()];
@@ -181,15 +217,14 @@ void FUMGraphNavigationManager::UpdateOverlayInWindow(
 	const TSharedPtr<SWidget>& InWidget)
 {
 	if (!InWindow.IsValid() || !InWidget.IsValid())
-	{
 		return;
-	}
 
-	TSharedPtr<SUMFocusDebugOverlay> OverlayPtr = OverlaysByWindow.FindRef(InWindow);
+	TSharedPtr<SUMFocusDebugOverlay> OverlayPtr =
+		OverlaysByWindow.FindRef(InWindow);
 	if (!OverlayPtr.IsValid())
-	{
 		return; // Shouldn’t happen if CreateOverlayIfNeeded was called
-	}
+
+	// FUMHelpers::NotifySuccess(FText::FromString("Update Overlay In Window"));
 
 	// Now compute geometry. We want geometry relative to the window’s top-left.
 	const FGeometry WidgetGeometry = InWidget->GetCachedGeometry();

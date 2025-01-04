@@ -427,7 +427,8 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	void SimulateClickOnWidget(
 		FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
-		const FKey& EffectingButton = EKeys::LeftMouseButton);
+		const FKey& EffectingButton = EKeys::LeftMouseButton,
+		bool		bIsDoubleClick = false);
 
 	void SimulateRightClick(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
@@ -437,6 +438,10 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	void NavigateNextPrevious(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	bool GetSelectedTreeViewItemAsWidget(
+		FSlateApplication& SlateApp, TSharedPtr<SWidget>& OutWidget,
+		const TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>& OptionalListView);
 
 	DECLARE_DELEGATE_RetVal_TwoParams(FReply, FOnKeyDown, const FGeometry&, const FKeyEvent&);
 

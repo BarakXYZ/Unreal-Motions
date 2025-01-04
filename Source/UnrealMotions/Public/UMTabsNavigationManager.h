@@ -5,6 +5,10 @@
 #include "Framework/Docking/TabManager.h"
 #include "UnrealMotions.h"
 
+DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnNewMajorTabChanged,
+	TWeakPtr<SDockTab> /* New Major Tab */,
+	TWeakPtr<SDockTab> /* New Minor Tab */);
+
 enum ENavSpecTabType : uint8
 {
 	LevelEditor,
@@ -90,7 +94,8 @@ public:
 		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
 
 	/**
-	 * Being called when a new Minor or Major Tab is being foregrounded.
+	 * Being called when a new Minor or Major Tab is being foregrounded, though
+	 * Major Tabs seems to be the main focus of this.
 	 * We're using it as a second layer backup for setting the Major Tab
 	 * in cases where OnActiveTabChanged won't be invoked.
 	 * @param NewActiveTab the newly to be set tab.
@@ -154,13 +159,16 @@ public:
 	 * @param OutTab Where the targeted tab will be stored at.
 	 * @param bIsMajorTab Dictates if we should move to a major or minor tab.
 	 */
-	bool ValidateTargetTab(TSharedPtr<SWidget>& OutTab, bool bIsMajorTab);
+	bool TryGetValidTargetTab(TSharedPtr<SDockTab>& OutTab, bool bIsMajorTab);
 
 	/**
 	 * Updates the currently tracked tab (major or minor).
 	 * @param NewTab The tab to set as current
 	 */
-	void SetCurrentTab(const TSharedPtr<SDockTab>& NewTab);
+	void SetCurrentTab(const TSharedRef<SDockTab> NewTab);
+
+	void LogTabChange(const FString& TabType,
+		const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab);
 
 	/**
 	 * Gets the active major tab in the current window.
@@ -302,6 +310,7 @@ public:
 	TWeakPtr<SWindow>		   CurrWin{ nullptr }; // User for getting Maj Tab
 	static TWeakPtr<SDockTab>  CurrMajorTab;
 	TWeakPtr<SDockTab>		   CurrMinorTab{ nullptr };
+	FUMOnNewMajorTabChanged	   OnNewMajorTabChanged;
 
-	bool VisualLog{ false };
+	bool VisualLog{ true };
 };

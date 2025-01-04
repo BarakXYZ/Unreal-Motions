@@ -37,7 +37,10 @@ public:
 		// No child content, purely a custom paint widget.
 	}
 
-	/** Sets (or updates) the geometry you want to highlight. */
+	/**
+	 * Sets (or updates) the geometry you want to highlight.
+	 * @param InGemoetry - The new geometry to visualize
+	 */
 	void SetTargetGeometry(const FPaintGeometry& InGeometry)
 	{
 		TargetGeometry = InGeometry;

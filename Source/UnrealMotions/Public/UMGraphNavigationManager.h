@@ -68,6 +68,8 @@ private:
 		const TSharedPtr<SWindow>& InWindow,
 		const TSharedPtr<SWidget>& InWidget);
 
+	void DrawDebugOutlineOnWidget(const TSharedRef<SWidget> InWidget);
+
 public:
 	FSlateColor				   FocusedBorderColor = FLinearColor(10.0, 10.0, 0.0f);
 	TWeakPtr<SBorder>		   LastActiveBorder = nullptr;
