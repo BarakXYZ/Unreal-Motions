@@ -95,6 +95,10 @@ public:
 	 */
 	void CleanupInvalidWindows(TArray<uint64> CleanupWindowsIds);
 
+	/**
+	 * Used in the Vim Subsystem. When we remove the current Major Tab, this helps
+	 * to focus and activate the next frontmost window.
+	 */
 	static bool FocusNextFrontmostWindow();
 
 	/**
@@ -113,7 +117,8 @@ private:
 	TSharedPtr<FUICommandInfo> CmdInfoCyclePrevWindow{ nullptr };
 	TSharedPtr<FUICommandInfo> CmdInfoGotoRootWindow{ nullptr };
 
-	TWeakPtr<SWindow>				CurrWin{ nullptr };
+	TWeakPtr<SWindow>				LastActiveWin{ nullptr };
+	FText							LastActiveWinTitle;
 	TMap<uint64, TWeakPtr<SWindow>> TrackedWindows;
 	bool							VisualLog{ true };
 };

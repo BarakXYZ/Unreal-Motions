@@ -4,6 +4,7 @@
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/SWidget.h"
+#include "UMInputPreProcessor.h"
 #include "framework/Application/SlateApplication.h"
 
 class FUMFocusManager
@@ -11,6 +12,8 @@ class FUMFocusManager
 public:
 	FUMFocusManager();
 	~FUMFocusManager();
+
+	static const TSharedPtr<FUMFocusManager>& Get();
 
 	void RegisterSlateEvents();
 
@@ -26,6 +29,44 @@ public:
 	void OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
 		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 		const TSharedPtr<SWidget>& NewWidget);
+
+	/**
+	 * Being called when a new Minor Tab is being activated.
+	 * Major tabs can also be deduced from this by fetching the TabManagerPtr
+	 * and ->GetActiveMajorTab
+	 * @param PrevActiveTab the currently set, old tab.
+	 * @param NewActiveTab the newly to be set tab.
+	 * @note Unreal incorrectly passes the internal delegate params in an inverted order. I've countered it with flipping the values again to compensate.
+	 */
+	void OnActiveTabChanged(
+		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
+
+	/**
+	 * Being called when a new Minor or Major Tab is being foregrounded, though
+	 * Major Tabs seems to be the main focus of this.
+	 * We're using it as a second layer backup for setting the Major Tab
+	 * in cases where OnActiveTabChanged won't be invoked.
+	 * @param NewActiveTab the newly to be set tab.
+	 * @param PrevActiveTab the currently set, old tab.
+	 * @note In this case, Unreal passes the delegate params in the correctly documented order. So we keep it as is (firstly new tab, then old tab).
+	 */
+	void OnTabForegrounded(
+		TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
+
+	/**
+	 * Updates the currently tracked tab (major or minor).
+	 * @param NewTab The tab to set as current
+	 */
+	void SetCurrentTab(const TSharedRef<SDockTab> NewTab);
+
+	void LogTabChange(const FString& TabType,
+		const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab);
+
+	// Can be called from a few different stages:
+	// If Major Tab Changed
+	// If TabWell Changed
+	// If Minor Tab Changed
+	void SetUserFocus();
 
 	// ~ Last active Major Tab by Window ID ~
 	// You enter the ID of the Window:
@@ -70,7 +111,16 @@ public:
 	TWeakPtr<SDockTab> ActiveMinorTab;
 	TWeakPtr<SWidget>  ActiveWidget;
 
-	static TSharedPtr<FUMFocusManager> FocusManager;
+	static const TSharedPtr<FUMFocusManager> FocusManager;
+
+	FTimerHandle TimerHandleNewWidgetTracker;
+	FTimerHandle TimerHandleNewMinorTabTracker;
+
+	TWeakPtr<SDockTab> ForegroundedProcessedTab;
+	bool			   bIsTabForegrounding{ false };
+	FUMOnMouseButtonUp OnMouseButtonUp;
+
+	bool bVisualLog{ false };
 
 	// UMFocusManager
 	// It will listen to:

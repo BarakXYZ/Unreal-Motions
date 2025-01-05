@@ -14,6 +14,7 @@
 #include "Editor/SceneOutliner/Public/SSceneOutliner.h"
 #include "ISceneOutlinerTreeItem.h"
 #include "Input/Events.h"
+#include "UMSlateHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All); // Development
@@ -835,12 +836,12 @@ void UVimEditorSubsystem::OpenWidgetReflector(
 
 	// Fetching the first (maybe only) instance of this (parent of our target)
 	TWeakPtr<SWidget> FoundWidget;
-	if (!FUMTabsNavigationManager::TraverseWidgetTree(
+	if (!FUMSlateHelpers::TraverseWidgetTree(
 			RefWin, FoundWidget, "SToolBarButtonBlock"))
 		return;
 
 	// Locate the button within it
-	if (FUMTabsNavigationManager::TraverseWidgetTree(
+	if (FUMSlateHelpers::TraverseWidgetTree(
 			FoundWidget.Pin(), FoundWidget, "SButton"))
 	{
 		TSharedPtr<SButton> Button =
@@ -855,7 +856,7 @@ void UVimEditorSubsystem::OpenWidgetReflector(
 			return;
 
 		// Remove the annoying SearchBox that is taking focus from HJKL
-		if (FUMTabsNavigationManager::TraverseWidgetTree(
+		if (FUMSlateHelpers::TraverseWidgetTree(
 				ChildRefWins[0], FoundWidget, "SSearchBox"))
 		{
 			// Won't work
@@ -889,7 +890,7 @@ void UVimEditorSubsystem::OpenWidgetReflector(
 
 		// Find all menu entry buttons in the found window
 		TArray<TWeakPtr<SWidget>> FoundButtons;
-		if (!FUMTabsNavigationManager::TraverseWidgetTree(
+		if (!FUMSlateHelpers::TraverseWidgetTree(
 				ChildRefWins[0], FoundButtons, "SMenuEntryButton"))
 			return;
 
@@ -1056,7 +1057,7 @@ void UVimEditorSubsystem::TryFocusSearchBox(FSlateApplication& SlateApp, const F
 		return;
 
 	TWeakPtr<SWidget> SearchBox = nullptr;
-	if (!FUMTabsNavigationManager::TraverseWidgetTree(
+	if (!FUMSlateHelpers::TraverseWidgetTree(
 			// SearchInWidget, SearchBox, SearchBoxType))
 			SearchInWidget, SearchBox, EditableTextType))
 		return;

@@ -290,6 +290,7 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 // that more. Maybe a specific mode desgined for navigation? TODO WIP OK THANK
 bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	OnMouseButtonUpAlertTabForeground.Broadcast();
 	// FUMHelpers::NotifySuccess(FText::FromString("Key up!"));
 	// return true;
 

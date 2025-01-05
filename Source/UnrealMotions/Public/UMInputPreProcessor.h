@@ -46,6 +46,11 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnVimModeChanged, const EVimMode);
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnRequestVimModeChange, FSlateApplication&, const EVimMode);
 
+/**
+ * Used in Focus Manager for handling foregrounded tabs correctly.
+ */
+DECLARE_MULTICAST_DELEGATE(FUMOnMouseButtonUp);
+
 class FUMInputPreProcessor : public IInputProcessor
 {
 public:
@@ -60,7 +65,9 @@ public:
 
 	/**
 	 * Returns the singleton instance of the input preprocessor
-	 * @return Shared pointer to the input preprocessor instance
+	 * @return Shared pointer to the input preprocessor instance -
+	 * Not sure if we can and should return by ref since this is registered
+	 * to Unreal for handling.
 	 * @note Creates the instance if it doesn't exist
 	 */
 	static TSharedPtr<FUMInputPreProcessor> Get();
@@ -483,6 +490,7 @@ public:
 	FOnVimModeChanged			   OnVimModeChanged;
 	FUMOnCountPrefix			   OnCountPrefix;
 	FUMOnResetSequence			   OnResetSequence;
+	FUMOnMouseButtonUp			   OnMouseButtonUpAlertTabForeground;
 	static FOnRequestVimModeChange OnRequestVimModeChange;
 
 	/** Logging configuration */

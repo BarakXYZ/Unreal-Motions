@@ -4,6 +4,7 @@
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Docking/TabManager.h"
 #include "UnrealMotions.h"
+#include "UMFocusManager.h"
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnNewMajorTabChanged,
 	TWeakPtr<SDockTab> /* New Major Tab */,
@@ -130,8 +131,9 @@ public:
 	 * Activates a specific tab within a SDockingTabWell widget.
 	 * @param DockingTabWell The tab well containing the tabs
 	 * @param TabIndex Index of tab to focus (1-based, 0 selects last tab)
+	 * @param bIsMajorTab Info to determine which tab we should set as the new one
 	 */
-	void FocusTabIndex(const TSharedPtr<SWidget>& DockingTabWell, int32 TabIndex);
+	void FocusTabIndex(const TSharedPtr<SWidget>& DockingTabWell, int32 TabIndex, bool bIsMajorTab);
 
 	/**
 	 * Adds navigation commands for cycling between tabs to the binding context.
@@ -177,6 +179,8 @@ public:
 	 */
 	bool GetActiveMajorTab(TWeakPtr<SDockTab>& OutMajorTab);
 
+	bool FindActiveMinorTabs();
+
 	/**
 	 * Prints debug information about a tab.
 	 * @param Tab Tab to debug
@@ -187,49 +191,11 @@ public:
 		bool bDebugVisualTabRole, FString DelegateType);
 
 	/**
-	 * Validates that the parent wiget for the targeted tab is valid and is
-	 * indeed a SDockingTabWell. Return false otherwise.
-	 * @param InOutTabWell Serves as both the SDockingTab from which we will get the parent, and where we will store the SDockingTabWell.
-	 */
-	bool GetParentTabWellFromTab(
-		const TSharedPtr<SWidget>& Tab, TSharedPtr<SWidget>& TabWell);
-
-	/**
 	 * Called when mouse button is pressed down, can be used to track tab changes.
 	 * Currently unused but kept for potential future use.
 	 * @param PointerEvent Event data for the mouse button press
 	 */
 	void OnMouseButtonDown(const FPointerEvent& PointerEvent);
-
-	/**
-	 * Recursively searches a widget tree for a SDockingTabWell widget.
-	 * @param ParentWidget The root widget to start traversing from
-	 * @param OutWidget Output parameter that will store the found widgets
-	 * @param TargetType Type of widget we're looking for (e.g. "SDockingTabWell")
-	 * @param SearchCount How many instances of this widget type we will try to look for. -1 will result in trying to find all widgets of this type in the widget's tree. 0 will be ignored, 1 will find the first instance, then return.
-	 * @param Depth Current depth in the widget tree (used for logging)
-	 * @return true if OutWidgets >= SearchCount, or OutWidget > 0 if SearchCount is set to -1, false otherwise
-	 */
-	static bool TraverseWidgetTree(
-		const TSharedPtr<SWidget>& ParentWidget,
-		TArray<TWeakPtr<SWidget>>& OutWidgets,
-		const FString&			   TargetType,
-		int32					   SearchCount = -1,
-		int32					   Depth = 0);
-
-	/**
-	 * Recursively searches a widget tree for a single widget of the specified type.
-	 * @param ParentWidget The root widget to start traversing from
-	 * @param OutWidget Output parameter that will store the found widget
-	 * @param TargetType Type of widget we're looking for
-	 * @param Depth Current depth in the widget tree (used for logging)
-	 * @return true if a widget was found, false otherwise
-	 */
-	static bool TraverseWidgetTree(
-		const TSharedPtr<SWidget>& ParentWidget,
-		TWeakPtr<SWidget>&		   OutWidget,
-		const FString&			   TargetType,
-		int32					   Depth = 0);
 
 	/**
 	 * Configures the "FindAllTabWells" command and binds it to the input system.
@@ -301,16 +267,17 @@ public:
 	TSharedPtr<FUICommandInfo> CmdInfoNextMinorTab{ nullptr };
 	TSharedPtr<FUICommandInfo> CmdInfoPrevMinorTab{ nullptr };
 
-	TSharedPtr<FUICommandInfo> CmdInfoFindAllTabWells{ nullptr };
-	TArray<TWeakPtr<SWidget>>  EditorTabWells;
-	FOnActiveTabChanged		   OnActiveTabChanged(FOnActiveTabChanged::FDelegate);
-	const FString			   SDTabWell{ "SDockingTabWell" };
-	const FString			   SToolkit{ "SStandaloneAssetEditorToolkitHost" };
-	const FString			   SLvlEditor{ "SLevelEditor" };
-	TWeakPtr<SWindow>		   CurrWin{ nullptr }; // User for getting Maj Tab
-	static TWeakPtr<SDockTab>  CurrMajorTab;
-	TWeakPtr<SDockTab>		   CurrMinorTab{ nullptr };
-	FUMOnNewMajorTabChanged	   OnNewMajorTabChanged;
+	TSharedPtr<FUICommandInfo>	CmdInfoFindAllTabWells{ nullptr };
+	TArray<TWeakPtr<SWidget>>	EditorTabWells;
+	FOnActiveTabChanged			OnActiveTabChanged(FOnActiveTabChanged::FDelegate);
+	const FString				SDTabWell{ "SDockingTabWell" };
+	const FString				SToolkit{ "SStandaloneAssetEditorToolkitHost" };
+	const FString				SLvlEditor{ "SLevelEditor" };
+	TWeakPtr<SWindow>			CurrWin{ nullptr }; // User for getting Maj Tab
+	static TWeakPtr<SDockTab>	CurrMajorTab;
+	TWeakPtr<SDockTab>			CurrMinorTab{ nullptr };
+	FUMOnNewMajorTabChanged		OnNewMajorTabChanged;
+	TSharedPtr<FUMFocusManager> FocusManager;
 
 	bool VisualLog{ true };
 };
