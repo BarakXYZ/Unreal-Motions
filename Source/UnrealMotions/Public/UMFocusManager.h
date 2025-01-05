@@ -115,12 +115,14 @@ public:
 
 	FTimerHandle TimerHandleNewWidgetTracker;
 	FTimerHandle TimerHandleNewMinorTabTracker;
+	FTimerHandle TimerHandleTabForegrounding;
 
 	TWeakPtr<SDockTab> ForegroundedProcessedTab;
 	bool			   bIsTabForegrounding{ false };
+	bool			   bIsDummyForegroundingCallbackCheck{ false };
 	FUMOnMouseButtonUp OnMouseButtonUp;
 
-	bool bVisualLog{ false };
+	bool bVisualLog{ true };
 
 	// UMFocusManager
 	// It will listen to:

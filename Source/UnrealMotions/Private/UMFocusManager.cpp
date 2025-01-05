@@ -197,9 +197,36 @@ void FUMFocusManager::OnTabForegrounded(
 			LogTab = NewActiveTab->GetTabLabel();
 			ForegroundedProcessedTab = NewActiveTab;
 		}
-		FUMHelpers::NotifySuccess(
-			FText::FromString(FString::Printf(TEXT("OnTabForegrounded - Processing: %s"), *LogTab.ToString())), bVisualLog);
+		if (!bIsDummyForegroundingCallbackCheck)
+			FUMHelpers::NotifySuccess(
+				FText::FromString(FString::Printf(TEXT("OnTabForegrounded - Processing: %s"), *LogTab.ToString())), bVisualLog);
+		// else
+		// 	FUMHelpers::NotifySuccess(FText::FromString("Dummy Check"));
+		// Set false to allow regular calls to notify & log regularly.
+		bIsDummyForegroundingCallbackCheck = false;
 
+		// NOTE:
+		// Since sometimes the delegate seems to not trigger again when the
+		// foregrounding is finished - we have to set this timer to verify
+		// manually if we've already completed the foregrounding operation.
+		TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+		if (!TimerManager->IsTimerActive(TimerHandleTabForegrounding))
+			TimerManager->SetTimer(
+				TimerHandleTabForegrounding,
+				[this, TimerManager]() {
+					TimerManager->ClearTimer(TimerHandleTabForegrounding);
+					// When calling the function again, we don't want to
+					// influence which tab should be focused next, but just to
+					// verify we finish the operation at all. Thus we pass
+					// null pointers as the params and mark a flag to ignore
+					// setting the tab.
+					if (bIsTabForegrounding)
+					{
+						bIsDummyForegroundingCallbackCheck = true;
+						OnTabForegrounded(nullptr, nullptr);
+					}
+				},
+				0.15f, false);
 		return;
 	}
 
@@ -224,6 +251,7 @@ void FUMFocusManager::OnTabForegrounded(
 	// though it might be healthy to even delay this mark a bit (like by 25ms or
 	// something) to insure we don't bring focus to a none-desired tab.
 	bIsTabForegrounding = false;
+	bIsDummyForegroundingCallbackCheck = false;
 }
 
 void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
