@@ -152,7 +152,7 @@ public:
 	bool			  bHasFilteredAnIncomingNewWidget{ false };
 	FUMOnWindowAction OnWindowAction;
 
-	bool bVisualLog{ true };
+	bool bVisualLog{ false };
 
 	// UMFocusManager
 	// It will listen to:

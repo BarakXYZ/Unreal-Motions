@@ -63,7 +63,7 @@ void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakW
 	const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
-	ToggleVisualLog(true);
+	// ToggleVisualLog(true);
 
 	// Clear if there's a current running timer as we gonna assign a newer widget
 	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
@@ -86,22 +86,19 @@ void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakW
 			// 	FText::FromString("Focus Manager On Focused Changed"), bVisualLog);
 
 			TrackActiveWindow();
-			if (!WeakNewWidget.IsValid()) // This widget has expired (removed)
+
+			const TSharedPtr<SWidget> PinnedNewWidget = WeakNewWidget.Pin();
+			if (!PinnedNewWidget.IsValid())
 				return;
-			const TSharedPtr<SWidget> PinNewWidget = WeakNewWidget.Pin();
-			if (!PinNewWidget.IsValid())
-				return;
-			if (ShouldFilterNewWidget(PinNewWidget.ToSharedRef()))
+			if (ShouldFilterNewWidget(PinnedNewWidget.ToSharedRef()))
 			{
 				bHasFilteredAnIncomingNewWidget = true;
 				return;
 			}
 
-			if (ActiveWidget.IsValid())
+			if (const TSharedPtr<SWidget> PinnedActiveWidget = ActiveWidget.Pin())
 			{
-				const TSharedPtr<SWidget> PinActiveWidget = ActiveWidget.Pin();
-				if (PinActiveWidget.IsValid()
-					&& PinActiveWidget->GetId() == PinNewWidget->GetId())
+				if (PinnedActiveWidget->GetId() == PinnedNewWidget->GetId())
 				{
 					FUMHelpers::NotifySuccess(
 						FText::FromString("Same widget, do not update."),
@@ -113,10 +110,10 @@ void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakW
 			FUMHelpers::NotifySuccess(
 				FText::FromString(
 					FString::Printf(TEXT("New Widget to Register: %s"),
-						*WeakNewWidget.Pin()->GetTypeAsString())),
+						*PinnedNewWidget->GetTypeAsString())),
 				bVisualLog);
 
-			ActiveWidget = WeakNewWidget; // New Widget found - track it.
+			ActiveWidget = PinnedNewWidget; // New Widget found - track it.
 
 			if (ActiveMinorTab.IsValid())
 			{
@@ -137,7 +134,7 @@ void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakW
 					if (LastActiveWidgetByMinorTabId.FindRef(NewTabId) != ActiveWidget)
 						LastActiveWidgetByMinorTabId.Add(NewTabId, ActiveWidget);
 
-					ActiveMinorTab = NewMinorTab.ToWeakPtr();
+					ActiveMinorTab = NewMinorTab;
 				}
 				else
 					FUMHelpers::NotifySuccess(
@@ -304,9 +301,11 @@ bool FUMFocusManager::HasWindowChanged()
 	if (!SysActiveWin.IsValid())
 		return false;
 
-	if (!ActiveWindow.IsValid() || !ActiveWindow.Pin().IsValid() || !SysActiveWin->GetTitle().EqualTo(ActiveWindow.Pin()->GetTitle()))
+	const auto& PinnedActiveWindow = ActiveWindow.Pin();
+	if (!PinnedActiveWindow.IsValid()
+		|| !SysActiveWin->GetTitle().EqualTo(PinnedActiveWindow->GetTitle()))
 	{
-		ActiveWindow = SysActiveWin.ToWeakPtr();
+		ActiveWindow = SysActiveWin;
 		return true;
 	}
 
@@ -328,8 +327,9 @@ void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 
 	if (NewTab->GetVisualTabRole() == ETabRole::MajorTab)
 	{
-		if (ActiveMajorTab.IsValid() && ActiveMajorTab == NewTab)
-			return; // Not a new Major Tab
+		if (const TSharedPtr<SDockTab>& PinnedLastMajorTab = ActiveMajorTab.Pin())
+			if (PinnedLastMajorTab == NewTab)
+				return; // Not a new Major Tab
 
 		LogTabChange(TEXT("Major"), ActiveMajorTab, NewTab);
 		ActiveMajorTab = NewTab;
@@ -356,24 +356,29 @@ void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 	}
 	else // Minor Tab
 	{
-		if (ActiveMinorTab.IsValid() && ActiveMinorTab == NewTab)
-			return; // Not a new Minor Tab
+		if (const TSharedPtr<SDockTab>& PinnedLastMinorTab = ActiveMinorTab.Pin())
+			if (PinnedLastMinorTab == NewTab)
+				return; // Not a new Minor Tab
 
 		LogTabChange(TEXT("Minor"), ActiveMinorTab, NewTab);
 		ActiveMinorTab = NewTab;
 		NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
 
 		// Register this tab's TabWell with the current Active Major Tab parent.
-		if (ActiveMajorTab.IsValid() && ActiveMajorTab.Pin().IsValid()
-			&& DoesMinorTabResidesInMajorTab(
-				NewTab, ActiveMajorTab.Pin().ToSharedRef()))
-			LastActiveTabWellByMajorTabId.Add(
-				ActiveMajorTab.Pin()->GetId(), NewTab->GetParentWidget());
-		// Not sure why we wouldn't have a valid ref really:
-		// But we may want to handle this scenario and grab a valid Major Tab
+		if (const TSharedPtr<SDockTab> PinnedLastMajorTab = ActiveMajorTab.Pin())
+		{
+			if (DoesMinorTabResidesInMajorTab(
+					NewTab, PinnedLastMajorTab.ToSharedRef()))
+				LastActiveTabWellByMajorTabId.Add(
+					PinnedLastMajorTab->GetId(), NewTab->GetParentWidget());
+			else
+				FUMHelpers::NotifySuccess(
+					FText::FromString("Can't register TabWell: Minor tab does not reside in Major Tab"),
+					bVisualLog);
+		}
 		else
 			FUMHelpers::NotifySuccess(
-				FText::FromString("Can't regiser TabWell: No valid Major Tab"),
+				FText::FromString("Can't register TabWell: No valid Major Tab"),
 				bVisualLog);
 
 		// Skip widget focusing if there's already any focus (e.g.
@@ -390,10 +395,10 @@ void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 		if (const TWeakPtr<SWidget>* LastWidget =
 				LastActiveWidgetByMinorTabId.Find(NewTab->GetId()))
 		{
-			if (LastWidget->IsValid() && LastWidget->Pin().IsValid())
+			if (const auto& PinnedLastWidget = LastWidget->Pin())
 			{
 				SlateApp.SetAllUserFocus(
-					LastWidget->Pin().ToSharedRef(), EFocusCause::Navigation);
+					PinnedLastWidget.ToSharedRef(), EFocusCause::Navigation);
 				FUMHelpers::NotifySuccess(
 					FText::FromString(FString::Printf(TEXT("Widget Found: %s"),
 						*LastWidget->Pin()->GetTypeAsString())),
@@ -416,8 +421,8 @@ bool FUMFocusManager::TryFindTabWellAndActivateForegroundedTab(
 	if (const TWeakPtr<SWidget>* TabWell =
 			LastActiveTabWellByMajorTabId.Find(InMajorTab->GetId()))
 	{
-		if (TabWell->IsValid() && TabWell->Pin().IsValid())
-			if (FChildren* Tabs = TabWell->Pin()->GetChildren())
+		if (const auto& PinnedTabWell = TabWell->Pin())
+			if (FChildren* Tabs = PinnedTabWell->GetChildren())
 			{
 				for (int32 i{ 0 }; i < Tabs->Num(); ++i)
 				{
