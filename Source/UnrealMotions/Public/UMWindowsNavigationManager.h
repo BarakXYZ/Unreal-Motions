@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Docking/TabManager.h"
-#include "UnrealMotions.h"
+
+DECLARE_MULTICAST_DELEGATE_OneParam(FUMOnWindowChanged,
+	const TSharedPtr<SWindow> NewWindow);
 
 class FUMWindowsNavigationManager
 {
@@ -45,19 +47,6 @@ public:
 	 * Called after FSlateApplication delegates PostEngineInit.
 	 */
 	void RegisterSlateEvents();
-
-	/**
-	 * Handles focus change events between windows and widgets.
-	 * Used to track window focus changes that might not trigger TabManager delegates.
-	 * @param FocusEvent The focus event that triggered the callback
-	 * @param OldWidgetPath Path to the previously focused widget
-	 * @param OldWidget The previously focused widget
-	 * @param NewWidgetPath Path to the newly focused widget
-	 * @param NewWidget The newly focused widget
-	 */
-	void OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
-		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
-		const TSharedPtr<SWidget>& NewWidget);
 
 	/**
 	 * Detects if the user has moved to a different window and updates tracking accordingly.
@@ -107,11 +96,12 @@ public:
 	 */
 	const TMap<uint64, TWeakPtr<SWindow>>& GetTrackedWindows();
 
+	static FUMOnWindowChanged OnWindowChanged;
+
 private:
 	static TSharedPtr<FUMWindowsNavigationManager> WindowsNavigationManager;
 
-	const FName				  MainFrameContextName = TEXT("MainFrame");
-	FUMOnUserMovedToNewWindow OnUserMovedToNewWindow;
+	const FName MainFrameContextName = TEXT("MainFrame");
 
 	TSharedPtr<FUICommandInfo> CmdInfoCycleNextWindow{ nullptr };
 	TSharedPtr<FUICommandInfo> CmdInfoCyclePrevWindow{ nullptr };
@@ -120,5 +110,6 @@ private:
 	TWeakPtr<SWindow>				LastActiveWin{ nullptr };
 	FText							LastActiveWinTitle;
 	TMap<uint64, TWeakPtr<SWindow>> TrackedWindows;
-	bool							VisualLog{ true };
+
+	bool VisualLog{ true };
 };

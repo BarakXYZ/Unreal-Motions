@@ -6,10 +6,8 @@
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
 // #include "BlueprintEditor.h"
-// #include "Subsystems/AssetEditorSubsystem.h"
 
 #include "UMHelpers.h"
-#include "UnrealMotions.h"
 #include "UMSlateHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, NoLogging, All); // Prod
@@ -51,16 +49,6 @@ FUMTabsNavigationManager::FUMTabsNavigationManager()
 
 	FCoreDelegates::OnPostEngineInit.AddRaw(
 		this, &FUMTabsNavigationManager::RegisterSlateEvents);
-
-	OnUserMovedToNewTab = FUnrealMotionsModule::GetOnUserMovedToNewTab();
-
-	// FUnrealMotionsModule::GetOnUserMovedToNewWindow().AddRaw(
-	// 	this, &FUMTabsNavigationManager::HandleOnUserMovedToNewWindow);
-
-	// TODO: Why this doesn't work?
-	// FUnrealMotionsModule::GetOnUserMovedToNewWindow().AddSP(
-	// 	FUMTabsNavigationManager::TabsNavigationManager,
-	// 	&FUMTabsNavigationManager::HandleOnUserMovedToNewWindow);
 }
 
 FUMTabsNavigationManager::~FUMTabsNavigationManager()
@@ -171,9 +159,8 @@ bool FUMTabsNavigationManager::TryGetValidTargetTab(
 	if (bIsMajorTab)
 	{
 		if (!FocusManager->ActiveMajorTab.IsValid())
-			if (!GetActiveMajorTab(CurrMajorTab))
+			if (!FocusManager->TryGetFrontmostMajorTab())
 				return false;
-
 		OutTab = FocusManager->ActiveMajorTab.Pin();
 		return true;
 	}
@@ -287,37 +274,6 @@ bool FUMTabsNavigationManager::GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutN
 	return false;
 }
 
-// TODO: Try to refine this method
-bool FUMTabsNavigationManager::GetActiveMajorTab(TWeakPtr<SDockTab>& OutMajorTab)
-{
-	if (!CurrWin.IsValid() || !CurrWin.Pin()->IsActive())
-		CurrWin = FSlateApplication::Get().GetActiveTopLevelWindow();
-	TWeakPtr<SWidget> FoundWidget;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
-			CurrWin.Pin(), FoundWidget, "SDockingTabWell"))
-		return false;
-
-	FChildren* Tabs = FoundWidget.Pin()->GetChildren();
-	if (!Tabs || Tabs->Num() == 0)
-		return false;
-
-	for (int32 i{ 0 }; i < Tabs->Num(); ++i)
-	{
-		if (Tabs->GetChildAt(i)->GetTypeAsString() == "SDockTab")
-		{
-			TSharedRef<SDockTab> Tab =
-				StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(i));
-			if (Tab->IsForeground())
-			{
-				OutMajorTab = Tab.ToWeakPtr();
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
 bool FUMTabsNavigationManager::FindActiveMinorTabs()
 {
 	// 1. I'm afraid that this is needed for some internal stuff
@@ -366,28 +322,6 @@ bool FUMTabsNavigationManager::FindActiveMinorTabs()
 	return false;
 }
 
-bool FUMTabsNavigationManager::FindRootTargetWidgetName(FString& OutRootWidgetName)
-{
-	TWeakPtr<SDockTab> MajorTab = nullptr;
-	if (!GetActiveMajorTab(MajorTab))
-		return false;
-
-	ENavSpecTabType TabType = GetNavigationSpecificTabType(MajorTab.Pin());
-	switch (TabType)
-	{
-		case ENavSpecTabType::Toolkit:
-			OutRootWidgetName = SToolkit;
-			return true;
-		case ENavSpecTabType::LevelEditor:
-			OutRootWidgetName = SLvlEditor;
-			return true;
-		case ENavSpecTabType::None:
-			return false;
-		default:
-			return false;
-	}
-}
-
 TWeakPtr<SDockTab> FUMTabsNavigationManager::GetCurrentlySetMajorTab()
 {
 	return CurrMajorTab.IsValid() ? CurrMajorTab : nullptr;
@@ -404,50 +338,6 @@ bool FUMTabsNavigationManager::RemoveActiveMajorTab()
 		return true;
 	}
 	return false;
-}
-
-void FUMTabsNavigationManager::FindAllTabWells()
-{
-	UE_LOG(LogUMTabsNavigation, Display, TEXT("Find All Tab Wells Started!"));
-
-	FString RootName;
-	if (!FindRootTargetWidgetName(RootName) || !FSlateApplication::IsInitialized())
-		return;
-	FSlateApplication&		   App = FSlateApplication::Get();
-	const TSharedPtr<SWindow>& Win = App.GetActiveTopLevelWindow();
-	if (!Win)
-		return;
-
-	TWeakPtr<SWidget> RootWidget = nullptr;
-	if (!FUMSlateHelpers::TraverseWidgetTree(Win, RootWidget, RootName))
-		return;
-
-	EditorTabWells.Empty();
-	if (!FUMSlateHelpers::TraverseWidgetTree(
-			RootWidget.Pin(), EditorTabWells, SDTabWell))
-		return;
-
-	int32 WellNum{ 0 };
-	for (const TWeakPtr<SWidget>& Well : EditorTabWells)
-	{
-		UE_LOG(LogUMTabsNavigation, Display,
-			TEXT("TabWell(%d), Pos: %s"),
-			WellNum, *Well.Pin()->GetTickSpaceGeometry().ToString());
-		if (FChildren* Tabs = Well.Pin()->GetChildren())
-		{
-			for (int32 i{ 0 }; i < Tabs->Num(); ++i)
-			{
-				const TSharedPtr<SDockTab>& Tab =
-					StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(i));
-				if (Tab.IsValid())
-				{
-					UE_LOG(LogUMTabsNavigation, Display, TEXT("%sTab Name: %s"),
-						*FString::ChrN(12, ' '), *Tab->GetTabLabel().ToString());
-				}
-			}
-		}
-		++WellNum;
-	}
 }
 
 void FUMTabsNavigationManager::DebugTab(const TSharedPtr<SDockTab>& Tab,
@@ -633,27 +523,6 @@ void FUMTabsNavigationManager::AddMinorTabsNavigationCommandsToList(TSharedPtr<F
 		"MoveToMinorTab9", "Focus Minor Tab 9",
 		"Activates the ninth minor tab in the current tab well",
 		EUserInterfaceActionType::Button, TabChords[9]);
-}
-
-void FUMTabsNavigationManager::SetupFindTabWells(
-	TSharedRef<FUICommandList>& CommandList,
-	TSharedPtr<FBindingContext> MainFrameContext)
-{
-	FInputChord FindTabWellsChord(
-		EModifierKey::FromBools(true, false, true, false), EKeys::L);
-	UI_COMMAND_EXT(
-		MainFrameContext.Get(),
-		CmdInfoFindAllTabWells,
-		"FindAllTabWells",
-		"Find All Existing Tab Wells",
-		"Traverse the widget hierarchy and store all tab wells found.",
-		EUserInterfaceActionType::Button, FindTabWellsChord);
-
-	CommandList->MapAction(
-		CmdInfoFindAllTabWells,
-		FExecuteAction::CreateLambda([this]() {
-			FindAllTabWells();
-		}));
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -12,9 +12,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, Log, All); // Dev
 
 #define LOCTEXT_NAMESPACE "FUnrealMotionsModule"
 
-FUMOnUserMovedToNewWindow FUnrealMotionsModule::OnUserMovedToNewWindow;
-FUMOnUserMovedToNewTab	  FUnrealMotionsModule::OnUserMovedToNewTab;
-
 void FUnrealMotionsModule::StartupModule()
 {
 	UE_LOG(LogUnrealMotionsModule, Display, TEXT("Unreal Motions: Startup."));
@@ -48,16 +45,6 @@ void FUnrealMotionsModule::BindPostEngineInitDelegates()
 	FSlateApplication& App = FSlateApplication::Get();
 	App.RegisterInputPreProcessor(FUMInputPreProcessor::Get());
 	GraphNavigationManager = MakeShared<FUMGraphNavigationManager>();
-}
-
-FUMOnUserMovedToNewWindow& FUnrealMotionsModule::GetOnUserMovedToNewWindow()
-{
-	return FUnrealMotionsModule::OnUserMovedToNewWindow;
-}
-
-FUMOnUserMovedToNewTab& FUnrealMotionsModule::GetOnUserMovedToNewTab()
-{
-	return FUnrealMotionsModule::OnUserMovedToNewTab;
 }
 
 #undef LOCTEXT_NAMESPACE

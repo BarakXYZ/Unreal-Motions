@@ -425,16 +425,8 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	void Enter(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	void SimulateClickOnWidget(
-		FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
-		const FKey& EffectingButton = EKeys::LeftMouseButton,
-		bool		bIsDoubleClick = false);
-
 	void SimulateRightClick(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
-
-	void SimulateAnalogClick(
-		FSlateApplication& SlateApp, const TSharedPtr<SWidget>& Widget);
 
 	void NavigateNextPrevious(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);

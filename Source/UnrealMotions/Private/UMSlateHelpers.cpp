@@ -1,5 +1,7 @@
 #include "UMSlateHelpers.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Layout/ChildrenBase.h"
+#include "Widgets/Docking/SDockTab.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
 // DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
@@ -97,6 +99,44 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 			TSharedPtr<SWidget> Child = Children->GetChildAt(i);
 			if (TraverseWidgetTree(Child, OutWidget, TargetType, Depth + 1))
 				return true;
+		}
+	}
+	return false;
+}
+
+// We can't rely on the GlobalTabmanager for this because our current minor tab
+// doesn't necessarily reflect the frontmost major tab (for example if we have
+// some other window focused that doesn't match the minor tab parent window)
+bool FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
+	TSharedPtr<SDockTab>& OutMajorTab)
+{
+	static const FString DockWellType{ "SDockingTabWell" };
+	static const FName	 DockType{ "SDockTab" };
+
+	const TSharedPtr<SWindow> ActiveWin =
+		FSlateApplication::Get().GetActiveTopLevelWindow();
+	if (!ActiveWin.IsValid())
+		return false;
+
+	TWeakPtr<SWidget> FoundWidget;
+	if (!TraverseWidgetTree(ActiveWin->GetContent(), FoundWidget, DockWellType))
+		return false;
+
+	if (FChildren* Tabs = FoundWidget.Pin()->GetChildren())
+	{
+		for (int32 i{ 0 }; i < Tabs->Num(); ++i)
+		{
+			// if (Tabs->GetChildAt(i)->GetType().IsEqual(DockType))
+			if (Tabs->GetChildAt(i)->GetType().IsEqual(DockType))
+			{
+				TSharedRef<SDockTab> Tab =
+					StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(i));
+				if (Tab->IsForeground())
+				{
+					OutMajorTab = Tab;
+					return true;
+				}
+			}
 		}
 	}
 	return false;

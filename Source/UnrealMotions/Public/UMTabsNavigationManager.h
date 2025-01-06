@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Docking/TabManager.h"
-#include "UnrealMotions.h"
 #include "UMFocusManager.h"
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnNewMajorTabChanged,
@@ -172,13 +171,6 @@ public:
 	void LogTabChange(const FString& TabType,
 		const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab);
 
-	/**
-	 * Gets the active major tab in the current window.
-	 * @param OutMajorTab Output parameter to store the found major tab
-	 * @return true if a valid major tab was found
-	 */
-	bool GetActiveMajorTab(TWeakPtr<SDockTab>& OutMajorTab);
-
 	bool FindActiveMinorTabs();
 
 	/**
@@ -197,36 +189,13 @@ public:
 	 */
 	void OnMouseButtonDown(const FPointerEvent& PointerEvent);
 
-	/**
-	 * Configures the "FindAllTabWells" command and binds it to the input system.
-	 * Currently unused but kept for debugging purposes.
-	 * @param CommandList Command list to add the binding to
-	 * @param MainFrameContext Context to register the command in
-	 */
-	void SetupFindTabWells(TSharedRef<FUICommandList>& CommandList,
-		TSharedPtr<FBindingContext>					   MainFrameContext);
-
 	/** DEPRECATED
 	 * Return the last active non-major tab. Can be a Panel Tab, a Nomad Tab, etc.
 	 * @param OutNonMajorTab Where we will store the found tab (if any).
 	 */
 	bool GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNonMajorTab);
 
-	/**
-	 * Finds the root widget name based on the current major tab type.
-	 * Used to determine the appropriate widget tree root for tab well searches.
-	 * @param OutRootWidgetName Output parameter to store the found root widget name
-	 * @return true if a valid root widget name was found
-	 */
-	bool FindRootTargetWidgetName(FString& OutRootWidgetName);
-
 	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
-
-	/**
-	 * Finds and logs information about all tab wells in the current window.
-	 * Used for debugging tab layout and hierarchy.
-	 */
-	void FindAllTabWells();
 
 	static TWeakPtr<SDockTab> GetCurrentlySetMajorTab();
 	static bool				  RemoveActiveMajorTab();
@@ -241,7 +210,6 @@ public:
 
 private:
 	static TSharedPtr<FUMTabsNavigationManager> TabsNavigationManager;
-	FUMOnUserMovedToNewTab						OnUserMovedToNewTab;
 
 public:
 	/**

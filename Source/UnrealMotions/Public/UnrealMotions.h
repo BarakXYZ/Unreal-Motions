@@ -10,9 +10,6 @@
 #include "UMInputPreProcessor.h"
 #include "SUMStatusBarWidget.h"
 
-DECLARE_MULTICAST_DELEGATE_OneParam(FUMOnUserMovedToNewWindow, TWeakPtr<SWindow>);
-DECLARE_MULTICAST_DELEGATE_OneParam(FUMOnUserMovedToNewTab, TWeakPtr<SDockTab>);
-
 class FUnrealMotionsModule : public IModuleInterface
 {
 public:
@@ -20,14 +17,9 @@ public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
-	static FUMOnUserMovedToNewWindow& GetOnUserMovedToNewWindow();
-	static FUMOnUserMovedToNewTab&	  GetOnUserMovedToNewTab();
-
 	void BindPostEngineInitDelegates();
 
 private:
-	static FUMOnUserMovedToNewWindow OnUserMovedToNewWindow;
-	static FUMOnUserMovedToNewTab	 OnUserMovedToNewTab;
 	TSharedPtr<FUMInputPreProcessor> InputProcessor = nullptr;
 	TSharedPtr<SUMBufferVisualizer>	 BVis;
 	TSharedPtr<SUMStatusBarWidget>	 StatWidget;

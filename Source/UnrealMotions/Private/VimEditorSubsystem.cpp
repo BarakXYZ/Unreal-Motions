@@ -15,6 +15,7 @@
 #include "ISceneOutlinerTreeItem.h"
 #include "Input/Events.h"
 #include "UMSlateHelpers.h"
+#include "UMInputHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All); // Development
@@ -590,8 +591,6 @@ void UVimEditorSubsystem::Enter(
 		TSharedPtr<SButton> FocusedWidgetAsButton =
 			StaticCastSharedPtr<SButton>(FocusedWidget);
 		FocusedWidgetAsButton->SimulateClick();
-		// FocusedWidgetAsButton->SetClickMethod(EButtonClickMethod::MouseDown);
-		// SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef());
 
 		FUMHelpers::NotifySuccess(
 			FText::FromString(FString::Printf(
@@ -606,75 +605,8 @@ void UVimEditorSubsystem::Enter(
 	GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
 		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>());
 
-	SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef(),
+	FUMInputHelpers::SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef(),
 		EKeys::LeftMouseButton, true /* Double-Click */);
-}
-
-void UVimEditorSubsystem::SimulateClickOnWidget(
-	FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
-	const FKey& EffectingButton, bool bIsDoubleClick)
-{
-
-	FWidgetPath WidgetPath;
-	if (!SlateApp.FindPathToWidget(Widget, WidgetPath))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("SimulateClickOnWidget: Failed to find widget path!"));
-		return;
-	}
-
-	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
-	if (!ActiveWindow.IsValid())
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("SimulateClickOnWidget: No active window found!"));
-		return;
-	}
-
-	// Get the Native OS Window
-	TSharedPtr<FGenericWindow> NativeWindow = ActiveWindow->GetNativeWindow();
-	if (!NativeWindow.IsValid())
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("SimulateClickOnWidget: Native window is invalid!"));
-		return;
-	}
-
-	// Get the geometry of the widget to determine its position
-	const FGeometry& WidgetGeometry = Widget->GetCachedGeometry();
-	const FVector2D	 WidgetScreenPosition = WidgetGeometry.GetAbsolutePosition();
-	const FVector2D	 WidgetSize = WidgetGeometry.GetLocalSize();
-	const FVector2D	 WidgetCenter = WidgetScreenPosition + (WidgetSize * 0.5f);
-
-	// Save the original cursor position that we will go back to after clicking
-	const FVector2D OriginalCursorPosition = SlateApp.GetCursorPos();
-
-	SlateApp.SetPlatformCursorVisibility(false); // Hides the micro mouse flicker
-	SlateApp.SetCursorPos(WidgetCenter);		 // Move to the widget's center
-
-	FPointerEvent MouseDownEvent( // Construct the click Pointer Event
-		0,						  // PointerIndex
-		WidgetCenter,			  // Current cursor position
-		WidgetCenter,			  // Last cursor position
-		TSet<FKey>(),			  // No buttons pressed
-		EffectingButton,
-		0.0f, // WheelDelta
-		FModifierKeysState());
-
-	if (bIsDoubleClick)
-	{ // This will open things like assets, etc. (Tree view)
-		SlateApp.ProcessMouseButtonDoubleClickEvent(NativeWindow, MouseDownEvent);
-		SlateApp.ProcessMouseButtonUpEvent(MouseDownEvent); // needed?
-	}
-	else
-	{ // Simulate click (Up & Down)
-		SlateApp.ProcessMouseButtonDownEvent(NativeWindow, MouseDownEvent);
-		SlateApp.ProcessMouseButtonUpEvent(MouseDownEvent);
-	}
-
-	// Move the cursor back to its original position & toggle visibility on
-	SlateApp.SetCursorPos(OriginalCursorPosition);
-	SlateApp.SetPlatformCursorVisibility(true);
 }
 
 void UVimEditorSubsystem::SimulateRightClick(
@@ -688,7 +620,8 @@ void UVimEditorSubsystem::SimulateRightClick(
 	GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
 		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>());
 
-	SimulateClickOnWidget( // Will remain the original focused widget if no list
+	// Will remain the original focused widget if not list
+	FUMInputHelpers::SimulateClickOnWidget(
 		SlateApp, FocusedWidget.ToSharedRef(), EKeys::RightMouseButton);
 }
 
@@ -715,62 +648,6 @@ bool UVimEditorSubsystem::GetSelectedTreeViewItemAsWidget(
 
 	OutWidget = TableRow->AsWidget();
 	return true;
-}
-
-void UVimEditorSubsystem::SimulateAnalogClick(FSlateApplication& SlateApp, const TSharedPtr<SWidget>& Widget)
-{
-	if (!Widget.IsValid())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("SimulateAnalogClick: Widget is invalid!"));
-		return;
-	}
-
-	FWidgetPath WidgetPath;
-	if (!SlateApp.FindPathToWidget(Widget.ToSharedRef(), WidgetPath))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("SimulateAnalogClick: Failed to find widget path!"));
-		return;
-	}
-
-	// Get the geometry of the widget to determine its position
-	const FGeometry& WidgetGeometry = Widget->GetCachedGeometry();
-	const FVector2D	 WidgetScreenPosition = WidgetGeometry.GetAbsolutePosition();
-	const FVector2D	 WidgetSize = WidgetGeometry.GetLocalSize();
-	const FVector2D	 WidgetCenter = WidgetScreenPosition + (WidgetSize * 0.5f);
-
-	// Create an FAnalogInputEvent to simulate an analog click
-	FAnalogInputEvent AnalogPressEvent(
-		EKeys::LeftMouseButton, // Key to simulate
-		FModifierKeysState(),	// No modifiers
-		0,						// UserIndex
-		false,					// Not a repeat
-		0,						// CharacterCode
-		0,						// KeyCode
-		1.0f					// Analog value (fully pressed)
-	);
-
-	// Process the analog press event
-	if (!SlateApp.ProcessAnalogInputEvent(AnalogPressEvent))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("SimulateAnalogClick: Analog press event not handled!"));
-	}
-
-	// Create another event for releasing the analog key
-	FAnalogInputEvent AnalogReleaseEvent(
-		EKeys::LeftMouseButton, // Key to simulate
-		FModifierKeysState(),	// No modifiers
-		0,						// UserIndex
-		false,					// Not a repeat
-		0,						// CharacterCode
-		0,						// KeyCode
-		0.0f					// Analog value (fully released)
-	);
-
-	// Process the analog release event
-	if (!SlateApp.ProcessAnalogInputEvent(AnalogReleaseEvent))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("SimulateAnalogClick: Analog release event not handled!"));
-	}
 }
 
 void UVimEditorSubsystem::NavigateNextPrevious(

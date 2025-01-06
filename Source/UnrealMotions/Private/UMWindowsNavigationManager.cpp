@@ -12,6 +12,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogUMWindowsNavigation, NoLogging, All); // Prod
 
 TSharedPtr<FUMWindowsNavigationManager> FUMWindowsNavigationManager::WindowsNavigationManager = MakeShared<FUMWindowsNavigationManager>();
 
+FUMOnWindowChanged FUMWindowsNavigationManager::OnWindowChanged;
+
 FUMWindowsNavigationManager::FUMWindowsNavigationManager()
 {
 	FInputBindingManager&		InputBindingManager = FInputBindingManager::Get();
@@ -23,8 +25,6 @@ FUMWindowsNavigationManager::FUMWindowsNavigationManager()
 
 	RegisterCycleWindowsNavigation(MainFrameContext);
 	MapCycleWindowsNavigation(CommandList);
-
-	OnUserMovedToNewWindow = FUnrealMotionsModule::GetOnUserMovedToNewWindow();
 
 	FCoreDelegates::OnPostEngineInit.AddRaw(
 		this, &FUMWindowsNavigationManager::RegisterSlateEvents);
@@ -70,12 +70,6 @@ void FUMWindowsNavigationManager::RegisterSlateEvents()
 {
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 
-	// Useful because sometimes we will jump between windows without the
-	// TabManager Delegates being called. So this is an additional way to
-	// keep track of the currently active tabs.
-	SlateApp.OnFocusChanging()
-		.AddRaw(this, &FUMWindowsNavigationManager::OnFocusChanged);
-
 	// Maybe useful?
 	SlateApp.OnWindowBeingDestroyed().AddLambda([](const SWindow& Window) {
 		// Need to make some checks to filter out non-useful windows
@@ -85,80 +79,6 @@ void FUMWindowsNavigationManager::RegisterSlateEvents()
 				FString::Printf(TEXT("Window Being Destroyed: %s"),
 					*Window.GetTitle().ToString())));
 	});
-}
-
-void FUMWindowsNavigationManager::OnFocusChanged(
-	const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
-	const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
-	const TSharedPtr<SWidget>& NewWidget)
-{
-	HasUserMovedToNewWindow();
-}
-
-// NOTE: Thinking about this, there is a state where we can't fully know if we've
-// moved to a new window because the user may drag the window but then regret and
-// leave it in the same place. In that case we didn't really moved to a new win.
-// It looks like when dragging windows around, they will be immediately marked as
-// invalid (their ID & Pointer) so maybe we should use their name as a fallback or
-// something?
-// So yeah, not completely sure if windows should deduce Major Tabs?
-// If we're moving to a new window by dragging our current tab to a new window,
-// we also want it to be focused. So we can't really deduce the next active major
-// tab in that scenario. So maybe we can check if the number of tabs has changed?
-// Or, something with the drag events? Anyway Major Tabs should be in front of
-// everything so not really sure what does it mean to focus on them?
-// We can probably also just iterate over the tabwell of our currently focused
-// major tab that can be fetched using FGlobalTabmanager?
-// NOTE: Maybe we want to throw some delay on this operation in general too
-// Bottom line -> not sure how important is to track if the user has actually
-// moved to a new window since tabs are the real issue and they're being tracked
-// pretty well. Need to see.
-bool FUMWindowsNavigationManager::HasUserMovedToNewWindow(bool bSetNewWindow)
-{
-	const TSharedPtr<SWindow>& Win =
-		FSlateApplication::Get().GetActiveTopLevelRegularWindow();
-	if (!Win.IsValid())
-		return false;
-
-	if (!LastActiveWin.IsValid())
-	{
-		// FUMHelpers::NotifySuccess(FText::FromString(
-		// 	FString::Printf(TEXT("LastActiveWin Invalid: Store New Window Ptr: %s"),
-		// 		*Win->GetTitle().ToString())));
-		LastActiveWin = Win;
-	}
-	if (LastActiveWin.Pin() != Win)
-	{
-		// FUMHelpers::NotifySuccess(FText::FromString(
-		// 	FString::Printf(TEXT("LastActiveWin != Win | Actual New Window: %s"),
-		// 		*Win->GetTitle().ToString())));
-	}
-	else if (!Win->GetTitle().EqualTo(LastActiveWinTitle))
-	{
-		// FUMHelpers::NotifySuccess(FText::FromString(
-		// 	FString::Printf(TEXT("Title != LastActiveWinTitle | Actual New Window: %s"),
-		// 		*Win->GetTitle().ToString())));
-	}
-	else
-		return false;
-
-	// const TSharedRef<FGlobalTabmanager>& GTM = FGlobalTabmanager::Get();
-	// TSharedPtr<SDockTab>				 ActiveTab = GTM->GetActiveTab();
-	// if (ActiveTab->GetVisualTabRole() != ETabRole::MajorTab) // ???
-	// {
-	// 	TSharedPtr<FTabManager> TabManager = ActiveTab->GetTabManagerPtr();
-	// 	if (TabManager.IsValid())
-	// 	{
-	// 		TSharedPtr<SDockTab> MajorTab =
-	// 			GTM->GetMajorTabForTabManager(TabManager.ToSharedRef());
-	// 		if (MajorTab.IsValid())
-	// 			FUMHelpers::NotifySuccess(MajorTab->GetTabLabel());
-	// 	}
-	// }
-	LastActiveWin = Win;
-	LastActiveWinTitle = Win->GetTitle();
-	OnUserMovedToNewWindow.Broadcast(LastActiveWin);
-	return true;
 }
 
 void FUMWindowsNavigationManager::ToggleRootWindow()
@@ -257,14 +177,16 @@ void FUMWindowsNavigationManager::ActivateWindow(const TSharedRef<SWindow> Windo
 	SlateApp.ClearAllUserFocus(); // This is important to actually draw focus
 	SlateApp.SetAllUserFocus(
 		WinContent, EFocusCause::Navigation);
+
 	// SlateApp.SetKeyboardFocus(WinContent);
 	// FWidgetPath WidgetPath;
 	// SlateApp.FindPathToWidget(WinContent, WidgetPath);
 	// SlateApp.SetAllUserFocusAllowingDescendantFocus(
 	// 	WidgetPath, EFocusCause::Navigation);
 
-	// FUMHelpers::AddDebugMessage(FString::Printf(
-	// 	TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
+	FUMHelpers::AddDebugMessage(FString::Printf(
+		TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
+	OnWindowChanged.Broadcast(Window);
 }
 
 bool FUMWindowsNavigationManager::FocusNextFrontmostWindow()

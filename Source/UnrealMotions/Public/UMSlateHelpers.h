@@ -39,5 +39,7 @@ public:
 		const FString&			   TargetType,
 		int32					   Depth = 0);
 
+	static bool GetFrontmostForegroundedMajorTab(TSharedPtr<SDockTab>& OutMajorTab);
+
 	static const TSharedPtr<FUMSlateHelpers> SlateHelpers;
 };

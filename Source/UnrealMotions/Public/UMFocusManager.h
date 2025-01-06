@@ -6,6 +6,9 @@
 #include "Widgets/SWidget.h"
 #include "UMInputPreProcessor.h"
 #include "framework/Application/SlateApplication.h"
+#include "UMWindowsNavigationManager.h"
+
+DECLARE_DELEGATE_RetVal_TwoParams(bool, FUMOnWindowAction, const TSharedRef<FGenericWindow>&, EWindowAction::Type);
 
 class FUMFocusManager
 {
@@ -68,6 +71,30 @@ public:
 	// If Minor Tab Changed
 	void SetUserFocus();
 
+	bool ShouldFilterNewWidget(TSharedRef<SWidget> InWidget);
+
+	bool TryFocusLastActiveWidget();
+
+	bool DoesActiveMinorTabResidesInMajorTab(
+		const TSharedRef<SDockTab> InMajorTab);
+
+	bool DoesMinorTabResidesInMajorTab(
+		const TSharedRef<SDockTab> MinorTab, const TSharedRef<SDockTab> MajorTab);
+
+	void HandleOnWindowChanged(const TSharedPtr<SWindow> NewWindow);
+
+	void ToggleVisualLog(bool bIsVisualLog);
+
+	bool TryGetFrontmostMajorTab();
+
+	void TrackActiveWindow();
+
+	void LogTabParentWindow(const TSharedRef<SDockTab> InTab);
+
+	bool HasWindowChanged();
+
+	bool TryFindTabWellAndActivateForegroundedTab(const TSharedRef<SDockTab> InMajorTab);
+
 	// ~ Last active Major Tab by Window ID ~
 	// You enter the ID of the Window:
 	// if (the Window exists in it and the Major Tab is valid)
@@ -121,6 +148,9 @@ public:
 	bool			   bIsTabForegrounding{ false };
 	bool			   bIsDummyForegroundingCallbackCheck{ false };
 	FUMOnMouseButtonUp OnMouseButtonUp;
+
+	bool			  bHasFilteredAnIncomingNewWidget{ false };
+	FUMOnWindowAction OnWindowAction;
 
 	bool bVisualLog{ true };
 
