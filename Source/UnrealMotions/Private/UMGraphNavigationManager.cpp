@@ -120,6 +120,7 @@ void FUMGraphNavigationManager::DebugOnFocusChanged(
 	const FWidgetPath&		   WidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
+	return; // Skip all
 	// GetLastActiveEditor();
 
 	// if (!OldWidget.IsValid() || !NewWidget.IsValid())

@@ -334,12 +334,13 @@ bool FUMTabsNavigationManager::FindActiveMinorTabs()
 			CurrMajorTab.Pin()->GetContent(), DockingArea, "SDockingArea"))
 		return false;
 
+	// Next stop will be the splitter within it, which also includes all.
 	TWeakPtr<SWidget> Splitter;
 	if (!FUMSlateHelpers::TraverseWidgetTree(
 			CurrMajorTab.Pin()->GetContent(), Splitter, "SSplitter"))
 		return false;
 
-	// That seems to work pretty well!
+	// Collect all SDockTab(s)
 	TArray<TWeakPtr<SWidget>>
 		FoundPanelTabs;
 	if (FUMSlateHelpers::TraverseWidgetTree(
