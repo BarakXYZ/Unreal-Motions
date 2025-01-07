@@ -56,6 +56,8 @@ TSharedPtr<FUMInputPreProcessor> FUMInputPreProcessor::Get()
 void FUMInputPreProcessor::Tick(
 	const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor)
 {
+	if (TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0))
+		FUMHelpers::AddDebugMessage(FocusedWidget->GetTypeAsString());
 }
 
 // Process the current key sequence

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UMGraphNavigationManager.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Modules/ModuleManager.h"
@@ -23,6 +22,4 @@ private:
 	TSharedPtr<FUMInputPreProcessor> InputProcessor = nullptr;
 	TSharedPtr<SUMBufferVisualizer>	 BVis;
 	TSharedPtr<SUMStatusBarWidget>	 StatWidget;
-
-	TSharedPtr<FUMGraphNavigationManager> GraphNavigationManager{ nullptr };
 };

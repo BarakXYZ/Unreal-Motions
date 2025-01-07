@@ -41,5 +41,9 @@ public:
 
 	static bool GetFrontmostForegroundedMajorTab(TSharedPtr<SDockTab>& OutMajorTab);
 
+	static bool GetParentDockingTabStackAsWidget(
+		const TSharedRef<SWidget> ParentWidget,
+		TWeakPtr<SWidget>&		  OutDockingTabStack);
+
 	static const TSharedPtr<FUMSlateHelpers> SlateHelpers;
 };

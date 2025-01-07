@@ -141,3 +141,21 @@ bool FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
 	}
 	return false;
 }
+
+bool FUMSlateHelpers::GetParentDockingTabStackAsWidget(
+	const TSharedRef<SWidget> ParentWidget, TWeakPtr<SWidget>& OutDockingTabStack)
+{
+	static const FString DockType = "SDockingTabStack";
+	// return TraverseWidgetTree(ParentWidget, OutDockingTabStack, DockType);
+
+	TSharedPtr<SWidget> CursorWidget = ParentWidget->GetParentWidget();
+	if (CursorWidget.IsValid())
+		while (!CursorWidget->GetTypeAsString().Equals(DockType))
+		{
+			CursorWidget = CursorWidget->GetParentWidget();
+			if (!CursorWidget.IsValid())
+				return false;
+		}
+	OutDockingTabStack = CursorWidget;
+	return true;
+}

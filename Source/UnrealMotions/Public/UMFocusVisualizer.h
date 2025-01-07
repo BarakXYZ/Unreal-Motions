@@ -6,11 +6,13 @@
 #include "UMDebugWidget.h"
 #include "SUMFocusDebugOverlay.h"
 
-class FUMGraphNavigationManager
+class FUMFocusVisualizer
 {
 public:
-	FUMGraphNavigationManager();
-	~FUMGraphNavigationManager();
+	FUMFocusVisualizer();
+	~FUMFocusVisualizer();
+
+	static const TSharedPtr<FUMFocusVisualizer> Get();
 
 	void GetLastActiveEditor();
 
@@ -53,6 +55,8 @@ public:
 	 */
 	void OnWindowClosed(const TSharedRef<SWindow>& InWindow);
 
+	static void DrawDebugOutlineOnWidget(const TSharedRef<SWidget> InWidget);
+
 private:
 	/**
 	 * Ensures there's a debug overlay in the given window. If none, create one
@@ -68,9 +72,9 @@ private:
 		const TSharedPtr<SWindow>& InWindow,
 		const TSharedPtr<SWidget>& InWidget);
 
-	void DrawDebugOutlineOnWidget(const TSharedRef<SWidget> InWidget);
-
 public:
+	static TSharedPtr<FUMFocusVisualizer> FocusVisualizer;
+
 	FSlateColor				   FocusedBorderColor = FLinearColor(10.0, 10.0, 0.0f);
 	TWeakPtr<SBorder>		   LastActiveBorder = nullptr;
 	TSharedPtr<SUMDebugWidget> DebugWidgetInstance = nullptr;
@@ -80,6 +84,7 @@ public:
 private:
 	/** A pointer to the single debug overlay widget we keep around at all times. */
 	TSharedPtr<SUMFocusDebugOverlay> DebugOverlayWidget;
+	TSharedPtr<SUMFocusDebugOverlay> ActiveDebugOverlayWidget;
 
 	/** A weak pointer to the window in which our overlay resides. */
 	TWeakPtr<SWindow>										  DebugOverlayWindow;

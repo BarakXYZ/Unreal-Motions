@@ -1,17 +1,22 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Layout/Visibility.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
+#include "UMInputPreProcessor.h"
 
-/**
- * A per-window debug overlay that can draw an outline over any widget(s)
- * in that window. SetVisibility(EVisibility::HitTestInvisible) so it
- * never intercepts clicks.
- */
-class SUMFocusDebugOverlay : public SCompoundWidget
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FUMOnOutlineOverlayVisibilityChanged, bool /* bIsVisible */)
+
+	/**
+	 * A per-window debug overlay that can draw an outline over any widget(s)
+	 * in that window. SetVisibility(EVisibility::HitTestInvisible) so it
+	 * never intercepts clicks.
+	 */
+	class SUMFocusDebugOverlay : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SUMFocusDebugOverlay) {}
@@ -22,37 +27,24 @@ public:
 	SLATE_END_ARGS()
 
 	/** Construct the overlay. */
-	void Construct(const FArguments& InArgs)
-	{
-		// If user provided an initial geometry, store it.
-		TargetGeometry = InArgs._InitialGeometry;
-
-		// If user provided a default visibility, set it, otherwise “HitTestInvisible”
-		const EVisibility DefaultVis = InArgs._InitialVisibility == EVisibility::Visible
-			? EVisibility::Visible
-			: EVisibility::HitTestInvisible;
-
-		SetVisibility(DefaultVis);
-
-		// No child content, purely a custom paint widget.
-	}
+	void Construct(const FArguments& InArgs);
 
 	/**
 	 * Sets (or updates) the geometry you want to highlight.
 	 * @param InGemoetry - The new geometry to visualize
 	 */
-	void SetTargetGeometry(const FPaintGeometry& InGeometry)
-	{
-		TargetGeometry = InGeometry;
-		Invalidate(EInvalidateWidget::LayoutAndVolatility);
-	}
+	void SetTargetGeometry(const FPaintGeometry& InGeometry);
 
 	/** Clears the geometry so we draw nothing. */
-	void ClearTargetGeometry()
-	{
-		TargetGeometry.Reset();
-		Invalidate(EInvalidateWidget::LayoutAndVolatility);
-	}
+	void ClearTargetGeometry();
+
+	void ToggleOutlineActiveColor(bool bIsActive);
+
+	static void ToggleVisibility(bool bIsVisible);
+
+	void HandleOnVisibilityChanged(bool bIsVisible);
+
+	void HandleOnVimModeChanged(EVimMode NewVimMode);
 
 	//~ Begin SWidget interface
 	virtual int32 OnPaint(
@@ -62,24 +54,15 @@ public:
 		FSlateWindowElementList& OutDrawElements,
 		int32					 LayerId,
 		const FWidgetStyle&		 InWidgetStyle,
-		bool					 bParentEnabled) const override
-	{
-		if (TargetGeometry.IsSet())
-		{
-			// We assume TargetGeometry is already in the same coordinate space as the window.
-			FSlateDrawElement::MakeBox(
-				OutDrawElements,
-				++LayerId, // increment layer
-				TargetGeometry.GetValue(),
-				FCoreStyle::Get().GetBrush(TEXT("Debug.Border")),
-				ESlateDrawEffect::None,
-				FLinearColor::Yellow);
-		}
-		return LayerId;
-	}
+		bool					 bParentEnabled) const override;
 	//~ End SWidget interface
 
 private:
 	/** The geometry we want to highlight in this window’s space. */
 	TOptional<FPaintGeometry> TargetGeometry;
+	FLinearColor			  OutlineColor = FLinearColor(1.0f, 0.0f, 1.0f, 1.0f);
+	EVisibility				  Visibility;
+
+public:
+	static FUMOnOutlineOverlayVisibilityChanged OnOutlineOverlayVisibilityChanged;
 };

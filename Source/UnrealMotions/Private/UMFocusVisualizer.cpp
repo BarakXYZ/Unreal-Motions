@@ -1,4 +1,4 @@
-#include "UMGraphNavigationManager.h"
+#include "UMFocusVisualizer.h"
 
 #include "ILevelEditor.h"
 #include "Layout/PaintGeometry.h"
@@ -15,7 +15,10 @@
 
 #include "UMTabsNavigationManager.h"
 
-FUMGraphNavigationManager::FUMGraphNavigationManager()
+TSharedPtr<FUMFocusVisualizer> FUMFocusVisualizer::FocusVisualizer =
+	MakeShared<FUMFocusVisualizer>();
+
+FUMFocusVisualizer::FUMFocusVisualizer()
 {
 	// FCoreDelegates::OnPostEngineInit.AddLambda([this]() {
 	// 	StartDebugOnFocusChanged();
@@ -32,7 +35,7 @@ FUMGraphNavigationManager::FUMGraphNavigationManager()
 		});
 }
 
-FUMGraphNavigationManager::~FUMGraphNavigationManager()
+FUMFocusVisualizer::~FUMFocusVisualizer()
 {
 	if (LastActiveBorder.IsValid())
 		LastActiveBorder.Reset();
@@ -53,7 +56,12 @@ FUMGraphNavigationManager::~FUMGraphNavigationManager()
 	OverlaysByWindow.Empty();
 }
 
-void FUMGraphNavigationManager::GetLastActiveEditor()
+const TSharedPtr<FUMFocusVisualizer> FUMFocusVisualizer::Get()
+{
+	return FocusVisualizer;
+}
+
+void FUMFocusVisualizer::GetLastActiveEditor()
 {
 	UAssetEditorSubsystem* AssetEditorSubsystem =
 		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
@@ -106,14 +114,14 @@ void FUMGraphNavigationManager::GetLastActiveEditor()
 	// 	AssetEditorToolkit->GetTabManager(); // Not helpful
 }
 
-void FUMGraphNavigationManager::StartDebugOnFocusChanged()
+void FUMFocusVisualizer::StartDebugOnFocusChanged()
 {
 	FSlateApplication& App = FSlateApplication::Get();
 	App.OnFocusChanging().AddRaw(
-		this, &FUMGraphNavigationManager::DebugOnFocusChanged);
+		this, &FUMFocusVisualizer::DebugOnFocusChanged);
 }
 
-void FUMGraphNavigationManager::DebugOnFocusChanged(
+void FUMFocusVisualizer::DebugOnFocusChanged(
 	const FFocusEvent&		   FocusEvent,
 	const FWeakWidgetPath&	   WeakWidgetPath,
 	const TSharedPtr<SWidget>& OldWidget,
@@ -144,14 +152,14 @@ void FUMGraphNavigationManager::DebugOnFocusChanged(
 	DrawDebugOutlineOnWidget(NewWidget.ToSharedRef());
 }
 
-void FUMGraphNavigationManager::DrawDebugOutlineOnWidget(
+void FUMFocusVisualizer::DrawDebugOutlineOnWidget(
 	const TSharedRef<SWidget> InWidget)
 {
 	// Find the window in which this newly focused widget resides
 	// TSharedPtr<SWindow> FoundWindow =
 	// 	FSlateApplication::Get().FindWidgetWindow(InWidget);
 	TSharedPtr<SWindow> FoundWindow =
-		FSlateApplication::Get().GetActiveTopLevelWindow();
+		FSlateApplication::Get().GetActiveTopLevelRegularWindow();
 	if (!FoundWindow.IsValid())
 		return; // Possibly a pop-up or something with no real window
 
@@ -159,20 +167,20 @@ void FUMGraphNavigationManager::DrawDebugOutlineOnWidget(
 	// 	FText::FromString("Draw Debug Outline On Widget"));
 
 	// Ensure that window has an overlay
-	CreateOverlayIfNeeded(FoundWindow);
+	FocusVisualizer->CreateOverlayIfNeeded(FoundWindow);
 
 	// Now highlight the new widget in that window
-	UpdateOverlayInWindow(FoundWindow, InWidget);
+	FocusVisualizer->UpdateOverlayInWindow(FoundWindow, InWidget);
 	return;
 }
 
-void FUMGraphNavigationManager::OnWindowCreated(const TSharedRef<SWindow>& InNewWindow)
+void FUMFocusVisualizer::OnWindowCreated(const TSharedRef<SWindow>& InNewWindow)
 {
 	// The moment we learn about a brand new window, we can create an overlay right away
 	CreateOverlayIfNeeded(InNewWindow);
 }
 
-void FUMGraphNavigationManager::OnWindowClosed(const TSharedRef<SWindow>& InWindow)
+void FUMFocusVisualizer::OnWindowClosed(const TSharedRef<SWindow>& InWindow)
 {
 	// Remove from our map and remove the overlay from the window
 	TSharedPtr<SUMFocusDebugOverlay> OverlayPtr = OverlaysByWindow.FindRef(InWindow);
@@ -183,7 +191,7 @@ void FUMGraphNavigationManager::OnWindowClosed(const TSharedRef<SWindow>& InWind
 	OverlaysByWindow.Remove(InWindow);
 }
 
-void FUMGraphNavigationManager::CreateOverlayIfNeeded(const TSharedPtr<SWindow>& InWindow)
+void FUMFocusVisualizer::CreateOverlayIfNeeded(const TSharedPtr<SWindow>& InWindow)
 {
 	if (!InWindow.IsValid())
 	{
@@ -196,6 +204,7 @@ void FUMGraphNavigationManager::CreateOverlayIfNeeded(const TSharedPtr<SWindow>&
 		// FUMHelpers::NotifySuccess(FText::FromString("Window already exists: " + InWindow->GetTitle().ToString()));
 		return;
 	}
+
 	// FUMHelpers::NotifySuccess(FText::FromString("New Window Found: " + InWindow->GetTitle().ToString()));
 
 	// Create a new overlay
@@ -213,7 +222,7 @@ void FUMGraphNavigationManager::CreateOverlayIfNeeded(const TSharedPtr<SWindow>&
 	OverlaysByWindow.Add(InWindow, NewOverlay);
 }
 
-void FUMGraphNavigationManager::UpdateOverlayInWindow(
+void FUMFocusVisualizer::UpdateOverlayInWindow(
 	const TSharedPtr<SWindow>& InWindow,
 	const TSharedPtr<SWidget>& InWidget)
 {
@@ -235,15 +244,19 @@ void FUMGraphNavigationManager::UpdateOverlayInWindow(
 
 	FPaintGeometry WindowSpaceGeometry = WidgetGeometry.ToPaintGeometry();
 	WindowSpaceGeometry.AppendTransform(
-		TransformCast<FSlateLayoutTransform>(
-			Inverse(WindowScreenPos)));
+		TransformCast<FSlateLayoutTransform>(Inverse(WindowScreenPos)));
 
 	// Update the overlay
 	OverlayPtr->SetTargetGeometry(WindowSpaceGeometry);
+
+	if (ActiveDebugOverlayWidget.IsValid())
+		ActiveDebugOverlayWidget->ToggleOutlineActiveColor(false); // Deactivate
+	ActiveDebugOverlayWidget = OverlayPtr;						   // Track
+	ActiveDebugOverlayWidget->ToggleOutlineActiveColor(true);	   // Activate
 }
 
 // OLD
-void FUMGraphNavigationManager::EnsureDebugOverlayExists()
+void FUMFocusVisualizer::EnsureDebugOverlayExists()
 {
 	if (DebugOverlayWidget.IsValid())
 	{
@@ -279,7 +292,7 @@ void FUMGraphNavigationManager::EnsureDebugOverlayExists()
 	DebugOverlayWindow = ActiveWindow; // store TWeakPtr
 }
 
-void FUMGraphNavigationManager::UpdateDebugOverlay(const TSharedPtr<SWidget>& InWidget)
+void FUMFocusVisualizer::UpdateDebugOverlay(const TSharedPtr<SWidget>& InWidget)
 {
 	if (!InWidget.IsValid() || !DebugOverlayWidget.IsValid())
 	{
@@ -309,7 +322,7 @@ void FUMGraphNavigationManager::UpdateDebugOverlay(const TSharedPtr<SWidget>& In
 	DebugOverlayWidget->SetTargetGeometry(WindowSpaceGeometry);
 }
 
-void FUMGraphNavigationManager::DrawWidgetDebugOutline(const TSharedPtr<SWidget>& InWidget)
+void FUMFocusVisualizer::DrawWidgetDebugOutline(const TSharedPtr<SWidget>& InWidget)
 {
 	if (!InWidget.IsValid())
 	{
@@ -365,7 +378,7 @@ void FUMGraphNavigationManager::DrawWidgetDebugOutline(const TSharedPtr<SWidget>
 // This is nonstandard so we have to go through some hoops and a specially exposed method
 // in FPaintGeometry to allow appending layout transforms.
 // */
-void FUMGraphNavigationManager::GetWidgetWindowSpaceGeometry(const TSharedPtr<SWidget>& InWidget, const TSharedPtr<SWindow>& WidgetWindow, FPaintGeometry& WindowSpaceGeometry)
+void FUMFocusVisualizer::GetWidgetWindowSpaceGeometry(const TSharedPtr<SWidget>& InWidget, const TSharedPtr<SWindow>& WidgetWindow, FPaintGeometry& WindowSpaceGeometry)
 {
 	if (!InWidget.IsValid())
 		return;

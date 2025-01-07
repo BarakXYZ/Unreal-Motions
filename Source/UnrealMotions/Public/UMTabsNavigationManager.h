@@ -198,7 +198,6 @@ public:
 	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
 
 	static TWeakPtr<SDockTab> GetCurrentlySetMajorTab();
-	static bool				  RemoveActiveMajorTab();
 
 	/** DEPRECATED
 	 * Gets the type of tab for navigation-specific purposes.

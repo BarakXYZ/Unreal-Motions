@@ -327,19 +327,6 @@ TWeakPtr<SDockTab> FUMTabsNavigationManager::GetCurrentlySetMajorTab()
 	return CurrMajorTab.IsValid() ? CurrMajorTab : nullptr;
 }
 
-bool FUMTabsNavigationManager::RemoveActiveMajorTab()
-{
-	static const FString LevelEditorType{ "LevelEditor" };
-
-	if (CurrMajorTab.IsValid() && !CurrMajorTab.Pin()->GetLayoutIdentifier().ToString().Equals(LevelEditorType))
-	{
-		// FUMHelpers::NotifySuccess(FText::FromString(CurrMajorTab.Pin()->GetLayoutIdentifier().ToString()));
-		CurrMajorTab.Pin()->RemoveTabFromParent();
-		return true;
-	}
-	return false;
-}
-
 void FUMTabsNavigationManager::DebugTab(const TSharedPtr<SDockTab>& Tab,
 	bool bDebugVisualTabRole, FString DelegateType)
 {

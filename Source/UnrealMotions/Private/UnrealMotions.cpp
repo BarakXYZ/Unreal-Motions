@@ -3,7 +3,6 @@
 
 #include "UMHelpers.h"
 #include "UMNavigationConfig.h"
-#include "UMGraphNavigationManager.h"
 
 #include "UMStatusBarManager.h"
 
@@ -44,7 +43,6 @@ void FUnrealMotionsModule::BindPostEngineInitDelegates()
 	// Register our custom InputPreProcessor to intercept user input.
 	FSlateApplication& App = FSlateApplication::Get();
 	App.RegisterInputPreProcessor(FUMInputPreProcessor::Get());
-	GraphNavigationManager = MakeShared<FUMGraphNavigationManager>();
 }
 
 #undef LOCTEXT_NAMESPACE

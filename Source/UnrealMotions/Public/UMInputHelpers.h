@@ -8,7 +8,7 @@
 class FUMInputHelpers
 {
 public:
-	FUMInputHelpers();
+	FToggleVisibilityUMInputHelpers();
 	~FUMInputHelpers();
 
 	static const TSharedPtr<FUMInputHelpers> Get();

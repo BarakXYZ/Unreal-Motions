@@ -9,6 +9,7 @@
 #include "UMSlateHelpers.h"
 #include "UMWindowsNavigationManager.h"
 #include "UMInputHelpers.h"
+#include "UMFocusVisualizer.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMFocusManager, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMFocusManager, Log, All); // Dev
@@ -293,25 +294,6 @@ void FUMFocusManager::OnTabForegrounded(
 	bIsDummyForegroundingCallbackCheck = false;
 }
 
-bool FUMFocusManager::HasWindowChanged()
-{
-	const auto& SlateApp = FSlateApplication::Get();
-
-	TSharedPtr<SWindow> SysActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
-	if (!SysActiveWin.IsValid())
-		return false;
-
-	const auto& PinnedActiveWindow = ActiveWindow.Pin();
-	if (!PinnedActiveWindow.IsValid()
-		|| !SysActiveWin->GetTitle().EqualTo(PinnedActiveWindow->GetTitle()))
-	{
-		ActiveWindow = SysActiveWin;
-		return true;
-	}
-
-	return false;
-}
-
 void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 {
 	auto& SlateApp = FSlateApplication::Get();
@@ -319,11 +301,11 @@ void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 
 	// Something unuseful stole our focus, we want to bring focus to our last
 	// tracked meaningful widget.
-	// if (bHasFilteredAnIncomingNewWidget) // Not sure about the position of this
-	// {
-	// 	bHasFilteredAnIncomingNewWidget = false;
-	// 	TryFocusLastActiveWidget();
-	// }
+	if (bHasFilteredAnIncomingNewWidget) // Not sure about the position of this
+	{
+		bHasFilteredAnIncomingNewWidget = false;
+		TryFocusLastActiveWidget();
+	}
 
 	if (NewTab->GetVisualTabRole() == ETabRole::MajorTab)
 	{
@@ -363,6 +345,13 @@ void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 		LogTabChange(TEXT("Minor"), ActiveMinorTab, NewTab);
 		ActiveMinorTab = NewTab;
 		NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
+		// FUMFocusVisualizer::DrawDebugOutlineOnWidget(NewTab->GetContent());
+		TWeakPtr<SWidget> DockingTabStack;
+		if (FUMSlateHelpers::GetParentDockingTabStackAsWidget(NewTab->GetContent(), DockingTabStack))
+			FUMFocusVisualizer::DrawDebugOutlineOnWidget(
+				DockingTabStack.Pin().ToSharedRef());
+
+		// Pass a delegate to FUMGraphNavigation for visualization
 
 		// Register this tab's TabWell with the current Active Major Tab parent.
 		if (const TSharedPtr<SDockTab> PinnedLastMajorTab = ActiveMajorTab.Pin())
@@ -413,6 +402,25 @@ void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 				NewTab, EFocusCause::Navigation);
 		}
 	}
+}
+
+bool FUMFocusManager::HasWindowChanged()
+{
+	const auto& SlateApp = FSlateApplication::Get();
+
+	TSharedPtr<SWindow> SysActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!SysActiveWin.IsValid())
+		return false;
+
+	const auto& PinnedActiveWindow = ActiveWindow.Pin();
+	if (!PinnedActiveWindow.IsValid()
+		|| !SysActiveWin->GetTitle().EqualTo(PinnedActiveWindow->GetTitle()))
+	{
+		ActiveWindow = SysActiveWin;
+		return true;
+	}
+
+	return false;
 }
 
 bool FUMFocusManager::TryFindTabWellAndActivateForegroundedTab(
@@ -589,6 +597,72 @@ bool FUMFocusManager::DoesMinorTabResidesInMajorTab(
 		bVisualLog);
 
 	return false;
+}
+
+bool FUMFocusManager::RemoveActiveMajorTab()
+{
+	static const FString LevelEditorType{ "LevelEditor" };
+
+	if (const TSharedPtr<SDockTab>& MajorTab = FocusManager->ActiveMajorTab.Pin())
+		// Removing the LevelEditor will cause closing the entire editor which is
+		// a bit too much.
+		if (!MajorTab->GetLayoutIdentifier().ToString().Equals(LevelEditorType))
+		{
+			MajorTab->RemoveTabFromParent();
+			return true;
+		}
+	return false;
+}
+
+bool FUMFocusManager::FocusNextFrontmostWindow()
+{
+	FSlateApplication&			SlateApp = FSlateApplication::Get();
+	TArray<TSharedRef<SWindow>> Wins;
+
+	SlateApp.GetAllVisibleWindowsOrdered(Wins);
+	for (int32 i{ Wins.Num() - 1 }; i > 0; --i)
+	{
+		if (!Wins[i]->GetTitle().IsEmpty())
+		{
+			ActivateWindow(Wins[i]);
+			return true; // Found the next window
+		}
+	}
+
+	// If no windows were found; try to bring focus to the root window
+	if (TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow())
+	{
+		ActivateWindow(RootWin.ToSharedRef());
+		return true;
+	}
+	return false;
+}
+
+// NOTE: Kept here some commented methods for future reference.
+void FUMFocusManager::ActivateWindow(const TSharedRef<SWindow> Window)
+{
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+	Window->BringToFront(true);
+	TSharedRef<SWidget> WinContent = Window->GetContent();
+	// FWindowDrawAttentionParameters DrawParams(
+	// 	EWindowDrawAttentionRequestType::UntilActivated);
+	// Window->DrawAttention(DrawParams);
+	// Window->ShowWindow();
+	// Window->FlashWindow(); // Amazing way to visually indicate activated wins!
+
+	SlateApp.ClearAllUserFocus(); // This is important to actually draw focus
+	SlateApp.SetAllUserFocus(
+		WinContent, EFocusCause::Navigation);
+
+	// SlateApp.SetKeyboardFocus(WinContent);
+	// FWidgetPath WidgetPath;
+	// SlateApp.FindPathToWidget(WinContent, WidgetPath);
+	// SlateApp.SetAllUserFocusAllowingDescendantFocus(
+	// 	WidgetPath, EFocusCause::Navigation);
+
+	FUMHelpers::AddDebugMessage(FString::Printf(
+		TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
+	FocusManager->HandleOnWindowChanged(Window);
 }
 
 void FUMFocusManager::LogTabChange(const FString& TabType, const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab)

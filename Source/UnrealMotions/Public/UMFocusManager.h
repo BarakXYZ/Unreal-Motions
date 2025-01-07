@@ -87,6 +87,21 @@ public:
 
 	bool TryGetFrontmostMajorTab();
 
+	/**
+	 * Used in the Vim Subsystem. When we remove the current Major Tab, this helps
+	 * to focus and activate the next frontmost window.
+	 */
+
+	static bool FocusNextFrontmostWindow();
+
+	/**
+	 * Activates the specified window, bringing it to the front and setting proper focus.
+	 * Handles focus management, window ordering, and ensuring proper activation state.
+	 * @param Window The window to activate
+	 */
+
+	static void ActivateWindow(const TSharedRef<SWindow> Window);
+
 	void TrackActiveWindow();
 
 	void LogTabParentWindow(const TSharedRef<SDockTab> InTab);
@@ -94,6 +109,8 @@ public:
 	bool HasWindowChanged();
 
 	bool TryFindTabWellAndActivateForegroundedTab(const TSharedRef<SDockTab> InMajorTab);
+
+	static bool RemoveActiveMajorTab();
 
 	// ~ Last active Major Tab by Window ID ~
 	// You enter the ID of the Window:
@@ -132,6 +149,7 @@ public:
 	// or focus Tab Content?
 	TMap<uint64, TWeakPtr<SWidget>> LastActiveWidgetByMinorTabId;
 
+	// TODO: protected + friend classes?
 	TWeakPtr<SWindow>  ActiveWindow;
 	TWeakPtr<SDockTab> ActiveMajorTab;
 	TWeakPtr<SWidget>  ActiveTabWell;
@@ -140,6 +158,7 @@ public:
 
 	static const TSharedPtr<FUMFocusManager> FocusManager;
 
+public:
 	FTimerHandle TimerHandleNewWidgetTracker;
 	FTimerHandle TimerHandleNewMinorTabTracker;
 	FTimerHandle TimerHandleTabForegrounding;

@@ -2,6 +2,7 @@
 #include "Framework/Docking/TabManager.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
+#include "UMFocusManager.h"
 #include "UMHelpers.h"
 #include "UMInputPreProcessor.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -875,15 +876,15 @@ void UVimEditorSubsystem::ActivateNewInvokedTab(
 	SlateApp.ClearAllUserFocus(); // NOTE: In order to actually draw focus
 
 	if (TSharedPtr<SWindow> Win = NewTab->GetParentWindow())
-		FUMWindowsNavigationManager::ActivateWindow(Win.ToSharedRef());
+		FUMFocusManager::ActivateWindow(Win.ToSharedRef());
 	NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
 }
 
 void UVimEditorSubsystem::RemoveActiveMajorTab()
 {
-	if (!FUMTabsNavigationManager::RemoveActiveMajorTab())
+	if (!FUMFocusManager::RemoveActiveMajorTab())
 		return;
-	FUMWindowsNavigationManager::FocusNextFrontmostWindow();
+	FUMFocusManager::FocusNextFrontmostWindow();
 }
 
 void UVimEditorSubsystem::TryFocusSearchBox(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)

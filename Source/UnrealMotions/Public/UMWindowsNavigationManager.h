@@ -57,13 +57,6 @@ public:
 	bool HasUserMovedToNewWindow(bool bSetNewWindow = true);
 
 	/**
-	 * Activates the specified window, bringing it to the front and setting proper focus.
-	 * Handles focus management, window ordering, and ensuring proper activation state.
-	 * @param Window The window to activate
-	 */
-	static void ActivateWindow(const TSharedRef<SWindow> Window);
-
-	/**
 	 * Cycles through non-root windows in the specified direction.
 	 * Will activate the next/previous visible regular window in the sequence.
 	 * @param bIsNextWindow If true, cycles to the next window; if false, cycles to the previous window
@@ -83,12 +76,6 @@ public:
 	 * @param CleanupWindowsIds Array of window IDs to remove from tracking
 	 */
 	void CleanupInvalidWindows(TArray<uint64> CleanupWindowsIds);
-
-	/**
-	 * Used in the Vim Subsystem. When we remove the current Major Tab, this helps
-	 * to focus and activate the next frontmost window.
-	 */
-	static bool FocusNextFrontmostWindow();
 
 	/**
 	 * Retrieves the map of currently tracked windows.
