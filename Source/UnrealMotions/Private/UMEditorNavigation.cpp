@@ -35,9 +35,15 @@ void FUMEditorNavigation::NavigatePanelTabs(
 		return;
 
 	// Window to operate on -> need to test this
-	const TSharedPtr<SWindow> Win = SlateApp.GetActiveTopLevelRegularWindow();
+	TSharedPtr<SWindow> Win = SlateApp.GetActiveTopLevelRegularWindow();
 	if (!Win.IsValid())
 		return;
+
+	// TArray<TSharedRef<SWindow>> VisWins;
+	// SlateApp.GetAllVisibleWindowsOrdered(VisWins);
+	// if (VisWins.IsEmpty())
+	// 	return;
+	// Win = VisWins.Last(); // test
 
 	const auto& FocusManager = FUMFocusManager::Get();
 	if (const auto& CurrMinorTab = FocusManager->ActiveMinorTab.Pin())
@@ -54,7 +60,7 @@ void FUMEditorNavigation::NavigatePanelTabs(
 
 			// Bring focus to the Docking Tab Stack to achieve the built-in
 			// panel navigation when it is focused.
-			SlateApp.ClearAllUserFocus();
+			// SlateApp.ClearAllUserFocus(); // TODO: Check if this is really needed!
 			SlateApp.SetAllUserFocus(
 				DockingTabStack.Pin(), EFocusCause::Navigation);
 

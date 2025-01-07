@@ -2,6 +2,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
 // #include "GenericPlatform/GenericWindow.h"
+#include "GenericPlatform/GenericWindow.h"
 #include "Input/Events.h"
 #include "UMHelpers.h"
 #include "Editor.h"
@@ -649,24 +650,37 @@ void FUMFocusManager::ActivateWindow(const TSharedRef<SWindow> Window)
 {
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 	Window->BringToFront(true);
-	TSharedRef<SWidget> WinContent = Window->GetContent();
-	// FWindowDrawAttentionParameters DrawParams(
-	// 	EWindowDrawAttentionRequestType::UntilActivated);
+	TSharedRef<SWidget>			   WinContent = Window->GetContent();
+	FWindowDrawAttentionParameters DrawParams(
+		EWindowDrawAttentionRequestType::UntilActivated);
 	// Window->DrawAttention(DrawParams);
 	// Window->ShowWindow();
-	// Window->FlashWindow(); // Amazing way to visually indicate activated wins!
+	// Window->FlashWindow(); // Cool way to visually indicate activated wins!
 
-	// TODO need to understand how to make this works, because it seems to make
-	// problems
-	SlateApp.ClearAllUserFocus(); // This is important to actually draw focus
-	SlateApp.SetAllUserFocus(
-		WinContent, EFocusCause::Navigation);
+	// I was a bit worried about this, but actually it seems that without this
+	// we will have a weird focusing bug. So this actually seems to work pretty
+	// well.
+	SlateApp.ClearAllUserFocus();
 
-	// SlateApp.SetKeyboardFocus(WinContent);
-	// FWidgetPath WidgetPath;
-	// SlateApp.FindPathToWidget(WinContent, WidgetPath);
-	// SlateApp.SetAllUserFocusAllowingDescendantFocus(
-	// 	WidgetPath, EFocusCause::Navigation);
+	// TODO:
+	// NOTE:
+	// This is really interesting. It may help to soildfy focus and what we
+	// actually want! Like pass in the MajorTab->MinorTab->*Widget*
+	// I'm thinking maybe something like find major tab in window function ->
+	// Then we have the major, we can do the check, get the minor, get the widget
+	// and pass it in **before drawing attention**!
+	// Window->SetWidgetToFocusOnActivate();
+
+	// TODO: For some reason it looks like there's still a bug where we allow
+	// association of widgets with panel tabs that aren't their actual panel!
+	// So we need to have greater safeguards on this.
+
+	// This will focus the window content, which isn't really useful. And it
+	// looks like ->DrawAttention() Seems to do a better job!
+	// SlateApp.SetAllUserFocus(
+	// 	WinContent, EFocusCause::Navigation);
+
+	Window->DrawAttention(DrawParams); // Seems to work well!
 
 	FUMHelpers::AddDebugMessage(FString::Printf(
 		TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
