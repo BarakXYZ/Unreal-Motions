@@ -159,3 +159,15 @@ bool FUMSlateHelpers::GetParentDockingTabStackAsWidget(
 	OutDockingTabStack = CursorWidget;
 	return true;
 }
+
+bool FUMSlateHelpers::IsValidTreeViewType(const FName& InWidgetType)
+{
+	static const TSet<FName> ValidWidgetNavigationTypes{
+		"SAssetTileView",
+		"SSceneOutlinerTreeView",
+		"STreeView",
+		"SSubobjectEditorDragDropTree"
+	};
+
+	return ValidWidgetNavigationTypes.Contains(InWidgetType);
+}

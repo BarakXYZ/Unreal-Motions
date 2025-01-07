@@ -45,5 +45,7 @@ public:
 		const TSharedRef<SWidget> ParentWidget,
 		TWeakPtr<SWidget>&		  OutDockingTabStack);
 
+	static bool IsValidTreeViewType(const FName& InWidgetType);
+
 	static const TSharedPtr<FUMSlateHelpers> SlateHelpers;
 };

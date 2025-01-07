@@ -275,22 +275,6 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 		bool													   bIsShiftDown);
 
 	/**
-	 * @brief Maps Vim navigation keys (HJKL) to corresponding UI nav events.
-	 *
-	 * @details Creates a navigation event that:
-	 * - Translates H,J,K,L to Left,Down,Up,Right
-	 * - Handles shift modifier for selection
-	 * - Sets appropriate navigation genesis
-	 *
-	 * @param InKeyEvent The original key event to map
-	 * @param OutNavigationEvent The resulting navigation event
-	 * @param bIsShiftDown Whether shift is being held
-	 * @return true if mapping was successful, false otherwise
-	 */
-	static bool MapVimToNavigationEvent(const FKeyEvent& InKeyEvent,
-		FNavigationEvent& OutNavigationEvent, bool bIsShiftDown);
-
-	/**
 	 * SEMI-DEPRECATED
 	 * @brief Maps Vim movement keys to corresponding arrow key events.
 	 *

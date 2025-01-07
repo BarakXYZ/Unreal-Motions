@@ -1,7 +1,7 @@
 #include "UMFocusManager.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
-#include "GenericPlatform/GenericWindow.h"
+// #include "GenericPlatform/GenericWindow.h"
 #include "Input/Events.h"
 #include "UMHelpers.h"
 #include "Editor.h"
@@ -301,7 +301,12 @@ void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 
 	// Something unuseful stole our focus, we want to bring focus to our last
 	// tracked meaningful widget.
-	if (bHasFilteredAnIncomingNewWidget) // Not sure about the position of this
+	if (bBypassAutoFocusLastActiveWidget) // When navigation between panel tabs
+	{
+		bHasFilteredAnIncomingNewWidget = false;
+		bBypassAutoFocusLastActiveWidget = false;
+	}
+	else if (bHasFilteredAnIncomingNewWidget)
 	{
 		bHasFilteredAnIncomingNewWidget = false;
 		TryFocusLastActiveWidget();
@@ -493,6 +498,7 @@ void FUMFocusManager::HandleOnWindowChanged(const TSharedPtr<SWindow> NewWindow)
 		FUMHelpers::NotifySuccess(FText::FromString("New Window"), bVisualLog);
 		// TryFocusLastActiveWidget();
 		TSharedPtr<SDockTab> FrontmostMajorTab;
+		// TODO: Debug what this spits when not drawing focus actively to the win
 		if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(FrontmostMajorTab))
 		{
 			// FSlateApplication::Get().ClearAllUserFocus();
@@ -650,6 +656,8 @@ void FUMFocusManager::ActivateWindow(const TSharedRef<SWindow> Window)
 	// Window->ShowWindow();
 	// Window->FlashWindow(); // Amazing way to visually indicate activated wins!
 
+	// TODO need to understand how to make this works, because it seems to make
+	// problems
 	SlateApp.ClearAllUserFocus(); // This is important to actually draw focus
 	SlateApp.SetAllUserFocus(
 		WinContent, EFocusCause::Navigation);

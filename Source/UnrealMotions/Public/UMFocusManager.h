@@ -169,6 +169,7 @@ public:
 	FUMOnMouseButtonUp OnMouseButtonUp;
 
 	bool			  bHasFilteredAnIncomingNewWidget{ false };
+	bool			  bBypassAutoFocusLastActiveWidget{ false };
 	FUMOnWindowAction OnWindowAction;
 
 	bool bVisualLog{ false };

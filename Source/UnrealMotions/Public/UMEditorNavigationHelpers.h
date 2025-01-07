@@ -1,3 +1,5 @@
+#pragma once
+
 #include "CoreMinimal.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Templates/SharedPointer.h"

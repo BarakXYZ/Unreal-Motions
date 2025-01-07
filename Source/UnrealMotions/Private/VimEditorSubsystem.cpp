@@ -17,29 +17,13 @@
 #include "Input/Events.h"
 #include "UMSlateHelpers.h"
 #include "UMInputHelpers.h"
+#include "UMEditorNavigation.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All); // Development
 
 static constexpr int32 MIN_REPEAT_COUNT = 1;
 static constexpr int32 MAX_REPEAT_COUNT = 999;
-
-static const TMap<FKey, FKey> VimToArrowKeys = {
-	{ EKeys::H, FKey(EKeys::Left) }, { EKeys::J, FKey(EKeys::Down) },
-	{ EKeys::K, FKey(EKeys::Up) }, { EKeys::L, FKey(EKeys::Right) }
-};
-
-static const TMap<FKey, EUINavigation> VimToUINavigation = {
-	{ EKeys::H, EUINavigation::Left }, { EKeys::J, EUINavigation::Down },
-	{ EKeys::K, EUINavigation::Up }, { EKeys::L, EUINavigation::Right }
-};
-
-static const TSet<FName> ValidWidgetNavigationTypes{
-	"SAssetTileView",
-	"SSceneOutlinerTreeView",
-	"STreeView",
-	"SSubobjectEditorDragDropTree"
-};
 
 void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -245,36 +229,20 @@ bool UVimEditorSubsystem::MapVimToArrowNavigation(
 		bIsShiftDown, bIsShiftDown,
 		false, false, false, false, false, false, false);
 
-	const FKey* MappedKey = VimToArrowKeys.Find(InKeyEvent.GetKey());
-	if (!MappedKey)
-		return false;
-	OutKeyEvent = FKeyEvent(
-		*MappedKey,
-		ModKeysState,
-		0,	   // User index
-		false, // Is repeat
-		0,	   // Character code
-		0	   // Key code
-	);
-	return true;
-}
-
-bool UVimEditorSubsystem::MapVimToNavigationEvent(const FKeyEvent& InKeyEvent,
-	FNavigationEvent& OutNavigationEvent, bool bIsShiftDown)
-{
-	const FModifierKeysState ModKeysShift(bIsShiftDown, bIsShiftDown,
-		false, false, false, false, false, false, false);
-
-	const EUINavigation* NavigationType =
-		VimToUINavigation.Find(InKeyEvent.GetKey());
-
-	if (!NavigationType)
-		return false;
-
-	FNavigationEvent NavEvent(ModKeysShift, 0, *NavigationType,
-		ENavigationGenesis::Keyboard);
-	OutNavigationEvent = NavEvent;
-	return true;
+	FKey MappedKey;
+	if (FUMInputHelpers::GetArrowKeyFromVimKey(InKeyEvent.GetKey(), MappedKey))
+	{
+		OutKeyEvent = FKeyEvent(
+			MappedKey,
+			ModKeysState,
+			0,	   // User index
+			false, // Is repeat
+			0,	   // Character code
+			0	   // Key code
+		);
+		return true;
+	}
+	return false;
 }
 
 int32 UVimEditorSubsystem::FindWidgetIndexInParent(
@@ -318,8 +286,8 @@ bool UVimEditorSubsystem::GetListView(FSlateApplication& SlateApp, TSharedPtr<SL
 		return false;
 	}
 
-	if (!ValidWidgetNavigationTypes.Find(FocusedWidget->GetType())
-		&& !ValidWidgetNavigationTypes.Find(
+	if (!FUMSlateHelpers::IsValidTreeViewType(FocusedWidget->GetType())
+		&& !FUMSlateHelpers::IsValidTreeViewType(
 			FName(FocusedWidget->GetTypeAsString().Left(9))))
 	{
 		// FUMHelpers::NotifySuccess(
@@ -520,7 +488,8 @@ bool UVimEditorSubsystem::HandleListViewNavigation(
 	const bool bShouldSimulateShiftDown{ CurrentVimMode == EVimMode::Visual };
 
 	FNavigationEvent NavEvent;
-	MapVimToNavigationEvent(InKeyEvent, NavEvent, bShouldSimulateShiftDown);
+	FUMInputHelpers::GetNavigationEventFromVimKey(
+		InKeyEvent, NavEvent, bShouldSimulateShiftDown);
 
 	const int32 Count{ GetPracticalCountBuffer() };
 
@@ -1074,4 +1043,26 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::R },
 		VimSubWeak, &VimSub::SimulateRightClick);
+
+	/////////////////////////////////////////////////////////////////////////
+	//						~ Panel Navigation ~
+	//
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::H) },
+		&FUMEditorNavigation::NavigatePanelTabs);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::J) },
+		&FUMEditorNavigation::NavigatePanelTabs);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::K) },
+		&FUMEditorNavigation::NavigatePanelTabs);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Control, EKeys::L) },
+		&FUMEditorNavigation::NavigatePanelTabs);
+
+	//
+	/////////////////////////////////////////////////////////////////////////
 }

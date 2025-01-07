@@ -238,10 +238,35 @@ public:
 		TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback);
 
 	/**
-	 * Adds a key binding that receives the Slate application and key event using a weak pointer
-	 * @param Sequence - Array of input chords that trigger the callback
-	 * @param WeakObj - Weak pointer to the object containing the member function
-	 * @param MemberFunc - Member function to call when the sequence is matched
+	 * Adds a key binding for a static function that receives the Slate application and key event.
+	 * This overload is designed for static member functions or free functions.
+	 *
+	 * @tparam ObjectType - Ignored in this static overload but kept for symmetry with the weak pointer version.
+	 * @param Sequence - Array of input chords that trigger the callback.
+	 * @param MemberFunc - Static function to call when the sequence is matched.
+	 */
+	template <typename ObjectType>
+	void AddKeyBinding_KeyEvent(
+		const TArray<FInputChord>& Sequence,
+		void (*MemberFunc)(FSlateApplication&, const FKeyEvent&))
+	{
+		AddKeyBinding_KeyEvent(
+			Sequence,
+			[MemberFunc](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+				MemberFunc(SlateApp, InKeyEvent);
+			});
+	}
+
+	/**
+	 * Adds a key binding for a member function that receives the Slate
+	 * application and key event.
+	 * This overload supports weak pointers, allowing for safe binding to member
+	 * functions of objects that may be destroyed.
+	 *
+	 * @tparam ObjectType - The type of the object containing the member function.
+	 * @param Sequence - Array of input chords that trigger the callback.
+	 * @param WeakObj - Weak pointer to the object containing the member function.
+	 * @param MemberFunc - Member function to call when the sequence is matched.
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
