@@ -4,6 +4,8 @@
 #include "Framework/Application/SlateApplication.h"
 #include "UMFocusManager.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogUMEditorNavigation, Log, All);
+
 class FUMEditorNavigation
 {
 public:

@@ -3,7 +3,6 @@
 #include "Engine/GameInstance.h"
 #include "Framework/Application/SlateApplication.h"
 #include "StatusBarSubsystem.h"
-#include "UMHelpers.h"
 
 // #include "WidgetDrawerConfig.h"
 
@@ -56,8 +55,8 @@ TSharedPtr<FUMInputPreProcessor> FUMInputPreProcessor::Get()
 void FUMInputPreProcessor::Tick(
 	const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor)
 {
-	if (TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0))
-		FUMHelpers::AddDebugMessage(FocusedWidget->GetTypeAsString());
+	// if (TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0))
+	// 	FUMLogger::AddDebugMessage(FocusedWidget->GetTypeAsString());
 }
 
 // Process the current key sequence
@@ -119,7 +118,7 @@ void FUMInputPreProcessor::ResetSequence(FSlateApplication& SlateApp)
 	CurrentBuffer.Empty();
 	bIsCounting = false;
 	ResetBufferVisualizer(SlateApp);
-	// FUMHelpers::NotifySuccess(FText::FromString("Reset Sequence"));
+	// FUMLogger::NotifySuccess(FText::FromString("Reset Sequence"));
 }
 
 void FUMInputPreProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
@@ -217,14 +216,14 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 	// Otherwise, the simulated key press won't be handled by the engine.
 	if (bNativeInputHandling)
 	{
-		// FUMHelpers::NotifySuccess(FText::FromString(
+		// FUMLogger::NotifySuccess(FText::FromString(
 		// 	"HandleKeyDownEvent Dummy"));
 
 		bNativeInputHandling = false; // Resume manual handling from next event
 		return false;
 	}
 
-	// FUMHelpers::NotifySuccess(FText::FromString("HandleKeyDownEvent Prod"));
+	// FUMLogger::NotifySuccess(FText::FromString("HandleKeyDownEvent Prod"));
 	if (IsSimulateEscapeKey(SlateApp, InKeyEvent))
 		return true;
 
@@ -293,7 +292,7 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	OnMouseButtonUpAlertTabForeground.Broadcast();
-	// FUMHelpers::NotifySuccess(FText::FromString("Key up!"));
+	// FUMLogger::NotifySuccess(FText::FromString("Key up!"));
 	// return true;
 
 	// if (VimMode == EVimMode::Normal)
@@ -327,7 +326,7 @@ bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateAp
 		// AttDesc.DefaultSortOrder();
 		FString WidgetName = FocusedWidget->ToString();
 		FString DebugStr = FString::Printf(TEXT("Widget Type: %s, Widget Name: %s"), *WidgetType.ToString(), *WidgetName);
-		// FUMHelpers::NotifySuccess(FText::FromString(DebugStr));
+		// FUMLogger::NotifySuccess(FText::FromString(DebugStr));
 
 		return false;
 	}
@@ -393,7 +392,7 @@ bool FUMInputPreProcessor::IsSimulateEscapeKey(
 {
 	if (InKeyEvent.IsShiftDown() && InKeyEvent.GetKey() == EKeys::Escape)
 	{
-		FUMHelpers::NotifySuccess(FText::FromString("Simulate Escape"));
+		FUMLogger::NotifySuccess(FText::FromString("Simulate Escape"));
 		static const FKeyEvent EscapeEvent(
 			FKey(EKeys::Escape),
 			FModifierKeysState(),
@@ -411,7 +410,7 @@ void FUMInputPreProcessor::SetMode(FSlateApplication& SlateApp, const EVimMode N
 	if (VimMode != NewMode)
 	{
 		VimMode = NewMode;
-		FUMHelpers::NotifySuccess(
+		FUMLogger::NotifySuccess(
 			FText::FromString(UEnum::GetValueAsString(NewMode)), bVisualLog);
 	}
 	ResetSequence(SlateApp);
@@ -461,7 +460,7 @@ FInputChord FUMInputPreProcessor::GetChordFromKeyEvent(
 void FUMInputPreProcessor::SimulateMultiTabPresses(
 	FSlateApplication& SlateApp, int32 TimesToRepeat)
 {
-	FUMHelpers::NotifySuccess();
+	FUMLogger::NotifySuccess();
 	static const FKeyEvent TabEvent(
 		FKey(EKeys::Tab),
 		FModifierKeysState(),
@@ -545,19 +544,19 @@ void FUMInputPreProcessor::DebugInvalidWeakPtr(EUMKeyBindingCallbackType Callbac
 	switch (CallbackType)
 	{
 		case EUMKeyBindingCallbackType::None:
-			FUMHelpers::NotifySuccess(
+			FUMLogger::NotifySuccess(
 				FText::FromString("Invalid Weakptr _None"));
 			break;
 		case EUMKeyBindingCallbackType::NoParam:
-			FUMHelpers::NotifySuccess(
+			FUMLogger::NotifySuccess(
 				FText::FromString("Invalid Weakptr _NoParam"));
 			break;
 		case EUMKeyBindingCallbackType::KeyEventParam:
-			FUMHelpers::NotifySuccess(
+			FUMLogger::NotifySuccess(
 				FText::FromString("Invalid Weakptr _KeyEvent"));
 			break;
 		case EUMKeyBindingCallbackType::SequenceParam:
-			FUMHelpers::NotifySuccess(
+			FUMLogger::NotifySuccess(
 				FText::FromString("Invalid Weakptr _SequenceParam"));
 			break;
 	}
@@ -588,6 +587,6 @@ void FUMInputPreProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
 		*EventPath,
 		InKeyEvent.GetInputDeviceId().GetId());
 
-	FUMHelpers::NotifySuccess(FText::FromString(LogStr));
+	FUMLogger::NotifySuccess(FText::FromString(LogStr));
 	UE_LOG(LogTemp, Warning, TEXT("%s"), *LogStr);
 }

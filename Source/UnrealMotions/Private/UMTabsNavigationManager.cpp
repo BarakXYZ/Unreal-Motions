@@ -7,7 +7,7 @@
 #include "Framework/Application/SlateApplication.h"
 // #include "BlueprintEditor.h"
 
-#include "UMHelpers.h"
+#include "UMLogger.h"
 #include "UMSlateHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, NoLogging, All); // Prod
@@ -149,7 +149,7 @@ void FUMTabsNavigationManager::RegisterSlateEvents()
 //** Isn't currently being used *//
 void FUMTabsNavigationManager::OnMouseButtonDown(const FPointerEvent& PointerEvent)
 {
-	FUMHelpers::NotifySuccess(FText::FromString("On Mouse Button Down!"), VisualLog);
+	FUMLogger::NotifySuccess(FText::FromString("On Mouse Button Down!"), VisualLog);
 	// Set tab...
 }
 
@@ -368,8 +368,8 @@ void FUMTabsNavigationManager::DebugTab(const TSharedPtr<SDockTab>& Tab,
 			 "  Is Toolkit: %s"),
 		*DelegateType, *Name, *VisualRole, *RegularRole, Id, *LayoutId, bIsToolkit ? TEXT("true") : TEXT("false"));
 	UE_LOG(LogUMTabsNavigation, Display, TEXT("%s"), *DebugMsg);
-	FUMHelpers::NotifySuccess(FText::FromString(DebugMsg), VisualLog, 12.0f);
-	// FUMHelpers::AddDebugMessage(
+	FUMLogger::NotifySuccess(FText::FromString(DebugMsg), VisualLog, 12.0f);
+	// FUMLogger::AddDebugMessage(
 	// 	DebugMsg, EUMHelpersLogMethod::PrintToScreen,
 	// 	16.0f, FLinearColor::Yellow, 1.0f, 10);
 }

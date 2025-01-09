@@ -62,6 +62,12 @@ public:
 	 */
 	void SetCurrentTab(const TSharedRef<SDockTab> NewTab);
 
+	void PreSetCurrentTab();
+
+	void SetActiveMajorTab(const TSharedRef<SDockTab> InTab);
+
+	void SetActiveMinorTab(const TSharedRef<SDockTab> InTab);
+
 	void LogTabChange(const FString& TabType,
 		const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab);
 
@@ -108,9 +114,23 @@ public:
 
 	bool HasWindowChanged();
 
-	bool TryFindTabWellAndActivateForegroundedTab(const TSharedRef<SDockTab> InMajorTab);
+	bool FindTabWellAndActivateForegroundedTab(const TSharedRef<SDockTab> InMajorTab);
 
 	static bool RemoveActiveMajorTab();
+
+	bool VisualizeParentDockingTabStack(const TSharedRef<SDockTab> InTab);
+
+	/**
+	 * Try register the in Minor Tab TabWell with the currently active Major Tab.
+	 * @param InBaseMinorTab - The minor tab that resides inside the parent
+	 * TabWell we'll register
+	 */
+	bool RegisterTabWellWithActiveMajorTab(
+		const TSharedRef<SDockTab> InBaseMinorTab);
+
+	bool DoesTabHaveFocus(const TSharedRef<SDockTab> InTab);
+
+	bool TryFocusOnLastActiveWidgetInMinorTab(const TSharedRef<SDockTab> InTab);
 
 	// ~ Last active Major Tab by Window ID ~
 	// You enter the ID of the Window:
@@ -172,7 +192,8 @@ public:
 	bool			  bBypassAutoFocusLastActiveWidget{ false };
 	FUMOnWindowAction OnWindowAction;
 
-	bool bVisualLog{ false };
+	FUMLogger Logger;
+	bool	  bLog{ false };
 
 	// UMFocusManager
 	// It will listen to:

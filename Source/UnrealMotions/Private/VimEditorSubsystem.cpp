@@ -1,9 +1,9 @@
 #include "VimEditorSubsystem.h"
 #include "Framework/Docking/TabManager.h"
+#include "Framework/Notifications/NotificationManager.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
 #include "UMFocusManager.h"
-#include "UMHelpers.h"
 #include "UMInputPreProcessor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "UMWindowsNavigationManager.h"
@@ -18,17 +18,19 @@
 #include "UMSlateHelpers.h"
 #include "UMInputHelpers.h"
 #include "UMEditorNavigation.h"
+#include "UMEditorCommands.h"
 
-// DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, NoLogging, All); // Prod
-DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All); // Development
+DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All);
 
 static constexpr int32 MIN_REPEAT_COUNT = 1;
 static constexpr int32 MAX_REPEAT_COUNT = 999;
 
 void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+	Logger.SetLogCategory(&LogVimEditorSubsystem);
+
 	FSlateApplication& SlateApp = FSlateApplication::Get();
-	const FConfigFile& ConfigFile = FUMHelpers::ConfigFile;
+	const FConfigFile& ConfigFile = FUMLogger::ConfigFile;
 	FString			   OutLog = "Vim Editor Subsystem Initialized: ";
 
 	FString TestGetStr;
@@ -36,15 +38,15 @@ void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	if (!ConfigFile.IsEmpty())
 	{
-		ConfigFile.GetBool(*FUMHelpers::VimSection, TEXT("bStartVim"), bStartVim);
+		ConfigFile.GetBool(*FUMLogger::VimSection, TEXT("bStartVim"), bStartVim);
 
 		// TODO: Remove to a more general place? Debug
-		ConfigFile.GetBool(*FUMHelpers::DebugSection, TEXT("bVisualLog"), bVisualLog);
+		ConfigFile.GetBool(*FUMLogger::DebugSection, TEXT("bVisualLog"), bVisualLog);
 	}
 
 	ToggleVim(bStartVim);
 	OutLog += bStartVim ? "Enabled by Config." : "Disabled by Config.";
-	FUMHelpers::NotifySuccess(FText::FromString(OutLog), bVisualLog);
+	FUMLogger::NotifySuccess(FText::FromString(OutLog), bVisualLog);
 
 	VisModeManager = MakeShared<FUMVisualModeManager>();
 
@@ -90,7 +92,7 @@ void UVimEditorSubsystem::OnCountPrefix(FString AddedCount)
 {
 	// Building the buffer -> "1" + "7" + "3" == "173"
 	CountBuffer += AddedCount;
-	// FUMHelpers::NotifySuccess(FText::FromString(
+	// FUMLogger::NotifySuccess(FText::FromString(
 	// 	FString::Printf(TEXT("On Count Prefix: %s"), *CountBuffer)));
 }
 
@@ -127,6 +129,7 @@ void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 	{
 		case EVimMode::Normal:
 		{
+			Logger.Print("Vim Mode Changed: Normal Mode", ELogVerbosity::Verbose, true);
 			if (PreviousMode == EVimMode::Visual
 				&& VisModeManager->IsVisualTextSelected(SlateApp))
 				FUMInputPreProcessor::SimulateKeyPress(SlateApp, EKeys::Escape);
@@ -219,7 +222,7 @@ void UVimEditorSubsystem::ToggleVim(bool bEnable)
 		}
 	}
 
-	FUMHelpers::NotifySuccess(FText::FromString(OutLog), bVisualLog);
+	FUMLogger::NotifySuccess(FText::FromString(OutLog), bVisualLog);
 }
 
 bool UVimEditorSubsystem::MapVimToArrowNavigation(
@@ -281,7 +284,7 @@ bool UVimEditorSubsystem::GetListView(FSlateApplication& SlateApp, TSharedPtr<SL
 	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
 	if (!FocusedWidget.IsValid())
 	{
-		FUMHelpers::NotifySuccess(
+		FUMLogger::NotifySuccess(
 			FText::FromString("Focused widget NOT valid"), bVisualLog);
 		return false;
 	}
@@ -290,7 +293,7 @@ bool UVimEditorSubsystem::GetListView(FSlateApplication& SlateApp, TSharedPtr<SL
 		&& !FUMSlateHelpers::IsValidTreeViewType(
 			FName(FocusedWidget->GetTypeAsString().Left(9))))
 	{
-		// FUMHelpers::NotifySuccess(
+		// FUMLogger::NotifySuccess(
 		// 	FText::FromString(FString::Printf(TEXT("Not a valid type: %s"), *FocusedWidget->GetTypeAsString())), bVisualLog);
 		return false;
 	}
@@ -299,7 +302,7 @@ bool UVimEditorSubsystem::GetListView(FSlateApplication& SlateApp, TSharedPtr<SL
 		TSharedPtr<ISceneOutlinerTreeItem>>>(FocusedWidget);
 	if (!OutListView.IsValid())
 	{
-		FUMHelpers::NotifySuccess(FText::FromString("Not a ListView"), bVisualLog);
+		FUMLogger::NotifySuccess(FText::FromString("Not a ListView"), bVisualLog);
 		return false;
 	}
 	return true;
@@ -381,7 +384,7 @@ void UVimEditorSubsystem::HandleTreeViewVisualModeFirstOrLastItemNavigation(
 	if (!AnchorTreeViewItem.Item.IsValid())
 	{
 		CaptureAnchorTreeViewItemSelectionAndIndex(SlateApp);
-		FUMHelpers::NotifySuccess(FText::FromString(
+		FUMLogger::NotifySuccess(FText::FromString(
 			"Capture Anchor was NOT valid. Now capturing..."));
 	}
 
@@ -413,7 +416,7 @@ void UVimEditorSubsystem::HandleTreeViewVisualModeFirstOrLastItemNavigation(
 				true));
 		++DebugLoopNum;
 	}
-	// FUMHelpers::NotifySuccess(FText::FromString(
+	// FUMLogger::NotifySuccess(FText::FromString(
 	// 	FString::Printf(TEXT("Times Navigated: %d, Anchor Index: %d"),
 	// 		DebugLoopNum, AnchorTreeViewItem.Index)));
 }
@@ -441,7 +444,7 @@ void UVimEditorSubsystem::TrackVisualOffsetNavigation(const FKeyEvent& InKeyEven
 		return;
 
 	VisualNavOffsetIndicator += *OffsetIndex;
-	// FUMHelpers::NotifySuccess(
+	// FUMLogger::NotifySuccess(
 	// 	FText::FromString(FString::Printf(TEXT("Visual Nav Offset: %d"), VisualNavOffsetIndicator)), bVisualLog);
 }
 
@@ -483,6 +486,14 @@ bool UVimEditorSubsystem::HandleListViewNavigation(
 	if (!GetListView(SlateApp, ListView))
 		return false;
 
+	// We don't need the list view itself here. We can refactor to just verify
+	// if that's a ListView or not.
+
+	// Test
+	const auto& FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid())
+		return false;
+
 	// In Visual Mode, we want a constant simulation of Shift down for proper
 	// range selection. Else, we will just directly navigate to items.
 	const bool bShouldSimulateShiftDown{ CurrentVimMode == EVimMode::Visual };
@@ -496,8 +507,13 @@ bool UVimEditorSubsystem::HandleListViewNavigation(
 	for (int32 i{ 0 }; i < Count; ++i)
 	{
 		const FNavigationReply NavReply =
-			ListView->OnNavigation( // Navigate to the next or previous item
-				SlateApp.GetUserFocusedWidget(0)->GetCachedGeometry(), NavEvent);
+			// ListView->OnNavigation( // Navigate to the next or previous item
+			FocusedWidget->OnNavigation( // Navigate to the next or previous item
+										 // SlateApp.GetUserFocusedWidget(0)->GetCachedGeometry(), NavEvent);
+				FocusedWidget->GetCachedGeometry(), NavEvent);
+		// TODO:
+		// I think we can just use the ListView Geometry instead of going
+		// through SlateApp. Test this.
 
 		if (NavReply.GetBoundaryRule() != EUINavigationRule::Escape)
 			TrackVisualOffsetNavigation(InKeyEvent); // Only track if moving
@@ -531,7 +547,7 @@ bool UVimEditorSubsystem::IsTreeViewVertical(
 void UVimEditorSubsystem::Undo(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// FUMHelpers::NotifySuccess(FText::FromString("UNDO"));
+	// FUMLogger::NotifySuccess(FText::FromString("UNDO"));
 	FUMInputPreProcessor::SimulateKeyPress(SlateApp,
 		FKey(EKeys::Z),
 		FModifierKeysState(
@@ -551,7 +567,7 @@ void UVimEditorSubsystem::Enter(
 	if (!FocusedWidget)
 		return;
 
-	// FUMHelpers::NotifySuccess(
+	// FUMLogger::NotifySuccess(
 	// 	FText::FromName(FocusedWidget->GetWidgetClass().GetWidgetType()));
 	const FName FocusedWidgetType =
 		FocusedWidget->GetWidgetClass().GetWidgetType();
@@ -562,7 +578,7 @@ void UVimEditorSubsystem::Enter(
 			StaticCastSharedPtr<SButton>(FocusedWidget);
 		FocusedWidgetAsButton->SimulateClick();
 
-		FUMHelpers::NotifySuccess(
+		FUMLogger::NotifySuccess(
 			FText::FromString(FString::Printf(
 				TEXT("SButton Clicked! Text: %s, Type: %s, FocusedType: %s"),
 				*FocusedWidgetAsButton->GetAccessibleText().ToString(),
@@ -646,7 +662,7 @@ void UVimEditorSubsystem::NavigateNextPrevious(
 void UVimEditorSubsystem::DebugTreeItem(
 	const TSharedPtr<ISceneOutlinerTreeItem, ESPMode::ThreadSafe>& TreeItem, int32 Index)
 {
-	FUMHelpers::NotifySuccess(
+	FUMLogger::NotifySuccess(
 		FText::FromString(FString::Printf(
 			TEXT("Move to NewItem: %s, CanInteract: %s, Index: %d"),
 			*TreeItem->GetDisplayString(),
@@ -765,7 +781,7 @@ void UVimEditorSubsystem::OpenWidgetReflector(
 			0.01f, // 10ms delay seems to be enough (need to check on mac)
 			false  // Do not loop
 		);
-		FUMHelpers::NotifySuccess(FText::AsNumber(FoundButtons.Num()));
+		FUMLogger::NotifySuccess(FText::AsNumber(FoundButtons.Num()));
 	}
 }
 
@@ -893,12 +909,12 @@ void UVimEditorSubsystem::TryFocusSearchBox(FSlateApplication& SlateApp, const F
 	}
 	else
 	{
-		FUMHelpers::NotifySuccess(
+		FUMLogger::NotifySuccess(
 			FText::FromString("Minor tab window is not valid"), bVisualLog);
 		return;
 	}
 
-	// FUMHelpers::NotifySuccess(FText::FromString(FString::Printf(TEXT("Minor Tab: %s"), *ActiveMinorTab->GetTabLabel().ToString())), bVisualLog);
+	// FUMLogger::NotifySuccess(FText::FromString(FString::Printf(TEXT("Minor Tab: %s"), *ActiveMinorTab->GetTabLabel().ToString())), bVisualLog);
 
 	if (!SearchInWidget.IsValid())
 		return;
@@ -909,7 +925,7 @@ void UVimEditorSubsystem::TryFocusSearchBox(FSlateApplication& SlateApp, const F
 			SearchInWidget, SearchBox, EditableTextType))
 		return;
 
-	// FUMHelpers::NotifySuccess(FText::FromString(FString::Printf(TEXT("Found Type: %s"), *SearchBox.Pin()->GetTypeAsString())), bVisualLog);
+	// FUMLogger::NotifySuccess(FText::FromString(FString::Printf(TEXT("Found Type: %s"), *SearchBox.Pin()->GetTypeAsString())), bVisualLog);
 	SlateApp.SetAllUserFocus(SearchBox.Pin(), EFocusCause::Navigation);
 }
 
@@ -1062,6 +1078,14 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::L) },
 		&FUMEditorNavigation::NavigatePanelTabs);
+
+	Input.AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::D, EKeys::C },
+		&FUMEditorCommands::ClearAllDebugMessages);
+
+	Input.AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::D, EKeys::T, EKeys::N },
+		&FUMEditorCommands::ToggleAllowNotifications);
 
 	//
 	/////////////////////////////////////////////////////////////////////////

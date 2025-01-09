@@ -1,14 +1,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "EditorSubsystem.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "ISceneOutlinerTreeItem.h"
-#include "UMHelpers.h"
+#include "UMLogger.h"
 #include "UMInputPreProcessor.h"
 #include "UMGenericAppMessageHandler.h"
 #include "Framework/Application/SlateApplication.h"
 #include "UMVisualModeManager.h"
+#include "EditorSubsystem.h"
 #include "VimEditorSubsystem.generated.h"
 
 /**
@@ -423,7 +423,7 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	TWeakObjectPtr<UVimEditorSubsystem> VimSubWeak{ nullptr };
 	TWeakPtr<FUMInputPreProcessor>		InputPP;
-	EUMHelpersLogMethod					UMHelpersLogMethod = EUMHelpersLogMethod::PrintToScreen;
+	EUMLogMethod						UMHelpersLogMethod = EUMLogMethod::PrintToScreen;
 	FDelegateHandle						PreInputKeyDownDelegateHandle;
 	bool								bVisualLog{ true };
 	bool								bConsoleLog{ false };
@@ -434,6 +434,8 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	TSharedPtr<FUMGenericAppMessageHandler>		  UMGenericAppMessageHandler;
 	TSharedPtr<FGenericApplicationMessageHandler> OriginGenericAppMessageHandler;
+
+	FUMLogger Logger;
 
 	TSharedPtr<FUMVisualModeManager> VisModeManager;
 

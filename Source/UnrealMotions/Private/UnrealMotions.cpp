@@ -1,7 +1,7 @@
 #include "UnrealMotions.h"
 #include "Framework/Application/SlateApplication.h"
 
-#include "UMHelpers.h"
+#include "UMLogger.h"
 #include "UMNavigationConfig.h"
 
 #include "UMStatusBarManager.h"
@@ -14,7 +14,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, Log, All); // Dev
 void FUnrealMotionsModule::StartupModule()
 {
 	UE_LOG(LogUnrealMotionsModule, Display, TEXT("Unreal Motions: Startup."));
-	FUMHelpers::SetPluginConfigFile();
+	FUMLogger::SetPluginConfigFile();
 
 	// TODO: Check in the config if the user wants this feature.
 	FUMStatusBarManager::Initialize();

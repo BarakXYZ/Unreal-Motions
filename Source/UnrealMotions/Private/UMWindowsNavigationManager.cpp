@@ -1,7 +1,7 @@
 
 #include "UMWindowsNavigationManager.h"
 #include "Framework/Commands/UICommandInfo.h"
-#include "UMHelpers.h"
+#include "UMLogger.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "Framework/Application/SlateApplication.h"
 #include "UMFocusManager.h"
@@ -76,7 +76,7 @@ void FUMWindowsNavigationManager::RegisterSlateEvents()
 		// Need to make some checks to filter out non-useful windows
 		// like notification windows (which will cause this to loop for ever *~*)
 		if (Window.IsRegularWindow() && !Window.GetTitle().IsEmpty())
-			FUMHelpers::NotifySuccess(FText::FromString(
+			FUMLogger::NotifySuccess(FText::FromString(
 				FString::Printf(TEXT("Window Being Destroyed: %s"),
 					*Window.GetTitle().ToString())));
 	});
@@ -173,7 +173,7 @@ void FUMWindowsNavigationManager::CleanupInvalidWindows(
 		TrackedWindows.Remove(Key);
 	FString Log = FString::Printf(
 		TEXT("Cleaned: %d Invalid Windows"), WinIdsToCleanup.Num());
-	FUMHelpers::NotifySuccess(FText::FromString(Log), VisualLog);
+	FUMLogger::NotifySuccess(FText::FromString(Log), VisualLog);
 };
 
 const TMap<uint64, TWeakPtr<SWindow>>& FUMWindowsNavigationManager::GetTrackedWindows()

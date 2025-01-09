@@ -4,7 +4,8 @@
 // #include "GenericPlatform/GenericWindow.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "Input/Events.h"
-#include "UMHelpers.h"
+#include "Logging/LogVerbosity.h"
+#include "UMLogger.h"
 #include "Editor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "UMSlateHelpers.h"
@@ -15,10 +16,14 @@
 // DEFINE_LOG_CATEGORY_STATIC(LogUMFocusManager, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMFocusManager, Log, All); // Dev
 
+using Log = FUMLogger;
+using Sym = EUMLogSymbol;
+
 const TSharedPtr<FUMFocusManager> FUMFocusManager::FocusManager =
 	MakeShared<FUMFocusManager>();
 
 FUMFocusManager::FUMFocusManager()
+	: Logger(&LogUMFocusManager)
 {
 	FCoreDelegates::OnPostEngineInit.AddRaw(
 		this, &FUMFocusManager::RegisterSlateEvents);
@@ -65,7 +70,15 @@ void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakW
 	const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
-	// ToggleVisualLog(true);
+	// Logger.ToggleLogging(true);
+	Logger.Print("OnFocusChanged");
+
+	// Globally define rules for this LogCategory:
+	// 1. Should all messages print as notification?
+	// 2. Should all messages need to be ignored?
+	// 3. The symbol will deduce the color of the message (screen)
+	// 4.
+	// Log::Print("Same widget, do not update", Sym::Info);
 
 	// Clear if there's a current running timer as we gonna assign a newer widget
 	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
@@ -84,8 +97,8 @@ void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakW
 	TimerManager->SetTimer(
 		TimerHandleNewWidgetTracker,
 		[this, WeakNewWidget]() {
-			// FUMHelpers::NotifySuccess(
-			// 	FText::FromString("Focus Manager On Focused Changed"), bVisualLog);
+			// Log::NotifySuccess(
+			// 	FText::FromString("Focus Manager On Focused Changed"), bLog);
 
 			TrackActiveWindow();
 
@@ -102,18 +115,14 @@ void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakW
 			{
 				if (PinnedActiveWidget->GetId() == PinnedNewWidget->GetId())
 				{
-					FUMHelpers::NotifySuccess(
-						FText::FromString("Same widget, do not update."),
-						bVisualLog);
+					Logger.Print("OnFocusedChanged: Same widget, skip...");
 					return;
 				}
 			}
 
-			FUMHelpers::NotifySuccess(
-				FText::FromString(
-					FString::Printf(TEXT("New Widget to Register: %s"),
-						*PinnedNewWidget->GetTypeAsString())),
-				bVisualLog);
+			Logger.Print(FString::Printf(
+				TEXT("OnFocusedChanged: New widget %s, register..."),
+				*PinnedNewWidget->GetType().ToString()));
 
 			ActiveWidget = PinnedNewWidget; // New Widget found - track it.
 
@@ -139,9 +148,7 @@ void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakW
 					ActiveMinorTab = NewMinorTab;
 				}
 				else
-					FUMHelpers::NotifySuccess(
-						FText::FromString("No active Minor (Global) Tab found."),
-						bVisualLog);
+					Logger.Print("OnFocusChanged: No global or local Minor Tab found. Can't register...", ELogVerbosity::Error, true);
 			}
 		},
 		// We want to be pretty quick and expressive with this delay becauase
@@ -172,7 +179,7 @@ void FUMFocusManager::OnActiveTabChanged(
 			if (bIsTabForegrounding)
 				return;
 
-			FUMHelpers::NotifySuccess(FText::FromString("OnActiveTabChanged"), bVisualLog);
+			Logger.Print("OnActiveTabChanged");
 			if (!WeakNewTab.IsValid())
 				return;
 
@@ -216,14 +223,15 @@ void FUMFocusManager::OnTabForegrounded(
 
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 
-	// The IsDragDropping() func seems to do the job without this + it's better
-	// not to rely on the pressed buttons too much because we may add in the near
-	// future functionality to detch and relocate tabs via keyboard.
+	// We can also potentially check to see if the foregrounding is drag by
+	// looking at the pressed mouse buttons, but IsDragDropping() seems to do
+	// the job and we really don't want to rely on PressedMouseButtons too much.
 	// const TSet<FKey>&  PressedButtons = SlateApp.GetPressedMouseButtons();
-
 	if (SlateApp.IsDragDropping())
 	{
-		bIsTabForegrounding = true; // Bypass the misinformed OnActiveTabChanged
+		// Bypass the misinformed OnActiveTabChanged in order to not assign
+		// new active widgets (as we're really just dragging a tab around)
+		bIsTabForegrounding = true;
 
 		// It seems to sometimes think it's processing a certain incorrect tab,
 		// but it will eventually settle on the correct one. So we can store
@@ -235,11 +243,11 @@ void FUMFocusManager::OnTabForegrounded(
 			ForegroundedProcessedTab = NewActiveTab;
 		}
 		if (!bIsDummyForegroundingCallbackCheck)
-			FUMHelpers::NotifySuccess(
-				FText::FromString(FString::Printf(TEXT("OnTabForegrounded - Processing: %s"), *LogTab.ToString())), bVisualLog);
+			Logger.Print(FString::Printf(
+				TEXT("OnTabForegrounded: Dragging %s"), *LogTab.ToString()));
 		// else
-		// 	FUMHelpers::NotifySuccess(
-		// 		FText::FromString("Dummy Check"), bVisualLog);
+		// 	Logger.Print("OnTabForeGrounded: Dummy Check");
+
 		// Set false to allow regular logging.
 		bIsDummyForegroundingCallbackCheck = false;
 
@@ -269,24 +277,21 @@ void FUMFocusManager::OnTabForegrounded(
 				0.15f, false);
 		return;
 	}
+	Logger.Print("OnTabForegrounded: Finished");
 
-	FUMHelpers::NotifySuccess(
-		FText::FromString("OnTabForegrounded - Finished"), bVisualLog);
-
-	// Not we just want to check which tab should be forwarded for set as current.
+	// Now we just want to check which tab should be forwarded to set as current.
 	// *if TabForegrounding flag is true; we want to pass the manually tracked tab
-	// (We're probably dragging tabs around).
-	// *else we want to pass the NewActiveTab (param)
-	// (We're probably cycling or directly clicking on tabs).
+	// (i.e. we're probably dragging tabs around).
 	if (bIsTabForegrounding && ForegroundedProcessedTab.IsValid()
 		&& ForegroundedProcessedTab.Pin().IsValid())
 		SetCurrentTab(ForegroundedProcessedTab.Pin().ToSharedRef());
+	// *else we want to pass the NewActiveTab (param)
+	// (i.e. we're probably cycling or directly clicking on tabs).
 	else if (NewActiveTab.IsValid())
 		SetCurrentTab(NewActiveTab.ToSharedRef());
 	else
-		FUMHelpers::NotifySuccess(
-			FText::FromString("No valid new tab found in OnTabForegrounded"),
-			bVisualLog);
+		Logger.Print("OnTabForegrounded: No valid new tab.",
+			ELogVerbosity::Error);
 
 	// OnActiveTabChanged should be safe to continue processing from now on
 	// though it might be healthy to even delay this mark a bit (like by 25ms or
@@ -297,139 +302,195 @@ void FUMFocusManager::OnTabForegrounded(
 
 void FUMFocusManager::SetCurrentTab(const TSharedRef<SDockTab> NewTab)
 {
-	auto& SlateApp = FSlateApplication::Get();
 	// LogTabParentWindow(NewTab);
 
-	// Something unuseful stole our focus, we want to bring focus to our last
+	PreSetCurrentTab();
+
+	if (NewTab->GetVisualTabRole() == ETabRole::MajorTab)
+		SetActiveMajorTab(NewTab);
+	else
+		SetActiveMinorTab(NewTab);
+}
+
+void FUMFocusManager::PreSetCurrentTab()
+{
+	// if something unuseful stole our focus, we want to bring focus to our last
 	// tracked meaningful widget.
 	if (bBypassAutoFocusLastActiveWidget) // When navigation between panel tabs
 	{
+		Logger.Print("PreSetCurrentTab: BypassAutoFocusLastActiveWidget");
 		bHasFilteredAnIncomingNewWidget = false;
 		bBypassAutoFocusLastActiveWidget = false;
 	}
 	else if (bHasFilteredAnIncomingNewWidget)
 	{
+		Logger.Print("PreSetCurrentTab: Try focus last active widget");
 		bHasFilteredAnIncomingNewWidget = false;
 		TryFocusLastActiveWidget();
 	}
-
-	if (NewTab->GetVisualTabRole() == ETabRole::MajorTab)
-	{
-		if (const TSharedPtr<SDockTab>& PinnedLastMajorTab = ActiveMajorTab.Pin())
-			if (PinnedLastMajorTab == NewTab)
-				return; // Not a new Major Tab
-
-		LogTabChange(TEXT("Major"), ActiveMajorTab, NewTab);
-		ActiveMajorTab = NewTab;
-		NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
-
-		// if we have any user focus, we don't need to remap our user's focus to
-		// something else. He had probably clicked and focused on something
-		// already manually with the mouse.
-		if (NewTab->GetContent()->HasAnyUserFocusOrFocusedDescendants()
-			&& DoesActiveMinorTabResidesInMajorTab(NewTab))
-		// && FUMInputHelpers::AreMouseButtonsPressed(
-		// 	TSet<FKey>({ EKeys::LeftMouseButton })))
-		{
-			FUMHelpers::NotifySuccess(
-				FText::FromString("Major & Minor tabs had focus... Skipping."),
-				bVisualLog);
-			return;
-		}
-		TryFindTabWellAndActivateForegroundedTab(NewTab);
-
-		// In case we do not have any focus:
-		// Lookup the associated TabWell and activate the most recent tab in it.
-		// else if (const TWeakPtr<SWidget>* TabWell =
-	}
-	else // Minor Tab
-	{
-		if (const TSharedPtr<SDockTab>& PinnedLastMinorTab = ActiveMinorTab.Pin())
-			if (PinnedLastMinorTab == NewTab)
-				return; // Not a new Minor Tab
-
-		LogTabChange(TEXT("Minor"), ActiveMinorTab, NewTab);
-		ActiveMinorTab = NewTab;
-		NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
-		// FUMFocusVisualizer::DrawDebugOutlineOnWidget(NewTab->GetContent());
-		TWeakPtr<SWidget> DockingTabStack;
-		if (FUMSlateHelpers::GetParentDockingTabStackAsWidget(NewTab->GetContent(), DockingTabStack))
-			FUMFocusVisualizer::DrawDebugOutlineOnWidget(
-				DockingTabStack.Pin().ToSharedRef());
-
-		// Pass a delegate to FUMGraphNavigation for visualization
-
-		// Register this tab's TabWell with the current Active Major Tab parent.
-		if (const TSharedPtr<SDockTab> PinnedLastMajorTab = ActiveMajorTab.Pin())
-		{
-			if (DoesMinorTabResidesInMajorTab(
-					NewTab, PinnedLastMajorTab.ToSharedRef()))
-				LastActiveTabWellByMajorTabId.Add(
-					PinnedLastMajorTab->GetId(), NewTab->GetParentWidget());
-			else
-				FUMHelpers::NotifySuccess(
-					FText::FromString("Can't register TabWell: Minor tab does not reside in Major Tab"),
-					bVisualLog);
-		}
-		else
-			FUMHelpers::NotifySuccess(
-				FText::FromString("Can't register TabWell: No valid Major Tab"),
-				bVisualLog);
-
-		// Skip widget focusing if there's already any focus (e.g.
-		// user had manually clicked with the mouse)
-		if (NewTab->GetContent()->HasAnyUserFocusOrFocusedDescendants())
-		{
-			FUMHelpers::NotifySuccess(
-				FText::FromString("Minor had focus... Skipping."),
-				bVisualLog);
-			return;
-		}
-
-		// Check if there's an associated last widget we can focus on
-		if (const TWeakPtr<SWidget>* LastWidget =
-				LastActiveWidgetByMinorTabId.Find(NewTab->GetId()))
-		{
-			if (const auto& PinnedLastWidget = LastWidget->Pin())
-			{
-				SlateApp.SetAllUserFocus(
-					PinnedLastWidget.ToSharedRef(), EFocusCause::Navigation);
-				FUMHelpers::NotifySuccess(
-					FText::FromString(FString::Printf(TEXT("Widget Found: %s"),
-						*LastWidget->Pin()->GetTypeAsString())),
-					bVisualLog);
-			}
-		}
-		else
-		{
-			FUMHelpers::NotifySuccess(FText::FromString("SetCurrentTab: Can't find associated valid widget."));
-			//  TODO: Find something more useful?
-			SlateApp.SetAllUserFocus(
-				NewTab, EFocusCause::Navigation);
-		}
-	}
 }
 
-bool FUMFocusManager::HasWindowChanged()
+void FUMFocusManager::SetActiveMajorTab(const TSharedRef<SDockTab> InMajorTab)
 {
-	const auto& SlateApp = FSlateApplication::Get();
+	// Check if our currently set Major Tab match the incoming new one
+	if (const TSharedPtr<SDockTab>& PinnedLastMajorTab = ActiveMajorTab.Pin())
+		if (PinnedLastMajorTab == InMajorTab)
+			return; // They match, we can skip.
 
-	TSharedPtr<SWindow> SysActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
-	if (!SysActiveWin.IsValid())
-		return false;
+	// Set new Major Tab & activate it. Not sure if activation is needed, has it
+	// should already be active by this point. TODO: Check if activation is needed
+	LogTabChange(TEXT("Major"), ActiveMajorTab, InMajorTab);
+	ActiveMajorTab = InMajorTab;
+	InMajorTab->ActivateInParent(ETabActivationCause::SetDirectly);
 
-	const auto& PinnedActiveWindow = ActiveWindow.Pin();
-	if (!PinnedActiveWindow.IsValid()
-		|| !SysActiveWin->GetTitle().EqualTo(PinnedActiveWindow->GetTitle()))
+	// if we have any user focus, we don't need to remap our user's focus to
+	// something else. He had probably clicked and focused on something
+	// manually with the mouse.
+	if (!(DoesTabHaveFocus(InMajorTab)
+			&& DoesActiveMinorTabResidesInMajorTab(InMajorTab)))
+		FindTabWellAndActivateForegroundedTab(InMajorTab);
+}
+
+void FUMFocusManager::SetActiveMinorTab(const TSharedRef<SDockTab> InMinorTab)
+{
+	// Check if our currently set Minor Tab match the incoming new one
+	if (const TSharedPtr<SDockTab>& PinnedLastMinorTab = ActiveMinorTab.Pin())
+		if (PinnedLastMinorTab == InMinorTab)
+			return; // They match, we can skip.
+
+	// Set new Minor Tab & activate it. Not sure if activation is needed, has it
+	// should already be active by this point. TODO: Check if activation is needed
+	LogTabChange(TEXT("Minor"), ActiveMinorTab, InMinorTab);
+	ActiveMinorTab = InMinorTab;
+	InMinorTab->ActivateInParent(ETabActivationCause::SetDirectly);
+
+	VisualizeParentDockingTabStack(InMinorTab);
+
+	// Register this tab's TabWell with the current Active Major Tab parent.
+	RegisterTabWellWithActiveMajorTab(InMinorTab);
+
+	if (DoesTabHaveFocus(InMinorTab))
+		return; // Skip if already focused (usually if user manually clicked)
+
+	// Check if there's an associated last widget we can focus on
+	// I think we should only really do that if the TabWell operation goes
+	// well (TabWell ;))
+	TryFocusOnLastActiveWidgetInMinorTab(InMinorTab);
+}
+
+bool FUMFocusManager::DoesTabHaveFocus(const TSharedRef<SDockTab> InTab)
+{
+	// Skip widget focusing if there's already any focus (e.g.
+	// user had manually clicked with the mouse)
+	if (InTab->GetContent()->HasAnyUserFocusOrFocusedDescendants())
 	{
-		ActiveWindow = SysActiveWin;
+		Logger.Print("DoesTabHaveFocus: Minor had focus... Skipping.", ELogVerbosity::Warning);
 		return true;
 	}
-
 	return false;
 }
 
-bool FUMFocusManager::TryFindTabWellAndActivateForegroundedTab(
+bool FUMFocusManager::VisualizeParentDockingTabStack(
+	const TSharedRef<SDockTab> InTab)
+{
+	TWeakPtr<SWidget> DockingTabStack;
+	if (FUMSlateHelpers::GetParentDockingTabStackAsWidget(
+			InTab->GetContent(), DockingTabStack))
+	{
+		FUMFocusVisualizer::DrawDebugOutlineOnWidget(
+			DockingTabStack.Pin().ToSharedRef());
+		return true;
+	}
+	return false;
+}
+
+bool FUMFocusManager::RegisterTabWellWithActiveMajorTab(
+	const TSharedRef<SDockTab> InBaseMinorTab)
+{
+	if (const TSharedPtr<SDockTab> PinnedLastMajorTab = ActiveMajorTab.Pin())
+	{
+		if (DoesMinorTabResidesInMajorTab(
+				InBaseMinorTab, PinnedLastMajorTab.ToSharedRef()))
+		{
+			if (const TSharedPtr<SWidget> TabWell =
+					InBaseMinorTab->GetParentWidget())
+			{
+				LastActiveTabWellByMajorTabId.Add(
+					PinnedLastMajorTab->GetId(), TabWell);
+				Log::NotifySuccess(
+					FText::FromString(FString::Printf(TEXT("TabWell registered with MajorTab: %s"),
+						*PinnedLastMajorTab->GetTabLabel().ToString())),
+					bLog);
+				return true;
+			}
+		}
+		else
+			Log::NotifySuccess(
+				FText::FromString("Can't register TabWell: Minor tab does not reside in Major Tab"),
+				bLog);
+	}
+	else
+		Log::NotifySuccess(
+			FText::FromString("Can't register TabWell: No valid Major Tab"),
+			bLog);
+	return false;
+}
+
+bool FUMFocusManager::TryFocusOnLastActiveWidgetInMinorTab(
+	const TSharedRef<SDockTab> InTab)
+{
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+	if (const TWeakPtr<SWidget>* LastWidget =
+			LastActiveWidgetByMinorTabId.Find(InTab->GetId()))
+	{
+		if (const auto& PinnedLastWidget = LastWidget->Pin())
+		{
+			SlateApp.SetAllUserFocus(
+				PinnedLastWidget.ToSharedRef(), EFocusCause::Navigation);
+			Log::NotifySuccess(
+				FText::FromString(FString::Printf(TEXT("Widget Found: %s"),
+					*LastWidget->Pin()->GetTypeAsString())),
+				bLog);
+			return true;
+		}
+	}
+	else
+	{
+		Log::NotifySuccess(FText::FromString("SetCurrentTab: Can't find associated valid widget."));
+		//  TODO: Find something more useful?
+		SlateApp.SetAllUserFocus(
+			InTab->GetContent(), EFocusCause::Navigation);
+	}
+	return false;
+}
+
+bool FUMFocusManager::DoesActiveMinorTabResidesInMajorTab(
+	const TSharedRef<SDockTab> InMajorTab)
+{
+	const TSharedRef<FGlobalTabmanager>& GTM = FGlobalTabmanager::Get();
+	if (const TSharedPtr<SDockTab> GlobalMinorTab = GTM->GetActiveTab())
+	{
+		if (const TSharedPtr<FTabManager>
+				TabManager = GlobalMinorTab->GetTabManagerPtr())
+		{
+			if (const TSharedPtr<SDockTab>& ParentMajorTab =
+					GTM->GetMajorTabForTabManager(TabManager.ToSharedRef()))
+			{
+				if (ParentMajorTab->GetId() == InMajorTab->GetId())
+				{
+					Logger.Print("Active Minor Tab Resides in Major Tab");
+					return true;
+				}
+				Logger.Print("Active Minor Tab does NOT Resides in Major Tab",
+					ELogVerbosity::Warning);
+				return false;
+			}
+		}
+	}
+	return false;
+}
+
+bool FUMFocusManager::FindTabWellAndActivateForegroundedTab(
 	const TSharedRef<SDockTab> InMajorTab)
 {
 	if (const TWeakPtr<SWidget>* TabWell =
@@ -440,34 +501,40 @@ bool FUMFocusManager::TryFindTabWellAndActivateForegroundedTab(
 			{
 				for (int32 i{ 0 }; i < Tabs->Num(); ++i)
 				{
-					TSharedRef<SDockTab> Tab =
+					TSharedRef<SDockTab> MinorTab =
 						StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(i));
-					if (Tab->IsForeground()) // Get the latest tab in TabWell
+					if (MinorTab->IsForeground()) // Get the latest tab in TabWell
 					{
-						FUMHelpers::NotifySuccess(
-							FText::FromString(FString::Printf(TEXT("Focused MinorTab in TabWell: %s"),
-								*Tab->GetTabLabel().ToString())),
-							bVisualLog);
-						Tab->ActivateInParent(ETabActivationCause::SetDirectly);
+						Logger.Print(FString::Printf(TEXT("FindTabWellAndActivate: Activate Minor Tab: %s"), *MinorTab->GetTabLabel().ToString()),
+							ELogVerbosity::Verbose);
+
+						// Activate the frontmost Minor Tab in the TabWell
+						MinorTab->ActivateInParent(
+							ETabActivationCause::SetDirectly);
 
 						// if the window has changed the GlobalTabmanager
 						// won't automatically alert us for the change, thus
 						// we need to call this manually.
 						if (HasWindowChanged())
 						{
-							FUMHelpers::NotifySuccess(
-								FText::FromString("Window Changed - Manually Calling OnActiveTabChanged"), bVisualLog);
-							OnActiveTabChanged(nullptr, Tab);
+							Log::NotifySuccess(
+								FText::FromString("Window Changed - Manually Calling OnActiveTabChanged"), bLog);
+							OnActiveTabChanged(nullptr, MinorTab);
 						}
 						return true;
 					}
 				}
 			}
 	}
+	// It will be good to look at the different generic winodws the users may be
+	// in Unreal and understand what will he probably want to be focused.
+	// For example in Preferences it's the SearchBox while in Blueprint Editor
+	// it's the Editor Graph, etc.
+	// We can have some light rules on how we want to set the user's focus
+	// if there's no specific TabWell associated with the Major Tab (first time)
 	// Lookup all the TabWells and bring focus to the first one + tab in it.
-	FUMHelpers::NotifySuccess(
-		FText::FromString("No TabWell found with Active Major Tab"),
-		bVisualLog);
+	Logger.Print("FindTabWellAndActivate: No TabWell found with Active MajorTab",
+		ELogVerbosity::Error, true);
 	// FText::FromString("No TabWell found with Active Major Tab"));
 
 	// TWeakPtr<SWidget> DockingArea;
@@ -492,19 +559,79 @@ bool FUMFocusManager::TryFindTabWellAndActivateForegroundedTab(
 	return false;
 }
 
+bool FUMFocusManager::HasWindowChanged()
+{
+	const auto& SlateApp = FSlateApplication::Get();
+
+	TSharedPtr<SWindow> SysActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!SysActiveWin.IsValid())
+		return false;
+
+	const auto& PinnedActiveWindow = ActiveWindow.Pin();
+	if (!PinnedActiveWindow.IsValid()
+		|| !SysActiveWin->GetTitle().EqualTo(PinnedActiveWindow->GetTitle()))
+	{
+		ActiveWindow = SysActiveWin;
+		return true;
+	}
+
+	return false;
+}
+
 void FUMFocusManager::HandleOnWindowChanged(const TSharedPtr<SWindow> NewWindow)
 {
 	if (NewWindow.IsValid())
 	{
-		FUMHelpers::NotifySuccess(FText::FromString("New Window"), bVisualLog);
+		// Log::NotifySuccess(FText::FromString("New Window"), bLog);
+		Log::NotifySuccess(FText::FromString("New Window"));
 		// TryFocusLastActiveWidget();
 		TSharedPtr<SDockTab> FrontmostMajorTab;
 		// TODO: Debug what this spits when not drawing focus actively to the win
 		if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(FrontmostMajorTab))
 		{
+			// TODO:
+			// Check if for some magical reason it now will draw and call the Global
+			// Tab Manager delegate correctly.
+			//
 			// FSlateApplication::Get().ClearAllUserFocus();
 			// FSlateApplication::Get().ClearKeyboardFocus();
+			if (const auto& TabWell =
+					LastActiveTabWellByMajorTabId.Find(
+						FrontmostMajorTab->GetId()))
+			{
+				if (const auto& PinTabWell = TabWell->Pin())
+				{
+					if (const auto& MinorTab =
+							LastActiveMinorTabByTabWellId.Find(
+								PinTabWell->GetId()))
+					{
+						if (const auto& PinMinorTab = MinorTab->Pin())
+						{
+							PinMinorTab->ActivateInParent(
+								ETabActivationCause::UserClickedOnTab);
+							Log::NotifySuccess(
+								FText::FromString(FString::Printf(TEXT("New Window: Found Minor Tab - %s"),
+									*PinMinorTab->GetTabLabel().ToString())));
+							return;
+						}
+						Log::NotifySuccess(
+							FText::FromString(FString::Printf(TEXT("Cannot find MinorTab '%s' by TabWell ID. Major Tab: %s"),
+								*MinorTab->Pin()->GetTabLabel().ToString(),
+								*FrontmostMajorTab->GetTabLabel().ToString())));
+					}
+				}
+			}
+			else
+			{
+				Log::NotifySuccess(
+					FText::FromString("Cannot find TabWell by Major Tab ID"));
+				// Find TabWells and focus on the first one!
+			}
+
 			// FrontmostMajorTab->DrawAttention();
+			// Log::NotifySuccess(
+			// 	FText::FromString(FString::Printf(TEXT("New Window: Found Frontmost Major Tab - %s"),
+			// 		*FrontmostMajorTab->GetTabLabel().ToString())));
 			// FrontmostMajorTab->ActivateInParent(ETabActivationCause::SetDirectly);
 			// FGlobalTabmanager::Get()->SetActiveTab(FrontmostMajorTab);
 			// FGlobalTabmanager::Get()->DrawAttention(FrontmostMajorTab.ToSharedRef());
@@ -512,12 +639,14 @@ void FUMFocusManager::HandleOnWindowChanged(const TSharedPtr<SWindow> NewWindow)
 			// FGlobalTabmanager::Get()->DrawAttentionToTabManager(FrontmostMajorTab->GetTabManagerPtr().ToSharedRef());
 
 			// FrontmostMajorTab->ActivateInParent(ETabActivationCause::SetDirectly);
-			OnActiveTabChanged(nullptr, FrontmostMajorTab);
-			FUMHelpers::NotifySuccess(
-				FText::FromString(
-					FString::Printf(TEXT("New Window: New Focused Major - %s"),
-						*FrontmostMajorTab->GetTabLabel().ToString())),
-				bVisualLog);
+
+			// Latest production
+			// OnActiveTabChanged(nullptr, FrontmostMajorTab);
+			// Log::NotifySuccess(
+			// 	FText::FromString(
+			// 		FString::Printf(TEXT("New Window: New Focused Major - %s"),
+			// 			*FrontmostMajorTab->GetTabLabel().ToString())),
+			// 	bLog);
 		}
 	}
 }
@@ -564,25 +693,6 @@ bool FUMFocusManager::ShouldFilterNewWidget(TSharedRef<SWidget> InWidget)
 	return WidgetsToFilterByType.Contains(InWidget->GetType());
 }
 
-bool FUMFocusManager::DoesActiveMinorTabResidesInMajorTab(
-	const TSharedRef<SDockTab> InMajorTab)
-{
-	const TSharedRef<FGlobalTabmanager>& GTM = FGlobalTabmanager::Get();
-	if (const TSharedPtr<SDockTab> GlobalMinorTab = GTM->GetActiveTab())
-	{
-		if (const TSharedPtr<FTabManager>
-				TabManager = GlobalMinorTab->GetTabManagerPtr())
-		{
-			if (const TSharedPtr<SDockTab>& ParentMajorTab =
-					GTM->GetMajorTabForTabManager(TabManager.ToSharedRef()))
-			{
-				return ParentMajorTab->GetId() == InMajorTab->GetId();
-			}
-		}
-	}
-	return false;
-}
-
 bool FUMFocusManager::DoesMinorTabResidesInMajorTab(
 	const TSharedRef<SDockTab> MinorTab, const TSharedRef<SDockTab> MajorTab)
 {
@@ -597,11 +707,10 @@ bool FUMFocusManager::DoesMinorTabResidesInMajorTab(
 			if (ParentMajorTab->GetId() == MajorTab->GetId())
 				return true;
 
-	FUMHelpers::NotifySuccess(
-		FText::FromString(FString::Printf(TEXT("Minor Tab %s does not reside in Major Tab %s"),
+	Logger.Print(
+		FString::Printf(TEXT("Minor Tab %s does not reside in Major Tab %s"),
 			*MinorTab->GetTabLabel().ToString(),
-			*MajorTab->GetTabLabel().ToString())),
-		bVisualLog);
+			*MajorTab->GetTabLabel().ToString()));
 
 	return false;
 }
@@ -682,25 +791,24 @@ void FUMFocusManager::ActivateWindow(const TSharedRef<SWindow> Window)
 
 	Window->DrawAttention(DrawParams); // Seems to work well!
 
-	FUMHelpers::AddDebugMessage(FString::Printf(
+	Log::AddDebugMessage(FString::Printf(
 		TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
 	FocusManager->HandleOnWindowChanged(Window);
 }
 
 void FUMFocusManager::LogTabChange(const FString& TabType, const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab)
 {
+	FString NewTabLog = FString::Printf(TEXT("New: %s (ID: %d)\n"),
+		*NewTab->GetTabLabel().ToString(), NewTab->GetId());
+
 	FString PrevTabLog = CurrentTab.IsValid()
 		? FString::Printf(TEXT("Previous: %s (ID: %d)\n"), *CurrentTab.Pin()->GetTabLabel().ToString(), CurrentTab.Pin()->GetId())
 		: TEXT("None");
 
-	FString NewTabLog = FString::Printf(TEXT("New: %s (ID: %d)\n"),
-		*NewTab->GetTabLabel().ToString(), NewTab->GetId());
-
 	const FString LogStr = FString::Printf(
-		TEXT("Set New %s Tab:\n%s%s"), *TabType, *PrevTabLog, *NewTabLog);
+		TEXT("Set New %s Tab:\n%s%s"), *TabType, *NewTabLog, *PrevTabLog);
 
-	UE_LOG(LogTemp, Log, TEXT("%s"), *LogStr);
-	FUMHelpers::NotifySuccess(FText::FromString(LogStr), bVisualLog);
+	Logger.Print(LogStr, ELogVerbosity::Verbose);
 }
 
 void FUMFocusManager::LogTabParentWindow(const TSharedRef<SDockTab> InTab)
@@ -708,22 +816,18 @@ void FUMFocusManager::LogTabParentWindow(const TSharedRef<SDockTab> InTab)
 	const TSharedPtr<SWindow> TabParentWindow = InTab->GetParentWindow();
 	if (!TabParentWindow.IsValid())
 	{
-		FUMHelpers::NotifySuccess(
-			FText::FromString("SetCurrentTab: Invalid Tab Window"),
-			bVisualLog);
+		Logger.Print("SetCurrentTab: Invalid Tab Window", ELogVerbosity::Error);
 	}
 	else
 	{
-		FUMHelpers::NotifySuccess(
-			FText::FromString(FString::Printf(
-				TEXT("SetCurrentTab: Tab=%s, Window=%s"),
-				*InTab->GetTabLabel().ToString(),
-				*TabParentWindow->GetTitle().ToString())),
-			bVisualLog);
+		Logger.Print(FString::Printf(
+			TEXT("SetCurrentTab: Tab=%s, Window=%s"),
+			*InTab->GetTabLabel().ToString(),
+			*TabParentWindow->GetTitle().ToString()));
 	}
 }
 
 void FUMFocusManager::ToggleVisualLog(bool bIsVisualLog)
 {
-	bVisualLog = bIsVisualLog;
+	bLog = bIsVisualLog;
 }

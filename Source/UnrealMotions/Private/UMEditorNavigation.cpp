@@ -1,9 +1,11 @@
 #include "UMEditorNavigation.h"
 #include "Types/SlateEnums.h"
-#include "UMHelpers.h"
+#include "UMLogger.h"
 #include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
 #include "UMInputPreProcessor.h"
+
+DEFINE_LOG_CATEGORY(LogUMEditorNavigation);
 
 TSharedPtr<FUMEditorNavigation> FUMEditorNavigation::EditorNavigation =
 	MakeShared<FUMEditorNavigation>();
@@ -34,7 +36,8 @@ void FUMEditorNavigation::NavigatePanelTabs(
 	if (!FUMInputHelpers::GetArrowKeyFromVimKey(InKey.GetKey(), ArrowKey))
 		return;
 
-	// Window to operate on -> need to test this
+	// Window to operate on: keep an eye of this. This should be aligned with
+	// the currently focused window though.
 	TSharedPtr<SWindow> Win = SlateApp.GetActiveTopLevelRegularWindow();
 	if (!Win.IsValid())
 		return;
@@ -48,7 +51,7 @@ void FUMEditorNavigation::NavigatePanelTabs(
 	const auto& FocusManager = FUMFocusManager::Get();
 	if (const auto& CurrMinorTab = FocusManager->ActiveMinorTab.Pin())
 	{
-		// FUMHelpers::NotifySuccess(
+		// FUMLogger::NotifySuccess(
 		// 	FText::FromString(CurrMinorTab->GetLayoutIdentifier().ToString()));
 
 		TWeakPtr<SWidget> DockingTabStack;
@@ -57,6 +60,16 @@ void FUMEditorNavigation::NavigatePanelTabs(
 		{
 			// Alert the focus manager to bypass the next focus event in SetTab
 			FocusManager->bBypassAutoFocusLastActiveWidget = true;
+
+			// TODO: Refactor
+			// if (const TSharedPtr<SWidget> PinnedTabStack = DockingTabStack.Pin())
+			// {
+			// 	SlateApp.SetAllUserFocus(
+			// 		PinnedTabStack, EFocusCause::Navigation);
+
+			// 	// PinnedTabStack->OnNavigation(
+			// 	// 	PinnedTabStack->GetCachedGeometry());
+			// }
 
 			// Bring focus to the Docking Tab Stack to achieve the built-in
 			// panel navigation when it is focused.

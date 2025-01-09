@@ -8,7 +8,7 @@
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Text/STextBlock.h"
-#include "UMHelpers.h"
+#include "UMLogger.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMStatusBarManager, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMStatusBarManager, Log, All); // Dev
@@ -111,7 +111,7 @@ void FUMStatusBarManager::OnAssetEditorOpened(UObject* OpenedAsset)
 				TSharedRef<IToolkitHost> ToolkitHost =
 					AssetEditorToolkit->GetToolkitHost();
 				const FName StatusBarName = ToolkitHost->GetStatusBarName();
-				FUMHelpers::NotifySuccess(FText::FromName(StatusBarName));
+				FUMLogger::NotifySuccess(FText::FromName(StatusBarName));
 
 				RegisterToolbarExtension(StatusBarName.ToString());
 				// RegisterDrawer(StatusBarName);
@@ -135,7 +135,7 @@ void FUMStatusBarManager::RegisterToolbarExtension(
 	UToolMenu* ToolMenu = ToolMenus->FindMenu(StatusToolBarToExtend);
 	if (!ToolMenu) // Check if menu exists and valid.
 	{
-		FUMHelpers::NotifySuccess(
+		FUMLogger::NotifySuccess(
 			FText::FromString(FString::Printf(
 				TEXT("Menu: %s was not found."),
 				*StatusToolBarToExtend.ToString())),
@@ -148,10 +148,10 @@ void FUMStatusBarManager::RegisterToolbarExtension(
 		const FString Log = FString::Printf(
 			TEXT("Menu & Section found, skipping... Menu: %s Section: %s"),
 			*StatusToolBarToExtend.ToString(), *UMSectionName.ToString());
-		FUMHelpers::NotifySuccess(FText::FromString(Log), VisualLog);
+		FUMLogger::NotifySuccess(FText::FromString(Log), VisualLog);
 		return;
 	}
-	FUMHelpers::NotifySuccess(
+	FUMLogger::NotifySuccess(
 		FText::FromString("Section was not found, registering <3"), VisualLog);
 
 	FToolMenuSection& UMSection =

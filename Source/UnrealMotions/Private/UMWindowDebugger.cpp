@@ -3,7 +3,6 @@
 #include "UMWindowDebugger.h"
 #include "UMWindowsNavigationManager.h"
 #include "Framework/Docking/TabManager.h"
-#include "UMHelpers.h"
 
 // In the cpp file:
 void UUMWindowDebugger::DebugAllWindows(

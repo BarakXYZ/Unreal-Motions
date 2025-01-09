@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Framework/Application/NavigationConfig.h"
-#include "UMHelpers.h"
+#include "UMLogger.h"
 
 class FUMNavigationConfig : public FNavigationConfig
 {
@@ -53,12 +53,12 @@ public:
 		if (NavigationDirection)
 		{
 			UE_LOG(LogTemp, Log, TEXT("%s"), *LogMessage);
-			FUMHelpers::NotifySuccess(FText::FromString(LogMessage));
+			FUMLogger::NotifySuccess(FText::FromString(LogMessage));
 			return *NavigationDirection;
 		}
 
 		UE_LOG(LogTemp, Warning, TEXT("%s"), *LogMessage);
-		FUMHelpers::NotifySuccess(FText::FromString(LogMessage));
+		FUMLogger::NotifySuccess(FText::FromString(LogMessage));
 		return EUINavigation::Invalid;
 	}
 

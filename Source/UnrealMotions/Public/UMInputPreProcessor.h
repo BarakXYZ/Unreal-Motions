@@ -5,7 +5,7 @@
 #include "GenericPlatform/GenericPlatformMisc.h"
 #include "UMBufferVisualizer.h"
 
-#include "UMHelpers.h"
+#include "UMLogger.h"
 #include "UMKeyChordTrieNode.h"
 
 class SBufferVisualizer;
@@ -221,6 +221,33 @@ public:
 					(WeakObj.Get()->*MemberFunc)();
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::NoParam);
+			});
+	}
+
+	/**
+	 * Adds a key binding with no parameters using a raw pointer
+	 * @param Sequence - Array of input chords that trigger the callback
+	 * @param Obj - Raw pointer to the object containing the member function
+	 * @param MemberFunc - Member function to call when the sequence is matched
+	 */
+	template <typename ObjectType>
+	void AddKeyBinding_NoParam(
+		const TArray<FInputChord>& Sequence,
+		ObjectType*				   Obj,
+		void (ObjectType::*MemberFunc)())
+	{
+		AddKeyBinding_NoParam(
+			Sequence,
+			[this, Obj, MemberFunc]() {
+				if (Obj)
+				{
+					(Obj->*MemberFunc)();
+				}
+				else
+				{
+					// TODO: add logger here
+					// DebugInvalidRawPointer(EUMKeyBindingCallbackType::NoParam);
+				}
 			});
 	}
 
@@ -519,7 +546,7 @@ public:
 	static FOnRequestVimModeChange OnRequestVimModeChange;
 
 	/** Logging configuration */
-	EUMHelpersLogMethod UMHelpersLogMethod{ EUMHelpersLogMethod::PrintToScreen };
-	bool				bVisualLog{ true };
-	bool				bConsoleLog{ false };
+	EUMLogMethod UMHelpersLogMethod{ EUMLogMethod::PrintToScreen };
+	bool		 bVisualLog{ true };
+	bool		 bConsoleLog{ false };
 };

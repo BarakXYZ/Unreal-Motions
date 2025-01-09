@@ -1,5 +1,5 @@
 #include "SUMFocusDebugOverlay.h"
-#include "UMHelpers.h"
+#include "UMLogger.h"
 
 FUMOnOutlineOverlayVisibilityChanged SUMFocusDebugOverlay::OnOutlineOverlayVisibilityChanged;
 

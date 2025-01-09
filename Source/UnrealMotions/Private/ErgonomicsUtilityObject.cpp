@@ -1,7 +1,7 @@
 #include "ErgonomicsUtilityObject.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Commands/UICommandInfo.h"
-#include "UMHelpers.h"
+#include "UMLogger.h"
 
 void UErgonomicsUtilityObject::ConstructChords(bool bCtrl, bool bAlt, bool bShift, bool bCmd)
 
@@ -40,7 +40,7 @@ void UErgonomicsUtilityObject::ClearHotkeys(EUMHotkeySection Section, bool bClea
 				Command->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 				if (bClearSecondary)
 					Command->RemoveActiveChord(EMultipleKeyBindingIndex::Secondary);
-				FUMHelpers::NotifySuccess(FText::FromString("Command Clear: " + CommandStr));
+				FUMLogger::NotifySuccess(FText::FromString("Command Clear: " + CommandStr));
 			}
 		}
 		OnUtilityObjectAction.Broadcast();
@@ -75,7 +75,7 @@ void UErgonomicsUtilityObject::SetHotkeysToNums(
 						CheckCommand->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 				}
 				Command->SetActiveChord(Chords[i], EMultipleKeyBindingIndex::Primary);
-				FUMHelpers::NotifySuccess(FText::FromString("Command Set: " + CommandStr));
+				FUMLogger::NotifySuccess(FText::FromString("Command Set: " + CommandStr));
 				++i;
 			}
 		}
@@ -121,7 +121,7 @@ void UErgonomicsUtilityObject::DebugBookmarks()
 		FString CommandStr = Command->GetCommandName().ToString();
 		if (CommandStr.StartsWith("SetBookmark"))
 		{
-			FUMHelpers::NotifySuccess(FText::FromString(CommandStr));
+			FUMLogger::NotifySuccess(FText::FromString(CommandStr));
 			Command->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 		}
 	}
