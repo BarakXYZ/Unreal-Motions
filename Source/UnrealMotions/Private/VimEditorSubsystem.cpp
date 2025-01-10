@@ -344,48 +344,30 @@ void UVimEditorSubsystem::HandleArrowKeysNavigation(
 		FUMInputPreProcessor::ToggleNativeInputHandling(true);
 		SlateApp.ProcessKeyDownEvent(OutKeyEvent);
 		SlateApp.ProcessKeyUpEvent(OutKeyEvent);
-		// SlateApp.ProcessReply();  // I want to try implementation with this
 	}
-	// Might help with soldifying focus?
-	// if (TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0))
-	// 	SlateApp.SetAllUserFocus(FocusedWidget, EFocusCause::Navigation);
 }
 
 bool UVimEditorSubsystem::HandleListViewNavigation(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView = nullptr;
-	if (!FUMSlateHelpers::TryGetListView(SlateApp, ListView))
-		return false;
-
-	// We don't need the list view itself here. We can refactor to just verify
-	// if that's a ListView or not.
-
-	// Test
 	const auto& FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	if (!FocusedWidget.IsValid())
+	if (!FocusedWidget.IsValid()
+		|| !FUMSlateHelpers::IsValidTreeViewType(
+			FocusedWidget->GetTypeAsString()))
 		return false;
-
-	// In Visual Mode, we want a constant simulation of Shift down for proper
-	// range selection. Else, we will just directly navigate to items.
-	const bool bShouldSimulateShiftDown{ CurrentVimMode == EVimMode::Visual };
 
 	FNavigationEvent NavEvent;
 	FUMInputHelpers::GetNavigationEventFromVimKey(
-		InKeyEvent, NavEvent, bShouldSimulateShiftDown);
+		InKeyEvent, NavEvent,
+		CurrentVimMode == EVimMode::Visual /* Shift-Down in Visual Mode */);
 
 	const int32 Count{ GetPracticalCountBuffer() };
 
 	for (int32 i{ 0 }; i < Count; ++i)
 	{
 		const FNavigationReply NavReply =
-			// ListView->OnNavigation( // Navigate to the next or previous item
 			FocusedWidget->OnNavigation( // Navigate to the next or previous item
-										 // SlateApp.GetUserFocusedWidget(0)->GetCachedGeometry(), NavEvent);
 				FocusedWidget->GetCachedGeometry(), NavEvent);
-		// TODO:
-		// I think we can just use the ListView Geometry instead of going
-		// through SlateApp. Test this.
 
 		// This is deprecated, keeping for reference how we can use BoundaryRule
 		// if (NavReply.GetBoundaryRule() != EUINavigationRule::Escape)

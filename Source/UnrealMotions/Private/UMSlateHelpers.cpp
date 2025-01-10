@@ -161,16 +161,19 @@ bool FUMSlateHelpers::GetParentDockingTabStackAsWidget(
 	return true;
 }
 
-bool FUMSlateHelpers::IsValidTreeViewType(const FName& InWidgetType)
+bool FUMSlateHelpers::IsValidTreeViewType(const FString& InWidgetType)
 {
-	static const TSet<FName> ValidWidgetNavigationTypes{
+	static const TSet<FString> ValidWidgetNavigationTypes{
 		"SAssetTileView",
 		"SSceneOutlinerTreeView",
 		"STreeView",
 		"SSubobjectEditorDragDropTree"
 	};
 
-	return ValidWidgetNavigationTypes.Contains(InWidgetType);
+	return (ValidWidgetNavigationTypes.Contains(InWidgetType)
+		|| ValidWidgetNavigationTypes.Contains(InWidgetType.Left(9)));
+	// Either something specific like "SAssetTileView", etc.
+	// Or more generically starts with "STreeView"
 }
 
 bool FUMSlateHelpers::TryGetListView(FSlateApplication& SlateApp, TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& OutListView)
@@ -183,12 +186,8 @@ bool FUMSlateHelpers::TryGetListView(FSlateApplication& SlateApp, TSharedPtr<SLi
 		return false;
 	}
 
-	if (!FUMSlateHelpers::IsValidTreeViewType(FocusedWidget->GetType())
-		&& !FUMSlateHelpers::IsValidTreeViewType(
-			FName(FocusedWidget->GetTypeAsString().Left(9))))
-	{
+	if (!IsValidTreeViewType(FocusedWidget->GetTypeAsString()))
 		return false;
-	}
 
 	OutListView =
 		StaticCastSharedPtr<SListView<

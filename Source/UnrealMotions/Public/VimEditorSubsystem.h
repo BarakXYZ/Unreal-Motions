@@ -75,6 +75,10 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	void ProcessVimNavigationInput(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	/**
+	 * This is pretty generic. We're not doing something too special. Might
+	 * want to refactor and share this with more types.
+	 */
 	bool HandleListViewNavigation(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 

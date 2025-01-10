@@ -51,7 +51,7 @@ public:
 	///////////////////////////////////////////////////////////////////////////
 	//						~ List View Helpers ~
 	//
-	static bool IsValidTreeViewType(const FName& InWidgetType);
+	static bool IsValidTreeViewType(const FString& InWidgetType);
 
 	static bool GetSelectedTreeViewItemAsWidget(
 		FSlateApplication& SlateApp, TSharedPtr<SWidget>& OutWidget,
