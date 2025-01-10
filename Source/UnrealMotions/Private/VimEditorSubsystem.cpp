@@ -1,18 +1,8 @@
 #include "VimEditorSubsystem.h"
-#include "Framework/Docking/TabManager.h"
-#include "Framework/Notifications/NotificationManager.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
 #include "UMFocusManager.h"
 #include "UMInputPreProcessor.h"
-#include "Widgets/Docking/SDockTab.h"
-#include "UMWindowsNavigationManager.h"
-#include "UMTabsNavigationManager.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SHyperlink.h"
-#include "Widgets/Input/SSearchBox.h"
-#include "Widgets/Views/STreeView.h"
-#include "Editor/SceneOutliner/Public/SSceneOutliner.h"
 #include "ISceneOutlinerTreeItem.h"
 #include "Input/Events.h"
 #include "UMSlateHelpers.h"
@@ -241,7 +231,7 @@ bool UVimEditorSubsystem::HandleTreeViewFirstOrLastItemNavigation(
 	if (AllItems.IsEmpty())
 		return true; // Maybe we want to return false in here? Need some testings
 
-	// if G, our goto item will be the last one, if gg, first
+	// if G, our GoTo item will be the last one, if gg, first
 	bool bIsShiftDown = InKeyEvent.IsShiftDown();
 
 	if (CurrentVimMode == EVimMode::Normal)
@@ -278,7 +268,7 @@ void UVimEditorSubsystem::HandleTreeViewVisualModeFirstOrLastItemNavigation(
 {
 	const auto& SelItems = ListView->GetSelectedItems();
 	if (SelItems.IsEmpty())
-		return; // I think
+		return;
 
 	if (!AnchorTreeViewItem.Item.IsValid())
 	{
@@ -306,18 +296,13 @@ void UVimEditorSubsystem::HandleTreeViewVisualModeFirstOrLastItemNavigation(
 			: (AnchorTreeViewItem.Index + 1) - SelItems.Num();
 	}
 
-	int32 DebugLoopNum{ 0 };
 	for (int32 i{ 0 }; i < TimesToNavigate; ++i)
 	{
 		ProcessVimNavigationInput(SlateApp,
 			FUMInputPreProcessor::GetKeyEventFromKey(
 				NavKeyDirection,
 				true));
-		++DebugLoopNum;
 	}
-	// FUMLogger::NotifySuccess(FText::FromString(
-	// 	FString::Printf(TEXT("Times Navigated: %d, Anchor Index: %d"),
-	// 		DebugLoopNum, AnchorTreeViewItem.Index)));
 }
 
 void UVimEditorSubsystem::ProcessVimNavigationInput(
