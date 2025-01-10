@@ -482,7 +482,7 @@ void FUMInputPreProcessor::SimulateKeyPress(
 	FSlateApplication& SlateApp, const FKey& SimulatedKey,
 	const FModifierKeysState& ModifierKeys)
 {
-	static const FKeyEvent SimulatedEvent(
+	const FKeyEvent SimulatedEvent(
 		SimulatedKey,
 		ModifierKeys,
 		0, 0, 0, 0);
@@ -490,12 +490,6 @@ void FUMInputPreProcessor::SimulateKeyPress(
 	bNativeInputHandling = true;
 	SlateApp.ProcessKeyDownEvent(SimulatedEvent);
 	SlateApp.ProcessKeyUpEvent(SimulatedEvent);
-
-	// FCharacterEvent CharEvent(
-	// 	'I',
-	// 	FModifierKeysState(), 0, false);
-	// bNativeInputHandling = true;
-	// SlateApp.ProcessKeyCharEvent(CharEvent);
 }
 
 bool FUMInputPreProcessor::GetStrDigitFromKey(const FKey& InKey, FString& OutStr,

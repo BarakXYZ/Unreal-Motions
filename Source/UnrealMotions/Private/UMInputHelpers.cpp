@@ -1,5 +1,7 @@
 #include "UMInputHelpers.h"
 #include "Types/SlateEnums.h"
+#include "UMSlateHelpers.h"
+#include "Widgets/Input/SButton.h"
 
 const TSharedPtr<FUMInputHelpers> FUMInputHelpers::InputHelpers =
 	MakeShared<FUMInputHelpers>();
@@ -84,6 +86,22 @@ void FUMInputHelpers::SimulateClickOnWidget(
 	SlateApp.SetPlatformCursorVisibility(true);
 }
 
+void FUMInputHelpers::SimulateRightClick(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid())
+		return;
+
+	// Will fetch and assign the item to Focused Widget (or not if not list view)
+	FUMSlateHelpers::GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
+		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>());
+
+	// Will remain the original focused widget if not list
+	FUMInputHelpers::SimulateClickOnWidget(
+		SlateApp, FocusedWidget.ToSharedRef(), EKeys::RightMouseButton);
+}
+
 bool FUMInputHelpers::AreMouseButtonsPressed(const TSet<FKey>& InButtons)
 {
 	const FSlateApplication& SlateApp = FSlateApplication::Get();
@@ -131,11 +149,12 @@ bool FUMInputHelpers::GetNavigationEventFromVimKey(
 	const FKeyEvent&  InKeyEvent,
 	FNavigationEvent& OutNavigationEvent, bool bIsShiftDown)
 {
-	const FModifierKeysState ModKeysShift(bIsShiftDown, bIsShiftDown,
+	const FModifierKeysState ModKeysShift(
+		bIsShiftDown, bIsShiftDown,
 		false, false, false, false, false, false, false);
 
 	EUINavigation UINav;
-	if (FUMInputHelpers::GetUINavigationFromVimKey(InKeyEvent.GetKey(), UINav))
+	if (GetUINavigationFromVimKey(InKeyEvent.GetKey(), UINav))
 	{
 		FNavigationEvent NavEvent(ModKeysShift, 0, UINav,
 			ENavigationGenesis::Keyboard);
@@ -145,58 +164,56 @@ bool FUMInputHelpers::GetNavigationEventFromVimKey(
 	return false;
 }
 
-// void FUMInputHelpers::PrintConfiguredHotkeysCommandsName(
-// 	const TArray<FInputChord>& InChordsToCheck)
-// {
-// 	if (InChordsToCheck.Num() == 0)
-// 	{
-// 		UE_LOG(LogTemp, Warning, TEXT("No input chords provided for checking hotkeys."));
-// 		return;
-// 	}
+bool FUMInputHelpers::MapVimToArrowNavigation(
+	const FKeyEvent& InKeyEvent, FKeyEvent& OutKeyEvent, bool bIsShiftDown)
+{
+	const FModifierKeysState ModKeysState(
+		bIsShiftDown, bIsShiftDown,
+		false, false, false, false, false, false, false);
 
-// 	const UInputSettings* InputSettings = GetDefault<InputSettings>();
-// 	if (!InputSettings)
-// 	{
-// 		UE_LOG(LogTemp, Error, TEXT("Failed to get InputSettings."));
-// 		return;
-// 	}
+	FKey MappedKey;
+	if (GetArrowKeyFromVimKey(InKeyEvent.GetKey(), MappedKey))
+	{
+		OutKeyEvent = FKeyEvent(
+			MappedKey,
+			ModKeysState,
+			0,	   // User index
+			false, // Is repeat
+			0,	   // Character code
+			0	   // Key code
+		);
+		return true;
+	}
+	return false;
+}
 
-// 	const TArray<FInputActionBinding>&	ActionMappings = InputSettings->GetActionMappings();
-// 	const TArray<FInputAxisKeyBinding>& AxisMappings = InputSettings->GetAxisMappings();
+void FUMInputHelpers::Enter(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static const FName ButtonType{ "SButton" };
 
-// 	for (const FInputChord& Chord : InChordsToCheck)
-// 	{
-// 		bool bFound = false;
+	TSharedPtr<SWidget> FocusedWidget =
+		SlateApp.GetUserFocusedWidget(0);
+	// SlateApp.GetKeyboardFocusedWidget();
+	if (!FocusedWidget)
+		return;
 
-// 		// Check Action Mappings
-// 		for (const FInputActionBinding& ActionMapping : ActionMappings)
-// 		{
-// 			if (ActionMapping.Key == Chord.Key && ActionMapping.bShift == Chord.bShift && ActionMapping.bCtrl == Chord.bCtrl && ActionMapping.bAlt == Chord.bAlt && ActionMapping.bCmd == Chord.bCmd)
-// 			{
-// 				UE_LOG(LogTemp, Log, TEXT("Key '%s' is bound to Action '%s'"),
-// 					*Chord.Key.GetDisplayName().ToString(),
-// 					*ActionMapping.ActionName.ToString());
-// 				bFound = true;
-// 			}
-// 		}
+	// FUMLogger::NotifySuccess(
+	// 	FText::FromName(FocusedWidget->GetWidgetClass().GetWidgetType()));
+	const FName FocusedWidgetType =
+		FocusedWidget->GetWidgetClass().GetWidgetType();
 
-// 		// Check Axis Mappings
-// 		for (const FInputAxisKeyBinding& AxisMapping : AxisMappings)
-// 		{
-// 			if (AxisMapping.Key == Chord.Key)
-// 			{
-// 				UE_LOG(LogTemp, Log, TEXT("Key '%s' is bound to Axis '%s' with scale %f"),
-// 					*Chord.Key.GetDisplayName().ToString(),
-// 					*AxisMapping.AxisName.ToString(),
-// 					AxisMapping.Scale);
-// 				bFound = true;
-// 			}
-// 		}
+	if (FocusedWidgetType.IsEqual(ButtonType))
+	{
+		TSharedPtr<SButton> FocusedWidgetAsButton =
+			StaticCastSharedPtr<SButton>(FocusedWidget);
+		FocusedWidgetAsButton->SimulateClick();
+		return;
+	}
+	// Will fetch and assign the item to Focused Widget (or not if not list view)
+	FUMSlateHelpers::GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
+		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>());
 
-// 		if (!bFound)
-// 		{
-// 			UE_LOG(LogTemp, Warning, TEXT("Key '%s' is not bound to any action or axis."),
-// 				*Chord.Key.GetDisplayName().ToString());
-// 		}
-// 	}
-// }
+	FUMInputHelpers::SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef(),
+		EKeys::LeftMouseButton, true /* Double-Click */);
+}

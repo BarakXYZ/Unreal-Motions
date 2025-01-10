@@ -11,6 +11,7 @@ const TSharedPtr<FUMSlateHelpers> FUMSlateHelpers::SlateHelpers =
 
 FUMSlateHelpers::FUMSlateHelpers()
 {
+	Logger.SetLogCategory(&LogUMSlateHelpers);
 }
 FUMSlateHelpers::~FUMSlateHelpers()
 {
@@ -170,4 +171,74 @@ bool FUMSlateHelpers::IsValidTreeViewType(const FName& InWidgetType)
 	};
 
 	return ValidWidgetNavigationTypes.Contains(InWidgetType);
+}
+
+bool FUMSlateHelpers::TryGetListView(FSlateApplication& SlateApp, TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>& OutListView)
+{
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid())
+	{
+		SlateHelpers->Logger.Print(
+			"Focused Widget is NOT valid.", ELogVerbosity::Warning);
+		return false;
+	}
+
+	if (!FUMSlateHelpers::IsValidTreeViewType(FocusedWidget->GetType())
+		&& !FUMSlateHelpers::IsValidTreeViewType(
+			FName(FocusedWidget->GetTypeAsString().Left(9))))
+	{
+		return false;
+	}
+
+	OutListView =
+		StaticCastSharedPtr<SListView<
+			TSharedPtr<ISceneOutlinerTreeItem>>>(FocusedWidget);
+	return true;
+}
+
+bool FUMSlateHelpers::GetSelectedTreeViewItemAsWidget(
+	FSlateApplication& SlateApp, TSharedPtr<SWidget>& OutWidget,
+	const TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>& OptionalListView)
+{
+	// Check if we should fetch a new view or use an existing one that was passed
+	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView;
+	if (OptionalListView.IsSet())
+		ListView = OptionalListView.GetValue();
+
+	else if (!TryGetListView(SlateApp, ListView)) // Try fetch ListView
+		return false;
+
+	TArray<TSharedPtr<ISceneOutlinerTreeItem>> SelItems =
+		ListView->GetSelectedItems();
+	if (SelItems.IsEmpty() || !SelItems[0].IsValid())
+		return false;
+
+	TSharedPtr<ITableRow> TableRow = ListView->WidgetFromItem(SelItems[0]);
+	if (!TableRow.IsValid())
+		return false;
+
+	OutWidget = TableRow->AsWidget();
+	return true;
+}
+
+void FUMSlateHelpers::UpdateTreeViewSelectionOnExitVisualMode(
+	FSlateApplication& SlateApp, const TWeakPtr<ISceneOutlinerTreeItem>& AnchorItem)
+{
+	TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView = nullptr;
+	if (!FUMSlateHelpers::TryGetListView(SlateApp, ListView))
+		return;
+
+	const auto SelItems = ListView->GetSelectedItems();
+	if (SelItems.IsEmpty() || !AnchorItem.IsValid())
+		return;
+
+	// Determine if we should now focus on the first or last item.
+	// We deduce that by checking if our Anchor is to the left of the right
+	// of the list.
+	TSharedPtr<ISceneOutlinerTreeItem> CurrItem =
+		AnchorItem == SelItems[0] ? SelItems.Last() : SelItems[0];
+	ListView->ClearSelection();
+	ListView->SetItemSelection(CurrItem, true,
+		ESelectInfo::OnNavigation); // OnNavigation is important here to clear
+									// the selection array more deeply (it seems)
 }

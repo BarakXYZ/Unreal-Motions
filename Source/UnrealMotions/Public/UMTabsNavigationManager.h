@@ -9,7 +9,7 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnNewMajorTabChanged,
 	TWeakPtr<SDockTab> /* New Major Tab */,
 	TWeakPtr<SDockTab> /* New Minor Tab */);
 
-enum ENavSpecTabType : uint8
+enum class ENavSpecTabType : uint8
 {
 	LevelEditor,
 	Toolkit,

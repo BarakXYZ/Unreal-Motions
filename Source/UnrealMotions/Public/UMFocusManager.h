@@ -108,6 +108,20 @@ public:
 
 	static void ActivateWindow(const TSharedRef<SWindow> Window);
 
+	/**
+	 * @brief Activates and properly focuses a newly invoked tab.
+	 *
+	 * @details Ensures proper tab activation by:
+	 * 1. Clearing existing focus
+	 * 2. Activating parent window
+	 * 3. Setting tab as active in parent
+	 *
+	 * @param SlateApp Reference to Slate application
+	 * @param NewTab Pointer to newly created tab
+	 */
+	static void ActivateNewInvokedTab(
+		FSlateApplication& SlateApp, const TSharedPtr<SDockTab> NewTab);
+
 	void TrackActiveWindow();
 
 	void LogTabParentWindow(const TSharedRef<SDockTab> InTab);

@@ -17,6 +17,9 @@ public:
 		FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
 		const FKey& EffectingButton, bool bIsDoubleClick = false);
 
+	static void SimulateRightClick(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	static bool AreMouseButtonsPressed(const TSet<FKey>& InButtons);
 
 	static bool GetArrowKeyFromVimKey(const FKey& InVimKey, FKey& OutArrowKey);
@@ -39,6 +42,23 @@ public:
 	 */
 	static bool GetNavigationEventFromVimKey(const FKeyEvent& InKeyEvent,
 		FNavigationEvent& OutNavigationEvent, bool bIsShiftDown);
+
+	/**
+	 * @brief Maps Vim movement keys to corresponding arrow key events.
+	 *
+	 * @details Translates HJKL keys to arrow key events while preserving:
+	 * - Modifier key states
+	 * - Other key event properties
+	 *
+	 * @param InKeyEvent Original key event
+	 * @param OutKeyEvent Mapped arrow key event
+	 * @return true if mapping was successful, false if key wasn't mappable
+	 */
+	static bool MapVimToArrowNavigation(
+		const FKeyEvent& InKeyEvent, FKeyEvent& OutKeyEvent, bool bIsShiftDown);
+
+	static void Enter(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	// static void PrintConfiguredHotkeysCommandsName(const TArray<FInputChord>& InChordsToCheck);
 

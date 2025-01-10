@@ -8,6 +8,13 @@
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "VimTextEditorSubsystem.generated.h"
 
+enum class EUMEditableWidgetsFocusState : uint8
+{
+	None,
+	SingleLine,
+	MultiLine
+};
+
 /**
  *
  */
@@ -42,17 +49,28 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 		const TSharedPtr<SWidget>& NewWidget);
 
-	void ToggleReadOnly(bool bIsMultiLine, bool bIsReadOnly);
+	void UpdateEditables();
+
+	void ToggleReadOnlySingle();
+	void ToggleReadOnlyMulti();
+
+	void SetCursorSingle();
+	void SetCursorMulti();
+
+	void OnEditableFocusLost();
+
+	bool IsNewEditableText(const TSharedRef<SWidget> NewEditableText);
+	bool IsDefaultEditableBuffer(const FString& InBuffer);
 
 	FUMLogger					   Logger;
 	TWeakPtr<FUMInputPreProcessor> InputPP;
 	EVimMode					   CurrentVimMode{ EVimMode::Insert };
+	EVimMode					   PreviousVimMode{ EVimMode::Insert };
 
 	TWeakPtr<SWidget>					ActiveEditableGeneric{ nullptr };
 	TWeakPtr<SEditableText>				ActiveEditableText{ nullptr };
 	TWeakPtr<SMultiLineEditableText>	ActiveMultiLineEditableText{ nullptr };
 	TWeakPtr<SEditableTextBox>			ActiveEditableTextBox{ nullptr };
 	TWeakPtr<SMultiLineEditableTextBox> ActiveMultiLineEditableTextBox{ nullptr };
-	bool								bShouldReadOnlyText{ false };
-	bool								bIsActiveEditableMultiLine{ false };
+	EUMEditableWidgetsFocusState		EditableWidgetsFocusState{ EUMEditableWidgetsFocusState::None };
 };

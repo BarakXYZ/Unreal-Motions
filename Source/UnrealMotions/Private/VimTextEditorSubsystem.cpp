@@ -2,6 +2,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/InvalidateWidgetReason.h"
 #include "UMInputHelpers.h"
+#include "Editor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, Log, All);
 
@@ -34,25 +35,24 @@ void UVimTextEditorSubsystem::BindCommands()
 
 void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
-	EVimMode PreviousMode = CurrentVimMode;
+	PreviousVimMode = CurrentVimMode;
 	CurrentVimMode = NewVimMode;
-
-	FSlateApplication&		  SlateApp = FSlateApplication::Get();
-	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
 
 	switch (CurrentVimMode)
 	{
 		case EVimMode::Insert:
 		{
-			bShouldReadOnlyText = false;
-			ToggleReadOnly(bIsActiveEditableMultiLine, false);
+			UpdateEditables();
 			break;
 		}
 		case EVimMode::Normal:
+		{
+			UpdateEditables();
+			break;
+		}
 		case EVimMode::Visual:
 		{
-			bShouldReadOnlyText = true;
-			ToggleReadOnly(bIsActiveEditableMultiLine, true);
+			UpdateEditables();
 			break;
 		}
 	}
@@ -80,51 +80,93 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 
 	if (NewWidget.IsValid())
 	{
+		Logger.Print("On Focus Changed -> Editable");
+		// Check if Single-Line Editable Text & Track
 		if (NewWidget->GetType().IsEqual(EditableTextType))
 		{
-			ActiveEditableGeneric = NewWidget; // Track this widget for later use
-			bIsActiveEditableMultiLine = false;
-			//
-			TSharedPtr<SEditableText> EditableText =
-				StaticCastSharedPtr<SEditableText>(NewWidget);
-			ActiveEditableText = EditableText;
+			Logger.Print("Found SingleLine");
+			if (IsNewEditableText(NewWidget.ToSharedRef()))
+			{
+				Logger.Print("New SingleLine");
+				OnEditableFocusLost();
+				ActiveEditableGeneric = NewWidget; // Track as Generic
+				EditableWidgetsFocusState =
+					EUMEditableWidgetsFocusState::SingleLine; // Track Mode
 
-			Logger.Print("VimTextEditor: SEditableText Found", ELogVerbosity::Verbose);
+				TSharedPtr<SEditableText> EditableText =
+					StaticCastSharedPtr<SEditableText>(NewWidget);
+				ActiveEditableText = EditableText; // Track Editable
+
+				Logger.Print("SEditableText Found", ELogVerbosity::Verbose);
+			}
+			else
+			{
+				Logger.Print("Same SingleLine");
+				return;
+			}
 		}
+		// Check if Multi-Line Editable Text & Track
 		else if (NewWidget->GetType().IsEqual(MultiEditableTextType))
 		{
-			ActiveEditableGeneric = NewWidget; // Track this widget for later use
-			bIsActiveEditableMultiLine = true;
+			if (IsNewEditableText(NewWidget.ToSharedRef()))
+			{
+				OnEditableFocusLost();
 
-			TSharedPtr<SMultiLineEditableText> MultiEditableText =
-				StaticCastSharedPtr<SMultiLineEditableText>(NewWidget);
-			ActiveMultiLineEditableText = MultiEditableText;
+				ActiveEditableGeneric = NewWidget; // Track as Generic
+				EditableWidgetsFocusState =
+					EUMEditableWidgetsFocusState::MultiLine; // Track Mode
 
-			Logger.Print("VimTextEditor: SMultiLineEditableText Found", ELogVerbosity::Verbose);
+				TSharedPtr<SMultiLineEditableText> MultiEditableText =
+					StaticCastSharedPtr<SMultiLineEditableText>(NewWidget);
+				ActiveMultiLineEditableText = MultiEditableText; // Track Editable
+
+				Logger.Print("SMultiLineEditableText Found", ELogVerbosity::Verbose);
+			}
+			else
+				return;
 		}
-		else
+		else // No Editables found:
 		{
-			// Logger.Print("Could not find Editable or Multi Text"
-			// 		+ NewWidget->GetWidgetClass().GetWidgetType().ToString(),
-			// 	ELogVerbosity::Warning, true);
-			return;
+			// Check if any editables we're focused before, and handle them.
+			OnEditableFocusLost();
+			EditableWidgetsFocusState = EUMEditableWidgetsFocusState::None;
+			Logger.Print("None-Editable");
+			return; // Early return Non-Editables.
 		}
 
+		// Climb to the EditableTextBox parent
 		TSharedPtr<SWidget> Parent =
 			NewWidget->GetParentWidget(); // Usually SBox or some wrapper
 		if (!Parent.IsValid())
 			return;
-
 		Parent = Parent->GetParentWidget(); // Usually SHorizontalBox
 		if (!Parent.IsValid())
 			return;
-
 		// The actual SEditableTextBox or SMultiLineEditableTextBoxs
 		Parent = Parent->GetParentWidget();
 		if (!Parent.IsValid())
 			return;
 
-		if (bIsActiveEditableMultiLine)
+		Logger.Print("Climbed to parent");
+
+		// NOTE: We can look up the specific types, as they aren't represented
+		// as Multi & EditableText, but by some other wrappers like "SSearchBox",
+		// "SFilterSearchBoxImpl", etc. But they inherit from these Box types.
+
+		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
+		{
+			if (Parent->GetWidgetClass().GetWidgetType().IsEqual("SBorder"))
+			{
+				TSharedPtr<SEditableTextBox> TextBox =
+					StaticCastSharedPtr<SEditableTextBox>(Parent);
+				ActiveEditableTextBox = TextBox;
+				TextBox->SetSelectAllTextWhenFocused(false);
+				TextBox->SetSelectAllTextOnCommit(false);
+				Logger.Print("Set Active Editable Text Box");
+			}
+		}
+		else // Multi-Line
+		// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
 		{
 			// if (Parent->GetType().IsEqual(MultiEditableTextBoxType))
 			if (Parent->GetWidgetClass().GetWidgetType().IsEqual("SBorder"))
@@ -132,101 +174,238 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 				TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 					StaticCastSharedPtr<SMultiLineEditableTextBox>(Parent);
 				ActiveMultiLineEditableTextBox = MultiTextBox;
+				Logger.Print("Set Active MultiEditable Text Box");
 			}
 		}
-		else // Single Editable Text
-		{
-			// if (Parent->GetType().IsEqual(EditableTextBoxType))
-			if (Parent->GetWidgetClass().GetWidgetType().IsEqual("SBorder"))
-			{
-				TSharedPtr<SEditableTextBox> TextBox =
-					StaticCastSharedPtr<SEditableTextBox>(Parent);
-				ActiveEditableTextBox = TextBox;
-			}
-		}
-		ToggleReadOnly(bIsActiveEditableMultiLine, bShouldReadOnlyText);
-		// Logger.Print(Parent->GetWidgetClass().GetWidgetType().ToString(),
-		// ELogVerbosity::Verbose, true);
-		return;
-	}
-	else
-	{
-		Logger.Print("OnFocusedChanged: Widget Focused is Invalid",
-			ELogVerbosity::Error, true);
+
+		UpdateEditables(); // We early return if Non-Editables, so this is safe.
 	}
 }
 
-void UVimTextEditorSubsystem::ToggleReadOnly(bool bIsMultiLine, bool bIsReadOnly)
+void UVimTextEditorSubsystem::UpdateEditables()
 {
-	if (bIsMultiLine)
+	switch (EditableWidgetsFocusState)
 	{
-		if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-				ActiveMultiLineEditableTextBox.Pin())
-		{
-			MultiTextBox->SetIsReadOnly(bIsReadOnly);
-			MultiTextBox->SetTextBoxBackgroundColor(
-				FSlateColor(FLinearColor::Black));
-			MultiTextBox->SetReadOnlyForegroundColor(
-				FSlateColor(FLinearColor::White));
+		case EUMEditableWidgetsFocusState::None:
+			break;
 
-			// NOTE:
-			// We set this dummy goto to refresh the cursor blinking to ON / OFF
-			MultiTextBox->GoTo(MultiTextBox->GetCursorLocation());
-		}
+		case EUMEditableWidgetsFocusState::SingleLine:
+			SetCursorSingle();
+			ToggleReadOnlySingle();
+			Logger.Print("Handle Single-Line");
+			break;
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			SetCursorMulti();
+			ToggleReadOnlyMulti();
+			break;
 	}
-	else
+}
+
+void UVimTextEditorSubsystem::ToggleReadOnlySingle()
+{
+	if (const TSharedPtr<SEditableTextBox> TextBox = ActiveEditableTextBox.Pin())
 	{
-		if (const TSharedPtr<SEditableTextBox> TextBox =
-				ActiveEditableTextBox.Pin())
+		TextBox->SetIsReadOnly(CurrentVimMode == EVimMode::Normal);
+		TextBox->SetTextBoxBackgroundColor(
+			FSlateColor(FLinearColor::Black));
+		TextBox->SetReadOnlyForegroundColor(
+			FSlateColor(FLinearColor::White));
+
+		// NOTE:
+		// Unlike the MultiLineEditable we don't have GetCursorLocation
+		// so we can't really know where we were for the GoTo() *~*
+		// So the hack I found to mitigate the blinking vs. non-blinking
+		// cursor not changing upon turnning IsReadOnly ON / OFF is to just
+		// BeginSearch with an empty FText (LOL).
+		// This seems to keep the cursor in the same location while aligning
+		// the blinking cursor with the current mode (Normal vs. Insert) <3
+		TextBox->BeginSearch(FText::GetEmpty());
+	}
+}
+
+void UVimTextEditorSubsystem::ToggleReadOnlyMulti()
+{
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+		MultiTextBox->SetIsReadOnly(CurrentVimMode == EVimMode::Normal);
+		MultiTextBox->SetTextBoxBackgroundColor(
+			FSlateColor(FLinearColor::Black));
+		MultiTextBox->SetReadOnlyForegroundColor(
+			FSlateColor(FLinearColor::White));
+
+		// NOTE:
+		// We set this dummy GoTo to refresh the cursor blinking to ON / OFF
+		MultiTextBox->GoTo(MultiTextBox->GetCursorLocation());
+	}
+}
+
+void UVimTextEditorSubsystem::SetCursorSingle()
+{
+	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+	{
+		const FString& Text = EditTextBox->GetText().ToString();
+
+		// In Insert mode we clear the buffer if default setup ("  ") (1)
+		// or simply just clear any previous selection. (2)
+		if (CurrentVimMode == EVimMode::Insert)
 		{
-			TextBox->SetIsReadOnly(bIsReadOnly);
-			TextBox->SetTextBoxBackgroundColor(
-				FSlateColor(FLinearColor::Black));
-			TextBox->SetReadOnlyForegroundColor(
-				FSlateColor(FLinearColor::White));
-
-			// TextBox->OnNavigation();
-
-			// TextBox->SetTextBlockStyle();
-			// TextBox->SetStyle();
-
-			// Won't influence the "Active" blue outline look
-			// FSlateApplication::Get().SetKeyboardFocus(TextBox, EFocusCause::Navigation);
-
-			if (const auto EditTextBox = ActiveEditableText.Pin())
+			if (IsDefaultEditableBuffer(Text)) // (1) Clear default buffer if any
 			{
-				FNavigationEvent NavEvent;
-				FKeyEvent		 InKeyEvent(FKey(EKeys::Right), FModifierKeysState(), 0, 0, 0, 0);
-				FUMInputHelpers::GetNavigationEventFromVimKey(
-					InKeyEvent, NavEvent, true);
-				// EditTextBox->OnNavigation(EditTextBox->GetCachedGeometry(), NavEvent);
-				// EditTextBox->OnNavigation(EditTextBox->GetCachedGeometry(), NavEvent);
-				// EditTextBox->OnNavigation(EditTextBox->GetCachedGeometry(), NavEvent);
-
-				// EditTextBox->OnPreviewKeyDown(EditTextBox->GetCachedGeometry(), InKeyEvent);
-				// EditTextBox->OnPreviewKeyDown(EditTextBox->GetCachedGeometry(), InKeyEvent);
-				// EditTextBox->OnPreviewKeyDown(EditTextBox->GetCachedGeometry(), InKeyEvent);
-				// Most of the down and up are protected for the non Box
+				EditTextBox->SetText(FText::GetEmpty());	 // Clear
+				EditTextBox->BeginSearch(FText::GetEmpty()); // For cursor to blink.
 			}
-			FKeyEvent InKeyEvent(
-				FKey(EKeys::Right), FModifierKeysState(), 0, 0, 0, 0);
-			// TextBox->OnPreviewKeyDown(TextBox->GetCachedGeometry(), InKeyEvent);
-			// TextBox->OnKeyDown(TextBox->GetCachedGeometry(), InKeyEvent);
-			// TextBox->OnKeyUp(TextBox->GetCachedGeometry(), InKeyEvent);
-			// TextBox->OnFinishedKeyInput();
-			// TextBox->OnKeyDown(TextBox->GetCachedGeometry(), InKeyEvent);
-			// TextBox->OnKeyUp(TextBox->GetCachedGeometry(), InKeyEvent);
-			// TextBox->OnFinishedKeyInput();
+			else
+				EditTextBox->ClearSelection(); // (2) Clear previous selection
+		}
+		else if (CurrentVimMode == EVimMode::Normal || CurrentVimMode == EVimMode::Visual)
+		{
+			// 1)
+			// Set the default dummy buffer ("  ") for visualization and select it
+			if (Text.IsEmpty())
+			{
+				EditTextBox->SetText(FText::FromString("  "));
 
-			// NOTE:
-			// Unlike the MultiLineEditable we don't have GetCursorLocation
-			// so we can't really know where we were for the GoTo() *~*
-			// So the hack I found to mitigate the blinking vs. non-blinking
-			// cursor not changing upon turnning IsReadOnly ON / OFF is to just
-			// BeginSearch with an empty FText (LOL).
-			// This seems to keep the cursor in the same location while fixing
-			// aligning the blinking cursor with the current mode <3
-			// TextBox->BeginSearch(FText::GetEmpty());
+				EditTextBox->SelectAllText();
+				// NOTE:
+				// There's a slight delay that occurs sometimes when focusing
+				// for example on the finder in the Content Browser.
+				// This delay is important to set the text properly.
+				if (!GEditor)
+					return;
+				FTimerHandle THandle;
+				GEditor->GetTimerManager()->SetTimer(
+					THandle, [this, EditTextBox]() {
+						if (!ActiveEditableTextBox.IsValid())
+							return;
+
+						EditTextBox->SelectAllText();
+					},
+					0.025f, false);
+			}
+
+			// 2)
+			// There's 1 custom character selected, so we can just select all.
+			else if (Text.Len() == 1)
+			{
+				EditTextBox->SelectAllText();
+			}
+
+			// 3)
+			// There are multiple custom characters, potentially words, etc.
+			else
+			{
+				// Again delaying the processing as it seems to be needed in order
+				// to process correctly
+				if (!GEditor)
+					return;
+				FTimerHandle THandle;
+				GEditor->GetTimerManager()->SetTimer(
+					THandle,
+					[this, EditTextBox]() {
+						if (!ActiveEditableTextBox.IsValid())
+							return;
+						FSlateApplication& SlateApp = FSlateApplication::Get();
+
+						// This is important in order to mitigate a potential
+						// Stack Overflow that seems to occur in Preferences
+						// SearchBox
+						if (SlateApp.IsProcessingInput())
+							return;
+
+						EditTextBox->ClearSelection();
+
+						FModifierKeysState ModKeys(
+							true, true, /* Shift Down */
+							false, false, false, false, false, false, false);
+
+						// Default: try to select to the left.
+						FUMInputPreProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeys);
+
+						// If not text selected: Select to the right.
+						// We're deducing our location by checking if any text
+						// was selected, as there will be no text selected only
+						// if we're at the beginning of the line. If so, we can
+						// simply simulate to the right to select the first char.
+						if (!EditTextBox->AnyTextSelected())
+						{
+							FUMInputPreProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeys);
+						}
+					},
+					0.025f, false);
+
+				// EditTextBox->BeginSearch(FText::FromString(" "), ESearchCase::IgnoreCase, true);
+				// EditTextBox->GoTo(ETextLocation::EndOfLine);
+				// EditTextBox->AdvanceSearch();
+			}
 		}
 	}
+}
+
+void UVimTextEditorSubsystem::SetCursorMulti()
+{
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+	}
+}
+
+void UVimTextEditorSubsystem::OnEditableFocusLost()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+		{
+			break;
+		}
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+		{
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
+				const FString Text = EditTextBox->GetText().ToString();
+				if (IsDefaultEditableBuffer(Text))
+					EditTextBox->SetText(FText::GetEmpty());
+
+				EditTextBox->SetIsReadOnly(false);
+				ActiveEditableText.Reset();
+				ActiveEditableGeneric.Reset();
+			}
+
+			break;
+		}
+		case EUMEditableWidgetsFocusState::MultiLine:
+		{
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				const FString Text = MultiTextBox->GetText().ToString();
+				if (IsDefaultEditableBuffer(Text))
+					MultiTextBox->SetText(FText::GetEmpty());
+				MultiTextBox->SetIsReadOnly(false);
+				ActiveMultiLineEditableTextBox.Reset();
+				ActiveEditableGeneric.Reset();
+			}
+			break;
+		}
+	}
+}
+
+bool UVimTextEditorSubsystem::IsNewEditableText(
+	const TSharedRef<SWidget> NewEditableText)
+{
+	if (const TSharedPtr<SWidget> OldEditableText = ActiveEditableGeneric.Pin())
+	{
+		if (NewEditableText->GetId() == OldEditableText->GetId())
+			return false; // Id match -> same editlabe.
+		return true;	  // Id don't match -> incoming new one.
+	}
+	else // Invalid old one -> new incoming one.
+		return true;
+}
+
+bool UVimTextEditorSubsystem::IsDefaultEditableBuffer(const FString& InBuffer)
+{
+	return (InBuffer.Len() == 2 && InBuffer == "  ");
 }

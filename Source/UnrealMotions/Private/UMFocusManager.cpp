@@ -725,6 +725,7 @@ bool FUMFocusManager::RemoveActiveMajorTab()
 		if (!MajorTab->GetLayoutIdentifier().ToString().Equals(LevelEditorType))
 		{
 			MajorTab->RemoveTabFromParent();
+			FocusNextFrontmostWindow();
 			return true;
 		}
 	return false;
@@ -794,6 +795,16 @@ void FUMFocusManager::ActivateWindow(const TSharedRef<SWindow> Window)
 	Log::AddDebugMessage(FString::Printf(
 		TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
 	FocusManager->HandleOnWindowChanged(Window);
+}
+
+void FUMFocusManager::ActivateNewInvokedTab(
+	FSlateApplication& SlateApp, const TSharedPtr<SDockTab> NewTab)
+{
+	SlateApp.ClearAllUserFocus(); // NOTE: In order to actually draw focus
+
+	if (TSharedPtr<SWindow> Win = NewTab->GetParentWindow())
+		FUMFocusManager::ActivateWindow(Win.ToSharedRef());
+	NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
 }
 
 void FUMFocusManager::LogTabChange(const FString& TabType, const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab)
