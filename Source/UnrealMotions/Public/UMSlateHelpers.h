@@ -87,6 +87,8 @@ public:
 	//						~ List View Helpers ~
 	///////////////////////////////////////////////////////////////////////////
 
+	static bool IsValidEditableText(const FString& InWidgetType);
+
 	static const TSharedPtr<FUMSlateHelpers> SlateHelpers;
 
 	FUMLogger Logger;

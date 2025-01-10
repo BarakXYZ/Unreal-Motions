@@ -1,4 +1,5 @@
 #include "VimEditorSubsystem.h"
+#include "Editor.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
 #include "UMFocusManager.h"
@@ -19,7 +20,7 @@ void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Logger.SetLogCategory(&LogVimEditorSubsystem);
 
-	FSlateApplication& SlateApp = FSlateApplication::Get();
+	// FSlateApplication& SlateApp = FSlateApplication::Get();
 	const FConfigFile& ConfigFile = FUMLogger::ConfigFile;
 	FString			   OutLog = "Vim Editor Subsystem Initialized: ";
 
@@ -336,9 +337,7 @@ bool UVimEditorSubsystem::HandleListViewNavigation(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	const auto& FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	if (!FocusedWidget.IsValid()
-		|| !FUMSlateHelpers::IsValidTreeViewType(
-			FocusedWidget->GetTypeAsString()))
+	if (!FocusedWidget.IsValid() || !FUMSlateHelpers::IsValidTreeViewType(FocusedWidget->GetTypeAsString()))
 		return false;
 
 	FNavigationEvent NavEvent;
@@ -354,7 +353,7 @@ bool UVimEditorSubsystem::HandleListViewNavigation(
 			FocusedWidget->OnNavigation( // Navigate to the next or previous item
 				FocusedWidget->GetCachedGeometry(), NavEvent);
 
-		// This is deprecated, keeping for reference how we can use BoundaryRule
+		// DEPRECATED: keeping for reference how we can use BoundaryRule
 		// if (NavReply.GetBoundaryRule() != EUINavigationRule::Escape)
 		// 	TrackVisualOffsetNavigation(InKeyEvent); // Only track if moving
 	}

@@ -33,6 +33,8 @@ public:
 		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 		const TSharedPtr<SWidget>& NewWidget);
 
+	void DetectWidgetType(const TSharedRef<SWidget> InWidget);
+
 	/**
 	 * Being called when a new Minor Tab is being activated.
 	 * Major tabs can also be deduced from this by fetching the TabManagerPtr

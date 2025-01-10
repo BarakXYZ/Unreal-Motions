@@ -241,3 +241,15 @@ void FUMSlateHelpers::UpdateTreeViewSelectionOnExitVisualMode(
 		ESelectInfo::OnNavigation); // OnNavigation is important here to clear
 									// the selection array more deeply (it seems)
 }
+
+bool FUMSlateHelpers::IsValidEditableText(const FString& InWidgetType)
+{
+	static const TSet<FString> ValidEditableTextTypes{
+		"SEditableText",
+		"SMultiLineEditableText",
+		// "SEditableTextBox",
+		// "SMultiLineEditableTextBox"
+	};
+
+	return ValidEditableTextTypes.Contains(InWidgetType);
+}

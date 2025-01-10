@@ -66,12 +66,33 @@ void FUMFocusManager::RegisterSlateEvents()
 		FocusManager.ToSharedRef(), &FUMFocusManager::HandleOnWindowChanged);
 }
 
+void FUMFocusManager::DetectWidgetType(const TSharedRef<SWidget> InWidget)
+{
+	const FString WidgetType = InWidget->GetTypeAsString();
+	if (FUMSlateHelpers::IsValidTreeViewType(WidgetType))
+	{
+		// Set enum... + ?
+	}
+	else if (FUMSlateHelpers::IsValidEditableText(WidgetType))
+	{
+		// Set enum... + ?
+	}
+	else
+	{
+		// Default enum... + ?
+	}
+}
+
 void FUMFocusManager::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
 	const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
 	// Logger.ToggleLogging(true);
+	if (!NewWidget.IsValid())
+		return;
+
 	Logger.Print("OnFocusChanged");
+	DetectWidgetType(NewWidget.ToSharedRef());
 
 	// Globally define rules for this LogCategory:
 	// 1. Should all messages print as notification?
