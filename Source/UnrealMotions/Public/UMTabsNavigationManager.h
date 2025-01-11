@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Docking/TabManager.h"
-#include "UMFocusManager.h"
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnNewMajorTabChanged,
 	TWeakPtr<SDockTab> /* New Major Tab */,
@@ -197,8 +196,6 @@ public:
 
 	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
 
-	static TWeakPtr<SDockTab> GetCurrentlySetMajorTab();
-
 	/** DEPRECATED
 	 * Gets the type of tab for navigation-specific purposes.
 	 * Used to determine how to handle tab navigation for different tab types.
@@ -234,17 +231,9 @@ public:
 	TSharedPtr<FUICommandInfo> CmdInfoNextMinorTab{ nullptr };
 	TSharedPtr<FUICommandInfo> CmdInfoPrevMinorTab{ nullptr };
 
-	TSharedPtr<FUICommandInfo>	CmdInfoFindAllTabWells{ nullptr };
-	TArray<TWeakPtr<SWidget>>	EditorTabWells;
-	FOnActiveTabChanged			OnActiveTabChanged(FOnActiveTabChanged::FDelegate);
-	const FString				SDTabWell{ "SDockingTabWell" };
-	const FString				SToolkit{ "SStandaloneAssetEditorToolkitHost" };
-	const FString				SLvlEditor{ "SLevelEditor" };
-	TWeakPtr<SWindow>			CurrWin{ nullptr }; // User for getting Maj Tab
-	static TWeakPtr<SDockTab>	CurrMajorTab;
-	TWeakPtr<SDockTab>			CurrMinorTab{ nullptr };
-	FUMOnNewMajorTabChanged		OnNewMajorTabChanged;
-	TSharedPtr<FUMFocusManager> FocusManager;
+	TSharedPtr<FUICommandInfo> CmdInfoFindAllTabWells{ nullptr };
+	FOnActiveTabChanged		   OnActiveTabChanged(FOnActiveTabChanged::FDelegate);
+	FUMOnNewMajorTabChanged	   OnNewMajorTabChanged;
 
 	bool VisualLog{ true };
 };

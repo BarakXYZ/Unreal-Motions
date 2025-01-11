@@ -19,8 +19,6 @@ TSharedPtr<FUMTabsNavigationManager>
 	FUMTabsNavigationManager::TabsNavigationManager =
 		MakeShared<FUMTabsNavigationManager>();
 
-TWeakPtr<SDockTab> FUMTabsNavigationManager::CurrMajorTab = nullptr;
-
 FUMTabsNavigationManager::FUMTabsNavigationManager()
 {
 	FInputBindingManager&		InputBindingManager = FInputBindingManager::Get();
@@ -142,8 +140,6 @@ void FUMTabsNavigationManager::MapCycleTabsNavigation(
 
 void FUMTabsNavigationManager::RegisterSlateEvents()
 {
-
-	FocusManager = FUMFocusManager::Get();
 }
 
 //** Isn't currently being used *//
@@ -156,25 +152,29 @@ void FUMTabsNavigationManager::OnMouseButtonDown(const FPointerEvent& PointerEve
 bool FUMTabsNavigationManager::TryGetValidTargetTab(
 	TSharedPtr<SDockTab>& OutTab, bool bIsMajorTab)
 {
-	if (bIsMajorTab)
+	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
+	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
 	{
-		if (!FocusManager->ActiveMajorTab.IsValid())
-			if (!FocusManager->TryGetFrontmostMajorTab())
-				return false;
-		OutTab = FocusManager->ActiveMajorTab.Pin();
-		return true;
-	}
-	else
-	{
-		if (!FocusManager->ActiveMinorTab.IsValid())
+		if (bIsMajorTab)
 		{
-			CurrMinorTab = FGlobalTabmanager::Get()->GetActiveTab();
-			if (!CurrMinorTab.IsValid())
-				return false;
+			if (const TSharedPtr<FTabManager> TabManager =
+					ActiveMinorTab->GetTabManagerPtr())
+			{
+				if (const TSharedPtr<SDockTab> ActiveMajorTab =
+						GTM->GetMajorTabForTabManager(TabManager.ToSharedRef()))
+				{
+					OutTab = ActiveMajorTab;
+					return true;
+				}
+			}
 		}
-		OutTab = FocusManager->ActiveMinorTab.Pin();
-		return true;
+		else // Minor Tab
+		{
+			OutTab = ActiveMinorTab;
+			return true;
+		}
 	}
+	return false;
 }
 
 void FUMTabsNavigationManager::MoveToTabIndex(int32 TabIndex, bool bIsMajorTab)
@@ -188,7 +188,7 @@ void FUMTabsNavigationManager::MoveToTabIndex(int32 TabIndex, bool bIsMajorTab)
 		return;
 
 	TSharedPtr<SWidget> TabWell = TargetTab->GetParentWidget();
-	if (!TabWell.IsValid())
+	if (!TabWell.IsValid() || !TabWell->GetType().IsEqual("SDockingTabWell"))
 		return;
 
 	FocusTabIndex(TabWell, TabIndex, bIsMajorTab);
@@ -209,13 +209,10 @@ void FUMTabsNavigationManager::FocusTabIndex(
 			StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(TabIndex - 1));
 
 		// NOTE:
-		// We don't need to worry about tab assignent here as it will be auto
-		// set from the FocusManager. The delegates will get called and the tab
-		// will be set properly.
-		// Also, We don't need to worry about rapidly switching between tabs and
-		// being out-of-sync because we anyway grab the TabWell to switch between
-		// the tabs, which is very solid and doesn't rely on the specific tab
-		// tracked, but on the TabWell it exists in, which is good enough!
+		// This will call the ActiveTabChanged // Foregrounded in the FocusManager
+		// Also, we don't need to be in worry of being out-of-sync as we're
+		// working with the TabWell itself, not depending on the indivdual
+		// tab index.
 		if (NewTab.IsValid())
 			NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
 	}
@@ -228,7 +225,7 @@ void FUMTabsNavigationManager::CycleTabs(bool bIsMajorTab, bool bIsNextTab)
 		return;
 
 	TSharedPtr<SWidget> TabWell = TargetTab->GetParentWidget();
-	if (!TabWell.IsValid())
+	if (!TabWell.IsValid() || !TabWell->GetType().IsEqual("SDockingTabWell"))
 		return;
 
 	FChildren* Tabs = TabWell->GetChildren();
@@ -276,24 +273,21 @@ bool FUMTabsNavigationManager::GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutN
 
 bool FUMTabsNavigationManager::FindActiveMinorTabs()
 {
-	// 1. I'm afraid that this is needed for some internal stuff
-	// 2. Not sure how helpful it is because we still need to know if a new
-	// tab is created in order to navigate precisely.
-	// NewTab->SetOnTabClosed();
-	// NewTab->SetOnTabDraggedOverDockArea();
-	// NewTab->SetOnTabRelocated();
+	TSharedPtr<SDockTab> ActiveMajorTab;
+	if (!TryGetValidTargetTab(ActiveMajorTab, true))
+		return false;
 
 	// All panel tabs live inside a Docking Area. So we should really search
 	// only within it.
 	TWeakPtr<SWidget> DockingArea;
 	if (!FUMSlateHelpers::TraverseWidgetTree(
-			CurrMajorTab.Pin()->GetContent(), DockingArea, "SDockingArea"))
+			ActiveMajorTab->GetContent(), DockingArea, "SDockingArea"))
 		return false;
 
 	// Next stop will be the splitter within it, which also includes all.
 	TWeakPtr<SWidget> Splitter;
 	if (!FUMSlateHelpers::TraverseWidgetTree(
-			CurrMajorTab.Pin()->GetContent(), Splitter, "SSplitter"))
+			ActiveMajorTab->GetContent(), Splitter, "SSplitter"))
 		return false;
 
 	// Collect all SDockTab(s)
@@ -315,16 +309,11 @@ bool FUMTabsNavigationManager::FindActiveMinorTabs()
 			FSlateApplication::Get().SetAllUserFocus(
 				DockTab->GetContent(), EFocusCause::Navigation);
 
-			OnNewMajorTabChanged.Broadcast(CurrMajorTab, DockTab);
+			OnNewMajorTabChanged.Broadcast(ActiveMajorTab, DockTab);
 			return true;
 		}
 	}
 	return false;
-}
-
-TWeakPtr<SDockTab> FUMTabsNavigationManager::GetCurrentlySetMajorTab()
-{
-	return CurrMajorTab.IsValid() ? CurrMajorTab : nullptr;
 }
 
 void FUMTabsNavigationManager::DebugTab(const TSharedPtr<SDockTab>& Tab,
