@@ -1,19 +1,18 @@
 #include "UnrealMotions.h"
 #include "Framework/Application/SlateApplication.h"
-
-#include "UMLogger.h"
-#include "UMNavigationConfig.h"
-
 #include "UMStatusBarManager.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, Log, All); // Dev
+FUMLogger FUnrealMotionsModule::Logger(&LogUnrealMotionsModule);
 
 #define LOCTEXT_NAMESPACE "FUnrealMotionsModule"
 
 void FUnrealMotionsModule::StartupModule()
 {
-	UE_LOG(LogUnrealMotionsModule, Display, TEXT("Unreal Motions: Startup."));
+	Logger.Print("Unreal Motions: Startup.");
+
+	// TODO: Refactor
 	FUMLogger::SetPluginConfigFile();
 
 	// TODO: Check in the config if the user wants this feature.
@@ -29,13 +28,12 @@ void FUnrealMotionsModule::StartupModule()
 	// 		TSharedRef<FUMNavigationConfig> UMNavConfig =
 	// 			MakeShareable(new FUMNavigationConfig());
 	// 		FSlateApplication::Get().SetNavigationConfig(UMNavConfig);
-	// 		FSlateApplication::Get().TryDumpNavigationConfig(UMNavConfig);
 	// 	});
 }
 
 void FUnrealMotionsModule::ShutdownModule()
 {
-	UE_LOG(LogUnrealMotionsModule, Display, TEXT("Unreal Motions: Shutdown."));
+	Logger.Print("Unreal Motions: Shutdown.");
 }
 
 void FUnrealMotionsModule::BindPostEngineInitDelegates()

@@ -6,12 +6,11 @@
 #include "StatusBarSubsystem.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "Toolkits/AssetEditorToolkit.h"
-#include "Widgets/Input/SButton.h"
 #include "Widgets/Text/STextBlock.h"
-#include "UMLogger.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMStatusBarManager, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMStatusBarManager, Log, All); // Dev
+FUMLogger FUMStatusBarManager::Logger(&LogUMStatusBarManager);
 
 #define LOCTEXT_NAMESPACE "FUnrealMotionsModule"
 
@@ -70,28 +69,12 @@ TSharedPtr<FUMStatusBarManager> FUMStatusBarManager::Get()
 
 void FUMStatusBarManager::BindPostEngineInitDelegates()
 {
-	if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
+	if (UAssetEditorSubsystem* AssetEditorSubsystem =
+			GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
 	{
 		AssetEditorSubsystem->OnAssetEditorOpened().AddSP(
 			AsShared(), &FUMStatusBarManager::OnAssetEditorOpened);
 	}
-}
-FString FUMStatusBarManager::CleanupStatusBarName(FString TargetName)
-{
-	// Find the last occurrence of '_'
-	int32 UnderscoreIndex;
-	if (TargetName.FindLastChar('_', UnderscoreIndex))
-	{
-		// Check if the underscore is at the end or followed by digits only
-		FString TrailingPart = TargetName.Mid(UnderscoreIndex + 1);
-		if (TrailingPart.IsEmpty() || TrailingPart.IsNumeric())
-		{
-			return TargetName.Left(UnderscoreIndex); // Remove "_<digits>" or "_"
-		}
-	}
-
-	// Return the original string if no cleaning is needed
-	return TargetName;
 }
 
 void FUMStatusBarManager::OnAssetEditorOpened(UObject* OpenedAsset)
@@ -101,7 +84,7 @@ void FUMStatusBarManager::OnAssetEditorOpened(UObject* OpenedAsset)
 	{
 		IAssetEditorInstance* EditorInstance =
 			AssetEditorSubsystem->FindEditorForAsset(
-				OpenedAsset, /*bFocusIfOpen*/ false);
+				OpenedAsset, false /*bFocusIfOpen*/);
 		if (EditorInstance)
 		{
 			// Cast to FAssetEditorToolkit to get the toolkit host
@@ -110,8 +93,9 @@ void FUMStatusBarManager::OnAssetEditorOpened(UObject* OpenedAsset)
 			{
 				TSharedRef<IToolkitHost> ToolkitHost =
 					AssetEditorToolkit->GetToolkitHost();
+
 				const FName StatusBarName = ToolkitHost->GetStatusBarName();
-				FUMLogger::NotifySuccess(FText::FromName(StatusBarName));
+				Logger.Print(StatusBarName.ToString());
 
 				RegisterToolbarExtension(StatusBarName.ToString());
 				// RegisterDrawer(StatusBarName);
@@ -131,35 +115,36 @@ void FUMStatusBarManager::RegisterToolbarExtension(
 	const FName StatusToolBarToExtend =
 		*(CleanupStatusBarName(SerializedStatusBarName) + ".ToolBar");
 
-	// We wanna find the menu, then look if our custom section exists
+	// We want to find the menu, then look if our custom section exists
 	UToolMenu* ToolMenu = ToolMenus->FindMenu(StatusToolBarToExtend);
-	if (!ToolMenu) // Check if menu exists and valid.
+	if (!ToolMenu) // Check if the menu exists and is valid
 	{
-		FUMLogger::NotifySuccess(
-			FText::FromString(FString::Printf(
-				TEXT("Menu: %s was not found."),
-				*StatusToolBarToExtend.ToString())),
-			VisualLog);
+		Logger.Print(FString::Printf(
+			TEXT("RegisterToolbarExtension: Menu(%s) was not found."),
+			*StatusToolBarToExtend.ToString()));
 		return;
 	}
+
+	// Lookup if our section was already added
 	FToolMenuSection* Section = ToolMenu->FindSection(UMSectionName);
 	if (Section) // Our section was already added, we can safely skip.
 	{
-		const FString Log = FString::Printf(
+		Logger.Print(FString::Printf(
 			TEXT("Menu & Section found, skipping... Menu: %s Section: %s"),
-			*StatusToolBarToExtend.ToString(), *UMSectionName.ToString());
-		FUMLogger::NotifySuccess(FText::FromString(Log), VisualLog);
+			*StatusToolBarToExtend.ToString(), *UMSectionName.ToString()));
 		return;
 	}
-	FUMLogger::NotifySuccess(
-		FText::FromString("Section was not found, registering <3"), VisualLog);
 
+	// Section was not found, register:
 	FToolMenuSection& UMSection =
 		ToolMenu->AddSection(
 			"UnrealMotions",
 			LOCTEXT("UnrealMotions", "UnrealMotions"),
+			// We want to always be before SourceControl which is persistent
+			// through-out all editors.
 			FToolMenuInsert("SourceControl", EToolMenuInsertType::Before));
 
+	// Add our actual StatusBar widget:
 	TSharedRef<SUMStatusBarWidget> UMStatusBarWidget =
 		SNew(SUMStatusBarWidget)
 			.OnClicked(FOnClicked::CreateLambda([]() {
@@ -174,6 +159,23 @@ void FUMStatusBarManager::RegisterToolbarExtension(
 			FText::GetEmpty()));
 
 	ToolMenus->RefreshAllWidgets();
+}
+
+FString FUMStatusBarManager::CleanupStatusBarName(FString TargetName)
+{
+	// Find the index of the last occurrence of '_'
+	int32 UnderscoreIndex;
+	if (TargetName.FindLastChar('_', UnderscoreIndex))
+	{
+		// Check if the underscore is at the end or followed by digits only
+		FString TrailingPart = TargetName.Mid(UnderscoreIndex + 1);
+		if (TrailingPart.IsEmpty() || TrailingPart.IsNumeric())
+		{
+			return TargetName.Left(UnderscoreIndex); // Remove "_<digits>" or "_"
+		}
+	}
+	// Return the original string if no cleaning is needed
+	return TargetName;
 }
 
 void FUMStatusBarManager::AddDrawerToLevelEditor()

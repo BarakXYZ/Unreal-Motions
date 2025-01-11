@@ -4,6 +4,7 @@
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "WidgetDrawerConfig.h"
+#include "UMLogger.h"
 
 class FUMStatusBarManager : public TSharedFromThis<FUMStatusBarManager>
 {
@@ -33,4 +34,5 @@ private:
 	static TSharedPtr<FUMStatusBarManager> StatusBarManager;
 	TOptional<FWidgetDrawerConfig>		   GlobalDrawerConfig;
 	bool								   VisualLog{ true };
+	static FUMLogger					   Logger;
 };

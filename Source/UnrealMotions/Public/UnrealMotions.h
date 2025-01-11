@@ -1,13 +1,10 @@
 #pragma once
 
-#include "CoreMinimal.h"
-#include "Widgets/SWindow.h"
-#include "Widgets/Docking/SDockTab.h"
 #include "Modules/ModuleManager.h"
-#include "LevelEditor.h"
 
 #include "UMInputPreProcessor.h"
 #include "SUMStatusBarWidget.h"
+#include "UMLogger.h"
 
 class FUnrealMotionsModule : public IModuleInterface
 {
@@ -22,4 +19,5 @@ private:
 	TSharedPtr<FUMInputPreProcessor> InputProcessor = nullptr;
 	TSharedPtr<SUMBufferVisualizer>	 BVis;
 	TSharedPtr<SUMStatusBarWidget>	 StatWidget;
+	static FUMLogger				 Logger;
 };
