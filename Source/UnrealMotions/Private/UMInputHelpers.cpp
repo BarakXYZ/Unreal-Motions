@@ -3,21 +3,9 @@
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
 
-const TSharedPtr<FUMInputHelpers> FUMInputHelpers::InputHelpers =
-	MakeShared<FUMInputHelpers>();
-
-FUMInputHelpers::FUMInputHelpers()
-{
-}
-
-FUMInputHelpers::~FUMInputHelpers()
-{
-}
-
-const TSharedPtr<FUMInputHelpers> FUMInputHelpers::Get()
-{
-	return InputHelpers;
-}
+// DEFINE_LOG_CATEGORY_STATIC(LogUMInputHelpers, NoLogging, All); // Prod
+DEFINE_LOG_CATEGORY_STATIC(LogUMInputHelpers, Log, All); // Dev
+FUMLogger FUMInputHelpers::Logger(&LogUMInputHelpers, true);
 
 void FUMInputHelpers::SimulateClickOnWidget(
 	FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
@@ -27,16 +15,16 @@ void FUMInputHelpers::SimulateClickOnWidget(
 	FWidgetPath WidgetPath;
 	if (!SlateApp.FindPathToWidget(Widget, WidgetPath))
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("SimulateClickOnWidget: Failed to find widget path!"));
+		Logger.Print("SimulateClickOnWidget: Failed to find widget path!",
+			ELogVerbosity::Warning);
 		return;
 	}
 
 	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
 	if (!ActiveWindow.IsValid())
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("SimulateClickOnWidget: No active window found!"));
+		Logger.Print("SimulateClickOnWidget: No active window found!",
+			ELogVerbosity::Warning);
 		return;
 	}
 
@@ -44,8 +32,8 @@ void FUMInputHelpers::SimulateClickOnWidget(
 	TSharedPtr<FGenericWindow> NativeWindow = ActiveWindow->GetNativeWindow();
 	if (!NativeWindow.IsValid())
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("SimulateClickOnWidget: Native window is invalid!"));
+		Logger.Print("SimulateClickOnWidget: Native window is invalid!",
+			ELogVerbosity::Warning);
 		return;
 	}
 
@@ -198,8 +186,7 @@ void FUMInputHelpers::Enter(
 	if (!FocusedWidget)
 		return;
 
-	// FUMLogger::NotifySuccess(
-	// 	FText::FromName(FocusedWidget->GetWidgetClass().GetWidgetType()));
+	// Logger.Print(FocusedWidget->GetWidgetClass().GetWidgetType().ToString());
 	const FName FocusedWidgetType =
 		FocusedWidget->GetWidgetClass().GetWidgetType();
 

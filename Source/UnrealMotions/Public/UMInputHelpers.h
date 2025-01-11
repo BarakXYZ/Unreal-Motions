@@ -1,18 +1,13 @@
 #pragma once
 
-#include "CoreMinimal.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/SWidget.h"
 #include "InputCoreTypes.h"
+#include "UMLogger.h"
 
 class FUMInputHelpers
 {
 public:
-	FUMInputHelpers();
-	~FUMInputHelpers();
-
-	static const TSharedPtr<FUMInputHelpers> Get();
-
 	static void SimulateClickOnWidget(
 		FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
 		const FKey& EffectingButton, bool bIsDoubleClick = false);
@@ -60,7 +55,5 @@ public:
 	static void Enter(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	// static void PrintConfiguredHotkeysCommandsName(const TArray<FInputChord>& InChordsToCheck);
-
-	static const TSharedPtr<FUMInputHelpers> InputHelpers;
+	static FUMLogger Logger;
 };
