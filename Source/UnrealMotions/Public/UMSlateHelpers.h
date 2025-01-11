@@ -9,9 +9,6 @@
 class FUMSlateHelpers
 {
 public:
-	FUMSlateHelpers();
-	~FUMSlateHelpers();
-
 	/**
 	 * Recursively searches a widget tree for a SDockingTabWell widget.
 	 * @param ParentWidget The root widget to start traversing from
@@ -89,7 +86,5 @@ public:
 
 	static bool IsValidEditableText(const FString& InWidgetType);
 
-	static const TSharedPtr<FUMSlateHelpers> SlateHelpers;
-
-	FUMLogger Logger;
+	static FUMLogger Logger;
 };

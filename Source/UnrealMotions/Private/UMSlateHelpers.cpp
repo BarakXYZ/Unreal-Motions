@@ -3,19 +3,9 @@
 #include "Layout/ChildrenBase.h"
 #include "Widgets/Docking/SDockTab.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
-// DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
-
-const TSharedPtr<FUMSlateHelpers> FUMSlateHelpers::SlateHelpers =
-	MakeShared<FUMSlateHelpers>();
-
-FUMSlateHelpers::FUMSlateHelpers()
-{
-	Logger.SetLogCategory(&LogUMSlateHelpers);
-}
-FUMSlateHelpers::~FUMSlateHelpers()
-{
-}
+// DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
+DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
+FUMLogger FUMSlateHelpers::Logger(&LogUMSlateHelpers, true);
 
 bool FUMSlateHelpers::TraverseWidgetTree(
 	const TSharedPtr<SWidget>& ParentWidget,
@@ -23,19 +13,18 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 	const FString& TargetType, int32 SearchCount, int32 Depth)
 {
 	// Log the current widget and depth
-	UE_LOG(LogUMSlateHelpers, Display,
-		TEXT("%s[Depth: %d] Checking widget: %s"),
+	Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
 		*FString::ChrN(Depth * 2, ' '), // Visual indentation
-		Depth, *ParentWidget->GetTypeAsString());
+		Depth, *ParentWidget->GetTypeAsString()));
 
 	bool bFoundAllRequested = false;
 
 	if (ParentWidget->GetTypeAsString() == TargetType)
 	{
-		UE_LOG(LogUMSlateHelpers, Display,
+		Logger.Print(FString::Printf(
 			TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
 			*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
-			*TargetType);
+			*TargetType));
 		OutWidgets.Add(ParentWidget);
 
 		// If SearchCount is -1, continue searching but mark that we found at least one
@@ -75,17 +64,16 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 	int32					   Depth)
 {
 	// Log the current widget and depth
-	UE_LOG(LogUMSlateHelpers, Display,
-		TEXT("%s[Depth: %d] Checking widget: %s"),
+	Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
 		*FString::ChrN(Depth * 2, ' '), // Visual indentation
-		Depth, *ParentWidget->GetTypeAsString());
+		Depth, *ParentWidget->GetTypeAsString()));
 
 	if (ParentWidget->GetTypeAsString() == TargetType)
 	{
-		UE_LOG(LogUMSlateHelpers, Display,
+		Logger.Print(FString::Printf(
 			TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
 			*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
-			*TargetType);
+			*TargetType));
 
 		OutWidget = ParentWidget;
 		return true;
@@ -108,6 +96,8 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 // We can't rely on the GlobalTabmanager for this because our current minor tab
 // doesn't necessarily reflect the frontmost major tab (for example if we have
 // some other window focused that doesn't match the minor tab parent window)
+// This function puts frontmost, which is different than active, as the target to
+// fetch.
 bool FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
 	TSharedPtr<SDockTab>& OutMajorTab)
 {
@@ -181,8 +171,7 @@ bool FUMSlateHelpers::TryGetListView(FSlateApplication& SlateApp, TSharedPtr<SLi
 	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
 	if (!FocusedWidget.IsValid())
 	{
-		SlateHelpers->Logger.Print(
-			"Focused Widget is NOT valid.", ELogVerbosity::Warning);
+		Logger.Print("Focused Widget is NOT valid.", ELogVerbosity::Warning);
 		return false;
 	}
 
