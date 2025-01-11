@@ -89,7 +89,9 @@ public:
 	bool DoesMinorTabResidesInMajorTab(
 		const TSharedRef<SDockTab> MinorTab, const TSharedRef<SDockTab> MajorTab);
 
-	void HandleOnWindowChanged(const TSharedPtr<SWindow> NewWindow);
+	void HandleOnWindowChanged(
+		const TSharedPtr<SWindow> PrevWindow,
+		const TSharedPtr<SWindow> NewWindow);
 
 	void ToggleVisualLog(bool bIsVisualLog);
 

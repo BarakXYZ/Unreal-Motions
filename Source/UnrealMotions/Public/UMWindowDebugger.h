@@ -57,7 +57,4 @@ class UNREALMOTIONS_API UUMWindowDebugger : public UEditorUtilityWidget
 	void GetFocusCauseString(EFocusCause FocusCause, FString& OutString);
 
 	void GetWindowModeString(EWindowMode::Type WindowMode, FString& OutString);
-
-	UFUNCTION(BlueprintCallable, Category = "Unreal Motions: Windows Debugger")
-	void DebugTrackedWindows(TArray<FString>& WindowsNames);
 };

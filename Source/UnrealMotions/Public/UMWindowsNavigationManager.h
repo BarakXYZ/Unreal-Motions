@@ -1,11 +1,12 @@
 #pragma once
 
-#include "CoreMinimal.h"
-#include "Framework/Commands/InputBindingManager.h"
-#include "Framework/Docking/TabManager.h"
+#include "Framework/Commands/UICommandInfo.h"
+#include "Framework/Commands/UICommandList.h"
+#include "Widgets/SWindow.h"
+#include "UMLogger.h"
 
-DECLARE_MULTICAST_DELEGATE_OneParam(FUMOnWindowChanged,
-	const TSharedPtr<SWindow> NewWindow);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnWindowChanged,
+	const TSharedPtr<SWindow> PrevWindow, const TSharedPtr<SWindow> NewWindow);
 
 class FUMWindowsNavigationManager
 {
@@ -71,13 +72,6 @@ public:
 	void ToggleRootWindow();
 
 	/**
-	 * Removes invalid or closed windows from the tracking system.
-	 * Updates the tracking map and logs cleanup information.
-	 * @param CleanupWindowsIds Array of window IDs to remove from tracking
-	 */
-	void CleanupInvalidWindows(TArray<uint64> CleanupWindowsIds);
-
-	/**
 	 * Retrieves the map of currently tracked windows.
 	 * @return Constant reference to the map of window IDs to window pointers
 	 */
@@ -87,16 +81,13 @@ public:
 
 private:
 	static TSharedPtr<FUMWindowsNavigationManager> WindowsNavigationManager;
+	static FUMLogger							   Logger;
 
 	const FName MainFrameContextName = TEXT("MainFrame");
 
 	TSharedPtr<FUICommandInfo> CmdInfoCycleNextWindow{ nullptr };
 	TSharedPtr<FUICommandInfo> CmdInfoCyclePrevWindow{ nullptr };
 	TSharedPtr<FUICommandInfo> CmdInfoGotoRootWindow{ nullptr };
-
-	TWeakPtr<SWindow>				LastActiveWin{ nullptr };
-	FText							LastActiveWinTitle;
-	TMap<uint64, TWeakPtr<SWindow>> TrackedWindows;
 
 	bool VisualLog{ true };
 };

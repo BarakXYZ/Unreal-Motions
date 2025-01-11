@@ -599,23 +599,25 @@ bool FUMFocusManager::HasWindowChanged()
 	return false;
 }
 
-void FUMFocusManager::HandleOnWindowChanged(const TSharedPtr<SWindow> NewWindow)
+void FUMFocusManager::HandleOnWindowChanged(
+	const TSharedPtr<SWindow> PrevWindow,
+	const TSharedPtr<SWindow> NewWindow)
 {
 	if (NewWindow.IsValid())
 	{
-		// Log::NotifySuccess(FText::FromString("New Window"), bLog);
-		Log::NotifySuccess(FText::FromString("New Window"));
+		ActivateWindow(NewWindow.ToSharedRef());
+
+		Logger.Print("New Window");
 		// TryFocusLastActiveWidget();
 		TSharedPtr<SDockTab> FrontmostMajorTab;
 		// TODO: Debug what this spits when not drawing focus actively to the win
 		if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(FrontmostMajorTab))
 		{
 			// TODO:
-			// Check if for some magical reason it now will draw and call the Global
-			// Tab Manager delegate correctly.
+			// Check if for some magical reason it now will draw and call
+			// the GlobalTabmanager delegate correctly.
 			//
 			// FSlateApplication::Get().ClearAllUserFocus();
-			// FSlateApplication::Get().ClearKeyboardFocus();
 			if (const auto& TabWell =
 					LastActiveTabWellByMajorTabId.Find(
 						FrontmostMajorTab->GetId()))
@@ -813,9 +815,8 @@ void FUMFocusManager::ActivateWindow(const TSharedRef<SWindow> Window)
 
 	Window->DrawAttention(DrawParams); // Seems to work well!
 
-	Log::AddDebugMessage(FString::Printf(
+	FocusManager->Logger.Print(FString::Printf(
 		TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
-	FocusManager->HandleOnWindowChanged(Window);
 }
 
 void FUMFocusManager::ActivateNewInvokedTab(

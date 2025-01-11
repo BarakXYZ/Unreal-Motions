@@ -1,13 +1,13 @@
 
 #include "UMWindowsNavigationManager.h"
-#include "Framework/Commands/UICommandInfo.h"
-#include "UMLogger.h"
+#include "Framework/Docking/TabManager.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "Framework/Application/SlateApplication.h"
-#include "UMFocusManager.h"
+#include "Framework/Commands/InputBindingManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMWindowsNavigation, NoLogging, All); // Prod
 // DEFINE_LOG_CATEGORY_STATIC(LogUMTWindowsNavigation, Log, All); // Dev
+FUMLogger FUMWindowsNavigationManager::Logger(&LogUMWindowsNavigation);
 
 #define LOCTEXT_NAMESPACE "UMWindowsNavigationManager"
 
@@ -76,9 +76,8 @@ void FUMWindowsNavigationManager::RegisterSlateEvents()
 		// Need to make some checks to filter out non-useful windows
 		// like notification windows (which will cause this to loop for ever *~*)
 		if (Window.IsRegularWindow() && !Window.GetTitle().IsEmpty())
-			FUMLogger::NotifySuccess(FText::FromString(
-				FString::Printf(TEXT("Window Being Destroyed: %s"),
-					*Window.GetTitle().ToString())));
+			Logger.Print(FString::Printf(TEXT("Window Being Destroyed: %s"),
+				*Window.GetTitle().ToString()));
 	});
 }
 
@@ -88,6 +87,9 @@ void FUMWindowsNavigationManager::ToggleRootWindow()
 	if (!RootWin.IsValid())
 		return;
 	TArray<TSharedRef<SWindow>> ChildWins = RootWin->GetChildWindows();
+
+	TSharedPtr<SWindow> ActiveWindow = // Track previous window for the delegate
+		FSlateApplication::Get().GetActiveTopLevelRegularWindow();
 
 	bool bHasVisibleWindows = false;
 
@@ -104,7 +106,7 @@ void FUMWindowsNavigationManager::ToggleRootWindow()
 
 	if (bHasVisibleWindows)
 	{
-		FUMFocusManager::ActivateWindow(RootWin.ToSharedRef());
+		OnWindowChanged.Broadcast(ActiveWindow, RootWin);
 		return;
 	}
 
@@ -114,7 +116,7 @@ void FUMWindowsNavigationManager::ToggleRootWindow()
 
 	for (int32 i{ ChildWins.Num() - 1 }; i >= 0; --i)
 	{
-		if (ChildWins[i]->IsRegularWindow()) // Wins minimized was already checked
+		if (ChildWins[i]->IsRegularWindow()) // Wins minimized were checked
 		{
 			ChildWins[i]->Restore();
 			// Last active win will be the last found regular win (retain order)
@@ -122,7 +124,9 @@ void FUMWindowsNavigationManager::ToggleRootWindow()
 		}
 	}
 	if (LastFoundChildWinIndex != INDEX_NONE)
-		FUMFocusManager::ActivateWindow(ChildWins[LastFoundChildWinIndex]);
+	{
+		OnWindowChanged.Broadcast(ActiveWindow, ChildWins[LastFoundChildWinIndex]);
+	}
 }
 
 void FUMWindowsNavigationManager::CycleNoneRootWindows(bool bIsNextWindow)
@@ -131,6 +135,9 @@ void FUMWindowsNavigationManager::CycleNoneRootWindows(bool bIsNextWindow)
 	if (!RootWin.IsValid() || !RootWin->HasActiveChildren())
 		return;
 	TArray<TSharedRef<SWindow>> ChildWins = RootWin->GetChildWindows();
+
+	TSharedPtr<SWindow> ActiveWindow = // Track previous window for the delegate
+		FSlateApplication::Get().GetActiveTopLevelRegularWindow();
 
 	int32		   Cursor{ 0 };
 	TArray<uint64> VisWinIndexes;
@@ -142,7 +149,7 @@ void FUMWindowsNavigationManager::CycleNoneRootWindows(bool bIsNextWindow)
 		{
 			if (bIsNextWindow)
 			{
-				FUMFocusManager::ActivateWindow(Win);
+				OnWindowChanged.Broadcast(ActiveWindow, Win);
 				return; // We can return here, moving to next window is trivial
 			}
 			VisWinIndexes.Add(Cursor);
@@ -159,26 +166,9 @@ void FUMWindowsNavigationManager::CycleNoneRootWindows(bool bIsNextWindow)
 		for (const int32 WinIndex : VisWinIndexes)
 			ChildWins[WinIndex]->BringToFront();
 
-		FUMFocusManager::ActivateWindow(
-			ChildWins[VisWinIndexes[VisWinIndexes.Num() - 1]]);
+		OnWindowChanged.Broadcast(
+			ActiveWindow, ChildWins[VisWinIndexes[VisWinIndexes.Num() - 1]]);
 	}
-}
-
-void FUMWindowsNavigationManager::CleanupInvalidWindows(
-	TArray<uint64> WinIdsToCleanup)
-{
-	if (WinIdsToCleanup.Num() == 0)
-		return;
-	for (const auto& Key : WinIdsToCleanup)
-		TrackedWindows.Remove(Key);
-	FString Log = FString::Printf(
-		TEXT("Cleaned: %d Invalid Windows"), WinIdsToCleanup.Num());
-	FUMLogger::NotifySuccess(FText::FromString(Log), VisualLog);
-};
-
-const TMap<uint64, TWeakPtr<SWindow>>& FUMWindowsNavigationManager::GetTrackedWindows()
-{
-	return TrackedWindows;
 }
 
 void FUMWindowsNavigationManager::RegisterCycleWindowsNavigation(const TSharedPtr<FBindingContext>& MainFrameContext)

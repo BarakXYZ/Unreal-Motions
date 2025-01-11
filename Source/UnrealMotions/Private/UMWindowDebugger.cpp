@@ -306,27 +306,3 @@ void UUMWindowDebugger::GetWindowModeString(
 			break;
 	}
 }
-
-void UUMWindowDebugger::DebugTrackedWindows(TArray<FString>& WindowsNames)
-{
-	// if (FUMTabNavigationManager::IsInitialized())
-	// {
-	const TMap<uint64, TWeakPtr<SWindow>>& Wins = FUMWindowsNavigationManager::Get().GetTrackedWindows();
-
-	for (const auto& Win : Wins)
-	{
-		if (Win.Value.IsValid())
-		{
-			const TSharedPtr<SWindow>& EdWin = Win.Value.Pin();
-			FString					   LogVal = EdWin->IsActive()
-								   ? "{ Currently Active } "
-								   : "{ Currently Inactive } ";
-			WindowsNames.Add(LogVal + EdWin->GetTitle().ToString());
-		}
-	}
-	// }
-	// else
-	// {
-	// 	WindowsNames.Add("Tab Navigation Manager it NOT initialized!");
-	// }
-}
