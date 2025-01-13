@@ -33,6 +33,10 @@ public:
 		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 		const TSharedPtr<SWidget>& NewWidget);
 
+	void OnFocusChangedV2(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
+		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
+		const TSharedPtr<SWidget>& NewWidget);
+
 	void DetectWidgetType(const TSharedRef<SWidget> InWidget);
 
 	/**
@@ -46,6 +50,9 @@ public:
 	void OnActiveTabChanged(
 		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
 
+	void OnActiveTabChangedV2(
+		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
+
 	/**
 	 * Being called when a new Minor or Major Tab is being foregrounded, though
 	 * Major Tabs seems to be the main focus of this.
@@ -56,6 +63,9 @@ public:
 	 * @note In this case, Unreal passes the delegate params in the correctly documented order. So we keep it as is (firstly new tab, then old tab).
 	 */
 	void OnTabForegrounded(
+		TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
+
+	void OnTabForegroundedV2(
 		TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
 
 	/**
@@ -138,6 +148,11 @@ public:
 
 	bool VisualizeParentDockingTabStack(const TSharedRef<SDockTab> InTab);
 
+	void DebugGlobalTabManagerTracking();
+
+	void DebugPrevAndNewMinorTabsMajorTabs(
+		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
+
 	/**
 	 * Try register the in Minor Tab TabWell with the currently active Major Tab.
 	 * @param InBaseMinorTab - The minor tab that resides inside the parent
@@ -149,6 +164,36 @@ public:
 	bool DoesTabHaveFocus(const TSharedRef<SDockTab> InTab);
 
 	bool TryFocusOnLastActiveWidgetInMinorTab(const TSharedRef<SDockTab> InTab);
+
+	FString TabRoleToString(ETabRole InTabRole);
+
+	bool TryRegisterMinorWithParentMajorTab(
+		const TSharedRef<SDockTab> InMinorTab);
+
+	bool TryRegisterWidgetWithTab(
+		const TWeakPtr<SWidget> InWidget, const TSharedRef<SDockTab> InTab);
+
+	bool TryRegisterWidgetWithTab(const TSharedRef<SDockTab> InTab);
+
+	bool TryActivateLastWidgetInTab(const TSharedRef<SDockTab> InTab);
+
+	void ActivateTab(const TSharedRef<SDockTab> InTab);
+
+	void RecordWidgetUse(TSharedRef<SWidget> InWidget);
+
+	bool TryFocusLastActiveMinorForMajorTab(TSharedRef<SDockTab> InMajorTab);
+
+	bool TryFocusFirstFoundMinorTab(TSharedRef<SWidget> InMajorTab);
+
+	void GetDefaultTargetFallbackWidgetType(TSharedRef<SDockTab> InTab);
+
+	bool TryFocusFirstFoundListView(TSharedRef<SDockTab> InMajorTab);
+
+	bool TryFocusFirstFoundSearchBox(TSharedRef<SWidget> InContent);
+
+	void FocusTabContent(TSharedRef<SDockTab> InTab);
+
+	void OnWindowBeingDestroyed(const SWindow& Window);
 
 	// ~ Last active Major Tab by Window ID ~
 	// You enter the ID of the Window:
@@ -178,6 +223,8 @@ public:
 	// condition depending on the editor)
 	TMap<uint64, TWeakPtr<SDockTab>> LastActiveMinorTabByTabWellId;
 
+	TMap<uint64, TWeakPtr<SDockTab>> LastActiveMinorTabByMajorTabId;
+
 	// ~ Last active Widget in Tab Well ~
 	// You enter the ID of the Minor Tab:
 	// if (The Minor Tab exists and valid, and the widget found is valid)
@@ -187,19 +234,28 @@ public:
 	// or focus Tab Content?
 	TMap<uint64, TWeakPtr<SWidget>> LastActiveWidgetByMinorTabId;
 
+	TMap<uint64, TWeakPtr<SWidget>> LastActiveWidgetByTabId;
+
 	// TODO: protected + friend classes?
 	TWeakPtr<SWindow>  ActiveWindow;
 	TWeakPtr<SDockTab> ActiveMajorTab;
 	TWeakPtr<SWidget>  ActiveTabWell;
 	TWeakPtr<SDockTab> ActiveMinorTab;
 	TWeakPtr<SWidget>  ActiveWidget;
+	TWeakPtr<SWidget>  PrevWidget;
 
 	static const TSharedPtr<FUMFocusManager> FocusManager;
 
 public:
+	FDelegateHandle DelegateHandle_OnActiveTabChanged;
+	FDelegateHandle DelegateHandle_OnTabForegrounded;
+
 	FTimerHandle TimerHandleNewWidgetTracker;
 	FTimerHandle TimerHandleNewMinorTabTracker;
 	FTimerHandle TimerHandleTabForegrounding;
+	FTimerHandle TimerHandle_OnActiveTabChanged;
+
+	FTimerHandle TimerHandle_FocusTabContentFallback;
 
 	TWeakPtr<SDockTab> ForegroundedProcessedTab;
 	bool			   bIsTabForegrounding{ false };
@@ -210,8 +266,12 @@ public:
 	bool			  bBypassAutoFocusLastActiveWidget{ false };
 	FUMOnWindowAction OnWindowAction;
 
-	FUMLogger Logger;
-	bool	  bLog{ false };
+	static FUMLogger Logger;
+	bool			 bLog{ false };
+	bool			 bVisLogTabFocusFlow{ false };
+
+	// Holds the most recent widget at index 0, and the oldest at the end
+	TArray<TWeakPtr<SWidget>> RecentlyUsedWidgets;
 
 	// UMFocusManager
 	// It will listen to:
@@ -238,3 +298,26 @@ public:
 	// a specific panel tab (e.g. Event Graph for Blueprints, etc.))
 	// 5. We can then check if
 };
+
+// 1.
+// When cycling Major Tabs, OnTabForegrounded will be triggered while
+// OnActiveTabChanged won't.
+
+// 2.
+// When cycling Minor Tabs, both OnTabForegrounded & OnActiveTabChanged trigger.
+
+// 3.
+// When detaching (dragging-off) Major Tabs, only OnTabForegrounded will trigger.
+
+// 4.
+// When detaching (dragging-off) Minor Tabs, both OnForeground & OnActive trigger
+
+// 5.
+// When switching between minor tabs without cycling between tabs, for example
+// in blueprint we can switch between the details panel, to the Event Graph, etc.
+// This doesn't require foregrounding, thus only OnActiveTabChanged will trigger.
+
+// Tab Roles:
+// Tabs like Preferences, Output Log and Project Setting are considered
+// Nomad Tabs. Nomad tabs are not constrained by the standard tab hierarchy.
+// They can be docked or floated anywhere within the Unreal Engine editor.

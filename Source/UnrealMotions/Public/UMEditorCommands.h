@@ -89,5 +89,5 @@ public:
 	static void NavigateNextPrevious(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	FUMLogger Logger;
+	static FUMLogger Logger;
 };

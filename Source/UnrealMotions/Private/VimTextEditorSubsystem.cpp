@@ -4,6 +4,7 @@
 #include "UMInputHelpers.h"
 #include "Editor.h"
 
+// DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, Log, All);
 
 void UVimTextEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -78,6 +79,7 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 
 	// TODO: Might wanna do an early return if we're on Insert mode.
 
+	Logger.ToggleLogging(false);
 	if (NewWidget.IsValid())
 	{
 		Logger.Print("On Focus Changed -> Editable");

@@ -5,7 +5,7 @@
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
-FUMLogger FUMSlateHelpers::Logger(&LogUMSlateHelpers, true);
+FUMLogger FUMSlateHelpers::Logger(&LogUMSlateHelpers, false);
 
 bool FUMSlateHelpers::TraverseWidgetTree(
 	const TSharedPtr<SWidget>& ParentWidget,
@@ -104,8 +104,16 @@ bool FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
 	static const FString DockWellType{ "SDockingTabWell" };
 	static const FName	 DockType{ "SDockTab" };
 
+	FSlateApplication&			SlateApp = FSlateApplication::Get();
+	TArray<TSharedRef<SWindow>> VisWins;
+	SlateApp.GetAllVisibleWindowsOrdered(VisWins);
+	if (VisWins.IsEmpty())
+		return false;
+
 	const TSharedPtr<SWindow> ActiveWin =
-		FSlateApplication::Get().GetActiveTopLevelWindow();
+		VisWins.Last();
+	// FSlateApplication::Get().GetActiveTopLevelWindow();
+	// SlateApp.GetActiveTopLevelRegularWindow();
 	if (!ActiveWin.IsValid())
 		return false;
 
@@ -124,6 +132,9 @@ bool FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
 					StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(i));
 				if (Tab->IsForeground())
 				{
+					Logger.Print(FString::Printf(TEXT("Major Tab Found: %s"),
+									 *Tab->GetTabLabel().ToString()),
+						ELogVerbosity::Verbose, true);
 					OutMajorTab = Tab;
 					return true;
 				}
@@ -241,4 +252,95 @@ bool FUMSlateHelpers::IsValidEditableText(const FString& InWidgetType)
 	};
 
 	return ValidEditableTextTypes.Contains(InWidgetType);
+}
+
+bool FUMSlateHelpers::DoesTabResideInWindow(
+	const TSharedRef<SWindow>  ParentWindow,
+	const TSharedRef<SDockTab> ChildTab)
+{
+	FWidgetPath ChildWidgetPath;
+	if (FSlateApplication::Get().FindPathToWidget(
+			ChildTab->GetContent(), ChildWidgetPath))
+	{
+		if (ChildWidgetPath.ContainsWidget(&ParentWindow->GetContent().Get()))
+		{
+			Logger.Print(
+				FString::Printf(
+					TEXT("Window: %s contains tab: %s"),
+					*ParentWindow->GetTitle().ToString(),
+					*ChildTab->GetTabLabel().ToString()),
+				ELogVerbosity::Verbose);
+			return true;
+		}
+		else
+		{
+			Logger.Print(
+				FString::Printf(
+					TEXT("Window: %s does not contains tab: %s"),
+					*ParentWindow->GetTitle().ToString(),
+					*ChildTab->GetTabLabel().ToString()),
+				ELogVerbosity::Warning);
+			return false;
+		}
+	}
+	return false;
+}
+
+bool FUMSlateHelpers::DoesWidgetResideInTab(
+	const TSharedRef<SDockTab> ParentTab, const TSharedRef<SWidget> ChildWidget)
+{
+	FWidgetPath ParentWidgetPath;
+	FWidgetPath ChildWidgetPath;
+	if (FSlateApplication::Get().FindPathToWidget(ChildWidget, ChildWidgetPath))
+	{
+		if (ChildWidgetPath.ContainsWidget(&ParentTab->GetContent().Get()))
+		{
+			Logger.Print(
+				FString::Printf(
+					TEXT("Tab %s contain Widget %s"),
+					*ParentTab->GetTabLabel().ToString(),
+					*ChildWidget->GetTypeAsString()),
+				ELogVerbosity::Verbose);
+			return true;
+		}
+		else
+		{
+			Logger.Print(
+				FString::Printf(
+					TEXT("Tab %s does NOT contain Widget %s"),
+					*ParentTab->GetTabLabel().ToString(),
+					*ChildWidget->GetTypeAsString()),
+				ELogVerbosity::Warning);
+			return false;
+		}
+	}
+	return false;
+}
+
+TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
+{
+	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
+	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
+	{
+		if (const TSharedPtr<FTabManager> TabManager =
+				ActiveMinorTab->GetTabManagerPtr())
+		{
+			if (const TSharedPtr<SDockTab> ActiveMajorTab =
+					GTM->GetMajorTabForTabManager(TabManager.ToSharedRef()))
+			{
+				return ActiveMajorTab;
+			}
+		}
+	}
+	return nullptr;
+}
+
+TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMinorTab()
+{
+	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
+	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
+	{
+		return ActiveMinorTab;
+	}
+	return nullptr;
 }

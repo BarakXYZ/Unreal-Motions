@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Framework/Application/SlateApplication.h"
-#include "UMFocusManager.h"
+#include "UMLogger.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogUMEditorNavigation, Log, All);
 
@@ -17,6 +17,5 @@ public:
 		FSlateApplication& SlateApp, const FKeyEvent& InKey);
 
 	static TSharedPtr<FUMEditorNavigation> EditorNavigation;
-
-	TSharedPtr<FUMFocusManager> FocusManager;
+	static FUMLogger					   Logger;
 };

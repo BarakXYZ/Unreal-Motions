@@ -86,5 +86,17 @@ public:
 
 	static bool IsValidEditableText(const FString& InWidgetType);
 
+	static bool DoesTabResideInWindow(
+		const TSharedRef<SWindow>  ParentWindow,
+		const TSharedRef<SDockTab> ChildTab);
+
+	static bool DoesWidgetResideInTab(
+		const TSharedRef<SDockTab> ParentTab,
+		const TSharedRef<SWidget>  ChildWidget);
+
+	static TSharedPtr<SDockTab> GetActiveMajorTab();
+
+	static TSharedPtr<SDockTab> GetActiveMinorTab();
+
 	static FUMLogger Logger;
 };

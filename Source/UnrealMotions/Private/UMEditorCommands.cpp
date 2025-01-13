@@ -9,13 +9,13 @@
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, Log, All);
+FUMLogger FUMEditorCommands::Logger(&LogUMEditorCommands);
 
 TSharedPtr<FUMEditorCommands> FUMEditorCommands::EditorCommands =
 	MakeShared<FUMEditorCommands>();
 
 FUMEditorCommands::FUMEditorCommands()
 {
-	Logger.SetLogCategory(&LogUMEditorCommands);
 }
 
 FUMEditorCommands::~FUMEditorCommands()
@@ -99,8 +99,16 @@ void FUMEditorCommands::OpenContentBrowser(
 void FUMEditorCommands::OpenPreferences(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	static const FName PREFERENCES = "EditorSettings";
-	FUMFocusManager::ActivateNewInvokedTab(FSlateApplication::Get(),
-		FGlobalTabmanager::Get()->TryInvokeTab(FTabId(PREFERENCES)));
+	// FUMFocusManager::ActivateNewInvokedTab(FSlateApplication::Get(),
+	// 	FGlobalTabmanager::Get()->TryInvokeTab(FTabId(PREFERENCES)));
+	if (const auto Tab =
+			FGlobalTabmanager::Get()->TryInvokeTab(FTabId(PREFERENCES)))
+	{
+		SlateApp.ClearAllUserFocus();
+		SlateApp.SetAllUserFocus(Tab->GetContent(), EFocusCause::Navigation);
+		// FGlobalTabmanager::Get()->OnTabForegrounded(nullptr, nullptr);
+		// FGlobalTabmanager::Get()->SetActiveTab(Tab);
+	}
 }
 
 void FUMEditorCommands::OpenWidgetReflector(
@@ -179,55 +187,50 @@ void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEv
 	static const FString FilterSearchBoxType{ "SFilterSearchBox" };
 	static const FString EditableTextType{ "SEditableText" };
 
-	const TSharedRef<FGlobalTabmanager> GTabMngr = FGlobalTabmanager::Get();
-	TSharedPtr<SDockTab>				ActiveMinorTab = GTabMngr->GetActiveTab();
-	TSharedPtr<SDockTab>				MajorTab =
-		GTabMngr->GetMajorTabForTabManager(
-			ActiveMinorTab->GetTabManagerPtr().ToSharedRef());
+	TSharedPtr<SWidget> SearchContent;
 
-	TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
-	if (!ActiveWin.IsValid() || !ActiveMinorTab.IsValid())
-		return;
-
-	TSharedPtr<SWidget> SearchInWidget;
-	// NOTE: This is actually returning an invalid window for some reason
-	// Currently fetching the window via SlateApp...
-	TSharedPtr<SWindow> MinorTabWin = ActiveMinorTab->GetParentWindow();
-
-	FWidgetPath WidgetPath;
-	if (!SlateApp.FindPathToWidget(ActiveMinorTab.ToSharedRef(), WidgetPath))
-		return;
-
-	// MinorTabWin = SlateApp.FindWidgetWindow(ActiveMinorTab.ToSharedRef(), WidgetPath);
-	MinorTabWin = SlateApp.FindWidgetWindow(ActiveMinorTab.ToSharedRef());
-	if (MinorTabWin.IsValid())
+	if (const auto ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow())
 	{
-		if (MinorTabWin.Get() == ActiveWin.Get())
-			SearchInWidget = ActiveMinorTab->GetContent();
-		else
-			SearchInWidget = ActiveWin->GetContent();
+		if (const auto MinorTab = FUMSlateHelpers::GetActiveMinorTab())
+		{
+			if (FUMSlateHelpers::DoesTabResideInWindow(ActiveWindow.ToSharedRef(), MinorTab.ToSharedRef()))
+			{
+				SearchContent = MinorTab->GetContent();
+			}
+			else
+			{
+				SearchContent = ActiveWindow->GetContent();
+			}
+		}
+	}
+	else
+		return;
+
+	TArray<TWeakPtr<SWidget>> EditableTexts;
+	if (FUMSlateHelpers::TraverseWidgetTree(
+			// SearchInWidget, SearchBox, SearchBoxType))
+			SearchContent, EditableTexts, EditableTextType))
+	{
+		for (const auto& Text : EditableTexts)
+		{
+			if (const auto PinText = Text.Pin())
+			{
+				if (PinText->GetVisibility() == EVisibility::Visible)
+				{
+					SlateApp.SetAllUserFocus(
+						PinText, EFocusCause::Navigation);
+					Logger.Print("Found Editable Search Box to Focus On!",
+						ELogVerbosity::Verbose, true);
+					return;
+				}
+			}
+		}
 	}
 	else
 	{
-		// Logger.Print("Minor tab window is not valid");
-		return;
+		Logger.Print("Could not find any Editable Text to focus on.",
+			ELogVerbosity::Error, true);
 	}
-
-	// Logger.Print(FString::Printf(TEXT("Minor Tab: %s"),
-	// 	*ActiveMinorTab->GetTabLabel().ToString()));
-
-	if (!SearchInWidget.IsValid())
-		return;
-
-	TWeakPtr<SWidget> SearchBox = nullptr;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
-			// SearchInWidget, SearchBox, SearchBoxType))
-			SearchInWidget, SearchBox, EditableTextType))
-		return;
-
-	// Logger.Print(FString::Printf(TEXT("Found Type: %s"),
-	// 	*SearchBox.Pin()->GetTypeAsString()));
-	SlateApp.SetAllUserFocus(SearchBox.Pin(), EFocusCause::Navigation);
 }
 
 void FUMEditorCommands::DeleteItem(

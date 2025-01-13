@@ -472,9 +472,9 @@ void UVimEditorSubsystem::BindCommands()
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Four },
 		&FUMEditorCommands::OpenContentBrowser);
 
-	Input.AddKeyBinding_NoParam(
-		{ FInputChord(EModifierKey::Control, EKeys::W) },
-		&FUMFocusManager::RemoveActiveMajorTab);
+	// Input.AddKeyBinding_NoParam(
+	// 	{ FInputChord(EModifierKey::Control, EKeys::W) },
+	// 	&FUMFocusManager::RemoveActiveMajorTab);
 
 	//  Move HJKL
 	Input.AddKeyBinding_KeyEvent(
