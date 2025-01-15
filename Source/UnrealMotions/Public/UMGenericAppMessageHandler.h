@@ -27,8 +27,11 @@ public:
 	}
 
 	/** That will be our way to block and unblock the char input in runtime */
-	void ToggleBlockAllCharInput(bool bBlockAllCharInput)
+	void ToggleBlockAllCharInput(
+		bool bBlockAllCharInput,
+		bool bShouldSkipFirstDummyCharAfterRelease = false)
 	{
+		bSkipFirstDummyCharAfterRelease = bShouldSkipFirstDummyCharAfterRelease;
 		bBlockAllChars = bBlockAllCharInput;
 	}
 
@@ -43,6 +46,22 @@ public:
 		{
 			// Returning true => "handled," so it never reaches
 			// Slate’s text widgets (or any editable text widgets, etc.)
+			return true;
+		}
+
+		// NOTE:
+		// There's 1 dummy char that will fire after entering insert mode.
+		// This is due to the nature of how the callbacks from the Vim hotkeys
+		// are called. They are currently called before the InputPreProcessor
+		// HandleKeyDownEvent() function returns, thus what happens is that the
+		// MessageHandler is enabled, then the HandleKeyDownEvent() is returned -
+		// resulting in 1 dummy char (at least I think this what happens).
+		// This solution I'm using here to ignore the first char isn't amazing,
+		// but it works. So until there's a better solution or architecture,
+		// that's that.
+		if (bSkipFirstDummyCharAfterRelease)
+		{
+			bSkipFirstDummyCharAfterRelease = false;
 			return true;
 		}
 
@@ -364,5 +383,7 @@ public:
 private:
 	/** The original message handler we forward to. */
 	TSharedPtr<FGenericApplicationMessageHandler> OriginalHandler;
-	bool										  bBlockAllChars{ false };
+
+	bool bBlockAllChars{ false };
+	bool bSkipFirstDummyCharAfterRelease{ false };
 };

@@ -100,5 +100,12 @@ public:
 
 	static bool IsVisualTextSelected(FSlateApplication& SlateApp);
 
+	/**
+	 * Activates the specified window, bringing it to the front and setting proper focus.
+	 * Handles focus management, window ordering, and ensuring proper activation state.
+	 * @param Window The window to activate
+	 */
+	static void ActivateWindow(const TSharedRef<SWindow> InWindow);
+
 	static FUMLogger Logger;
 };

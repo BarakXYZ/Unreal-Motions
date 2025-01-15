@@ -2,6 +2,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "UMStatusBarManager.h"
 #include "UMConfig.h"
+#include "UMInputPreProcessor.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, Log, All); // Dev

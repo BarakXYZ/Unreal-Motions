@@ -1,10 +1,9 @@
 #pragma once
 
-#include "CoreMinimal.h"					  // Core Unreal functionality
-#include "Widgets/SCompoundWidget.h"		  // For SCompoundWidget
-#include "Rendering/DrawElements.h"			  // For FSlateDrawElement
-#include "Styling/CoreStyle.h"				  // For default brush styles
-#include "Widgets/DeclarativeSyntaxSupport.h" // SLATE_BEGIN_ARGS, SLATE_ARGUMENT, etc.
+#include "Widgets/SCompoundWidget.h"
+#include "Rendering/DrawElements.h"
+#include "Styling/CoreStyle.h"
+#include "Widgets/DeclarativeSyntaxSupport.h"
 
 class SUMDebugWidget : public SCompoundWidget
 {

@@ -19,12 +19,6 @@ enum class EVimMode : uint8
 };
 
 /**
- * Delegate that broadcasts when the input preprocessor is initialized
- * @note Called after the singleton instance is created in Initialize()
- */
-DECLARE_MULTICAST_DELEGATE(FOnUMPreProcessorInputInit);
-
-/**
  * Delegate that broadcasts when a numeric prefix is detected in input sequence
  * @param New Prefix - The numeric prefix string that was just entered
  * @note Used for handling repeat counts in Vim-style commands
@@ -65,24 +59,9 @@ public:
 
 	/**
 	 * Returns the singleton instance of the input preprocessor
-	 * @return Shared pointer to the input preprocessor instance -
-	 * Not sure if we can and should return by ref since this is registered
-	 * to Unreal for handling.
-	 * @note Creates the instance if it doesn't exist
+	 * @return Shared reference to the input preprocessor instance.
 	 */
-	static TSharedPtr<FUMInputPreProcessor> Get();
-
-	/**
-	 * Creates the singleton instance if it doesn't exist
-	 * @note Broadcasts OnUMPreProcessorInputInit after creation
-	 */
-	static void Initialize();
-
-	/**
-	 * Checks if the input preprocessor has been initialized
-	 * @return True if the input preprocessor instance exists
-	 */
-	static bool IsInitialized();
+	static TSharedRef<FUMInputPreProcessor> Get();
 
 	/**
 	 * Overridden tick function from IInputProcessor
@@ -454,24 +433,6 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 	//							~ Helpers ~
 
-	/**
-	 * Creates an FInputChord from a key event, capturing modifier key states
-	 * @param InKeyEvent - The key event to convert
-	 * @return FInputChord containing the key and modifier state information
-	 */
-	static FInputChord GetChordFromKeyEvent(const FKeyEvent& InKeyEvent);
-
-	/**
-	 * Converts a numeric key press to its string representation with optional value clamping
-	 * @param InKey - The key to convert
-	 * @param OutStr - Output parameter for the string representation
-	 * @param MinClamp - Optional minimum value to clamp the digit to (0 means no min clamping)
-	 * @param MaxClamp - Optional maximum value to clamp the digit to (0 means no max clamping)
-	 * @return True if the key was a numeric key (0-9)
-	 */
-	static bool GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
-		int32 MinClamp = 0, int32 MaxClamp = 0);
-
 	static FKeyEvent GetKeyEventFromKey(const FKey& InKey, bool bIsShiftDown);
 
 	/**
@@ -523,9 +484,7 @@ private:
 	FKeyChordTrieNode* TrieRoot = nullptr; // Root node (unique)
 
 	/** Static instance management */
-	static TSharedPtr<FUMInputPreProcessor> InputPreProcessor;
-	static FOnUMPreProcessorInputInit		OnUMPreProcessorInputInit;
-	static bool								bNativeInputHandling;
+	static bool bNativeInputHandling;
 
 	/** Input mode state */
 	static EVimMode VimMode;

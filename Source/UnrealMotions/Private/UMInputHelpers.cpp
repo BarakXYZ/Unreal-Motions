@@ -340,3 +340,57 @@ void FUMInputHelpers::Enter(
 	FUMInputHelpers::SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef(),
 		EKeys::LeftMouseButton, true /* Double-Click */);
 }
+
+bool FUMInputHelpers::GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
+	int32 MinClamp, int32 MaxClamp)
+{
+	static const TMap<FKey, FString> KeyToStringDigits = {
+		{ EKeys::Zero, TEXT("0") },
+		{ EKeys::One, TEXT("1") },
+		{ EKeys::Two, TEXT("2") },
+		{ EKeys::Three, TEXT("3") },
+		{ EKeys::Four, TEXT("4") },
+		{ EKeys::Five, TEXT("5") },
+		{ EKeys::Six, TEXT("6") },
+		{ EKeys::Seven, TEXT("7") },
+		{ EKeys::Eight, TEXT("8") },
+		{ EKeys::Nine, TEXT("9") },
+	};
+
+	const FString* FoundStr = KeyToStringDigits.Find(InKey);
+	if (!FoundStr)
+	{
+		return false;
+	}
+
+	// Convert found string to number for clamping
+	int32 NumValue = FCString::Atoi(**FoundStr);
+
+	// Apply clamping if specified
+	if (MinClamp > 0 || MaxClamp > 0)
+	{
+		// If only min is specified, use the found number as max
+		const int32 EffectiveMax = (MaxClamp > 0) ? MaxClamp : NumValue;
+		// If only max is specified, use 0 as min
+		const int32 EffectiveMin = (MinClamp > 0) ? MinClamp : 0;
+
+		NumValue = FMath::Clamp(NumValue, EffectiveMin, EffectiveMax);
+	}
+
+	// Convert back to string
+	OutStr = FString::FromInt(NumValue);
+	return true;
+}
+
+FInputChord FUMInputHelpers::GetChordFromKeyEvent(
+	const FKeyEvent& InKeyEvent)
+{
+	const FModifierKeysState& ModState = InKeyEvent.GetModifierKeys();
+	return FInputChord(
+		InKeyEvent.GetKey(),	  // The key
+		ModState.IsShiftDown(),	  // bShift
+		ModState.IsControlDown(), // bCtrl
+		ModState.IsAltDown(),	  // bAlt
+		ModState.IsCommandDown()  // bCmd
+	);
+}

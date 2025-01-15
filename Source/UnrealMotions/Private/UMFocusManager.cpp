@@ -633,32 +633,18 @@ void FUMFocusManager::HandleOnWindowChanged(
 	const TSharedPtr<SWindow> PrevWindow,
 	const TSharedPtr<SWindow> NewWindow)
 {
-	FGlobalTabmanager::Get();
-
 	if (NewWindow.IsValid())
 	{
-		Logger.Print(FString::Printf(TEXT("New Window: %s"), *NewWindow->GetTitle().ToString()), ELogVerbosity::Verbose);
+		Logger.Print(FString::Printf(TEXT("OnWindowChanged: New Window: %s"),
+			*NewWindow->GetTitle().ToString()));
 
-		ActivateWindow(NewWindow.ToSharedRef());
+		FUMSlateHelpers::ActivateWindow(NewWindow.ToSharedRef());
 
 		if (TryFocusFirstFoundMinorTab(NewWindow->GetContent()))
-			// if (TryFocusFirstFoundMinorTab(NewWindow.ToSharedRef()))
 			return;
 
 		if (TryFocusFirstFoundSearchBox(NewWindow->GetContent()))
-			// if (TryFocusFirstFoundSearchBox(NewWindow.ToSharedRef()))
 			return;
-		// FTimerHandle TimerHandle;
-		// GEditor->GetTimerManager()->SetTimer(
-		// 	TimerHandle,
-		// 	[this]() {
-		// 		TSharedPtr<SDockTab> FrontmostMajorTab;
-		// 		if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(FrontmostMajorTab))
-		// 		{
-		// 			OnTabForegroundedV2(FrontmostMajorTab, nullptr);
-		// 		}
-		// 	},
-		// 	0.5f, false);
 
 		TSharedPtr<SDockTab> FrontmostMajorTab;
 		if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(FrontmostMajorTab))
@@ -775,7 +761,7 @@ bool FUMFocusManager::FocusNextFrontmostWindow()
 	{
 		if (!Wins[i]->GetTitle().IsEmpty())
 		{
-			ActivateWindow(Wins[i]);
+			FUMSlateHelpers::ActivateWindow(Wins[i]);
 			return true; // Found the next window
 		}
 	}
@@ -783,47 +769,10 @@ bool FUMFocusManager::FocusNextFrontmostWindow()
 	// If no windows were found; try to bring focus to the root window
 	if (TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow())
 	{
-		ActivateWindow(RootWin.ToSharedRef());
+		FUMSlateHelpers::ActivateWindow(RootWin.ToSharedRef());
 		return true;
 	}
 	return false;
-}
-
-// NOTE: Kept here some commented methods for future reference.
-void FUMFocusManager::ActivateWindow(const TSharedRef<SWindow> Window)
-{
-	FSlateApplication& SlateApp = FSlateApplication::Get();
-	Window->BringToFront(true);
-	TSharedRef<SWidget>			   WinContent = Window->GetContent();
-	FWindowDrawAttentionParameters DrawParams(
-		EWindowDrawAttentionRequestType::UntilActivated);
-	// Window->DrawAttention(DrawParams);
-	// Window->ShowWindow();
-	// Window->FlashWindow(); // Cool way to visually indicate activated wins!
-
-	// I was a bit worried about this, but actually it seems that without this
-	// we will have a weird focusing bug. So this actually seems to work pretty
-	// well.
-	SlateApp.ClearAllUserFocus();
-
-	// TODO:
-	// NOTE:
-	// This is really interesting. It may help to soildfy focus and what we
-	// actually want! Like pass in the MajorTab->MinorTab->*Widget*
-	// I'm thinking maybe something like find major tab in window function ->
-	// Then we have the major, we can do the check, get the minor, get the widget
-	// and pass it in **before drawing attention**!
-	// Window->SetWidgetToFocusOnActivate();
-
-	// This will focus the window content, which isn't really useful. And it
-	// looks like ->DrawAttention() Seems to do a better job!
-	// SlateApp.SetAllUserFocus(
-	// 	WinContent, EFocusCause::Navigation);
-
-	Window->DrawAttention(DrawParams); // Seems to work well!
-
-	FocusManager->Logger.Print(FString::Printf(
-		TEXT("Activating Window: %s"), *Window->GetTitle().ToString()));
 }
 
 void FUMFocusManager::ActivateNewInvokedTab(
@@ -838,10 +787,10 @@ void FUMFocusManager::ActivateNewInvokedTab(
 	// SlateApp.GetAllVisibleWindowsOrdered(Wins);
 	// if (Wins.IsEmpty())
 	// 	return;
-	// FUMFocusManager::ActivateWindow(Wins.Last());
+	// FUMSlateHelpers::ActivateWindow(Wins.Last());
 
 	if (TSharedPtr<SWindow> Win = NewTab->GetParentWindow())
-		FUMFocusManager::ActivateWindow(Win.ToSharedRef());
+		FUMSlateHelpers::ActivateWindow(Win.ToSharedRef());
 
 	FocusManager->ActivateTab(NewTab.ToSharedRef());
 }
@@ -997,6 +946,10 @@ void FUMFocusManager::OnFocusChangedV2(const FFocusEvent& FocusEvent, const FWea
 	FString		  LogOldWidget = "Invalid";
 	FString		  LogNewWidget = "Invalid";
 
+	// Do we wanna track the windows change without necessarily be dependent on
+	// WindowsManager? What does that mean?
+	// FSlateApplication::Get().GetAllVisibleWindowsOrdered();
+
 	if (OldWidget.IsValid() && !ShouldFilterNewWidget(OldWidget.ToSharedRef()))
 	{
 		PrevWidget = OldWidget;
@@ -1131,8 +1084,6 @@ bool FUMFocusManager::TryFocusFirstFoundMinorTab(TSharedRef<SWidget> InContent)
 		const TSharedPtr<SDockTab> FirstMinorTab =
 			StaticCastSharedPtr<SDockTab>(FirstMinorTabAsWidget.Pin());
 
-		// TODO:
-		// Test without activating the tab itself?
 		ActivateTab(FirstMinorTab.ToSharedRef());
 		Logger.Print("Minor Tab Found: Fallback to focus first Minor Tab.",
 			ELogVerbosity::Warning, bVisLogTabFocusFlow);
@@ -1270,7 +1221,8 @@ bool FUMFocusManager::TryActivateLastWidgetInTab(
 	// return false; // NOTE: TEST
 
 	// if this tab has any focus, it means the user had probably clicked on
-	// it manually via the mouse or something.
+	// it manually via the mouse or something. In the case, we don't want to
+	// override the focus with the last registered one.
 	if (InTab->GetContent()->HasFocusedDescendants())
 	{
 		TryRegisterWidgetWithTab(ActiveWidget, InTab);
@@ -1300,6 +1252,14 @@ bool FUMFocusManager::TryActivateLastWidgetInTab(
 			return true;
 		}
 	}
+
+	// Registered widget was not found Fallback:
+	// if (TryFocusFirstFoundListView(InTab))
+	// 	return true;
+
+	if (TryFocusFirstFoundSearchBox(InTab->GetContent()))
+		return true;
+
 	TWeakPtr<SDockTab> WeakInTab = InTab; // Store as weak for safety
 
 	TimerManager->SetTimer(

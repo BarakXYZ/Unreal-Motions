@@ -6,7 +6,6 @@
 #include "Widgets/SWidget.h"
 #include "UMInputPreProcessor.h"
 #include "framework/Application/SlateApplication.h"
-#include "UMWindowsNavigationManager.h"
 
 DECLARE_DELEGATE_RetVal_TwoParams(bool, FUMOnWindowAction, const TSharedRef<FGenericWindow>&, EWindowAction::Type);
 
@@ -113,14 +112,6 @@ public:
 	 */
 
 	static bool FocusNextFrontmostWindow();
-
-	/**
-	 * Activates the specified window, bringing it to the front and setting proper focus.
-	 * Handles focus management, window ordering, and ensuring proper activation state.
-	 * @param Window The window to activate
-	 */
-
-	static void ActivateWindow(const TSharedRef<SWindow> Window);
 
 	/**
 	 * @brief Activates and properly focuses a newly invoked tab.

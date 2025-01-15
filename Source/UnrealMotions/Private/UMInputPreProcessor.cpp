@@ -3,17 +3,13 @@
 #include "Engine/GameInstance.h"
 #include "Framework/Application/SlateApplication.h"
 #include "StatusBarSubsystem.h"
+#include "UMInputHelpers.h"
 
 // #include "WidgetDrawerConfig.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMInputPreProcessor, Log, All); // Dev
-//
-TSharedPtr<FUMInputPreProcessor>
-	FUMInputPreProcessor::InputPreProcessor{ nullptr };
 
 EVimMode FUMInputPreProcessor::VimMode{ EVimMode::Insert };
-
-FOnUMPreProcessorInputInit FUMInputPreProcessor::OnUMPreProcessorInputInit;
 
 FOnRequestVimModeChange FUMInputPreProcessor::OnRequestVimModeChange;
 
@@ -23,8 +19,7 @@ FUMInputPreProcessor::FUMInputPreProcessor()
 {
 	Logger = FUMLogger(&LogUMInputPreProcessor);
 
-	OnUMPreProcessorInputInit.AddLambda(
-		[this]() { RegisterDefaultKeyBindings(); });
+	RegisterDefaultKeyBindings();
 
 	OnRequestVimModeChange.AddLambda(
 		[this](FSlateApplication& SlateApp, const EVimMode NewMode) {
@@ -35,24 +30,10 @@ FUMInputPreProcessor::~FUMInputPreProcessor()
 {
 }
 
-void FUMInputPreProcessor::Initialize()
+TSharedRef<FUMInputPreProcessor> FUMInputPreProcessor::Get()
 {
-	if (!InputPreProcessor)
-	{
-		InputPreProcessor = MakeShared<FUMInputPreProcessor>();
-		OnUMPreProcessorInputInit.Broadcast();
-	}
-}
-
-bool FUMInputPreProcessor::IsInitialized()
-{
-	return InputPreProcessor.IsValid();
-}
-
-TSharedPtr<FUMInputPreProcessor> FUMInputPreProcessor::Get()
-{
-	// Always ensure initialization first
-	Initialize();
+	static const TSharedRef<FUMInputPreProcessor> InputPreProcessor =
+		MakeShared<FUMInputPreProcessor>();
 	return InputPreProcessor;
 }
 
@@ -67,7 +48,7 @@ void FUMInputPreProcessor::Tick(
 bool FUMInputPreProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// 1) Add this key to current sequence
-	CurrentSequence.Add(GetChordFromKeyEvent(InKeyEvent));
+	CurrentSequence.Add(FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent));
 
 	// 2) Traverse the trie
 	FKeyChordTrieNode* CurrentNode = TrieRoot;
@@ -122,7 +103,6 @@ void FUMInputPreProcessor::ResetSequence(FSlateApplication& SlateApp)
 	CurrentBuffer.Empty();
 	bIsCounting = false;
 	ResetBufferVisualizer(SlateApp);
-	// FUMLogger::NotifySuccess(FText::FromString("Reset Sequence"));
 }
 
 void FUMInputPreProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
@@ -239,14 +219,10 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 	// Otherwise, the simulated key press won't be handled by the engine.
 	if (bNativeInputHandling)
 	{
-		// FUMLogger::NotifySuccess(FText::FromString(
-		// 	"HandleKeyDownEvent Dummy"));
-
 		bNativeInputHandling = false; // Resume manual handling from next event
 		return false;
 	}
 
-	// FUMLogger::NotifySuccess(FText::FromString("HandleKeyDownEvent Prod"));
 	if (IsSimulateEscapeKey(SlateApp, InKeyEvent))
 		return true;
 
@@ -321,7 +297,7 @@ bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const F
 	// }
 
 	OnMouseButtonUpAlertTabForeground.Broadcast();
-	// FUMLogger::NotifySuccess(FText::FromString("Key up!"));
+	// Logger.Print("Key up!");
 	// return true;
 
 	// if (VimMode == EVimMode::Normal)
@@ -355,7 +331,6 @@ bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateAp
 		// AttDesc.DefaultSortOrder();
 		FString WidgetName = FocusedWidget->ToString();
 		FString DebugStr = FString::Printf(TEXT("Widget Type: %s, Widget Name: %s"), *WidgetType.ToString(), *WidgetName);
-		// FUMLogger::NotifySuccess(FText::FromString(DebugStr));
 
 		return false;
 	}
@@ -374,7 +349,7 @@ bool FUMInputPreProcessor::TrackCountPrefix(
 
 	FString OutStr;
 	// Check if the current key is a digit
-	if (GetStrDigitFromKey(InKeyEvent.GetKey(), OutStr))
+	if (FUMInputHelpers::GetStrDigitFromKey(InKeyEvent.GetKey(), OutStr))
 	{
 		// If this is the first key in the sequence, start counting mode
 		// Example: User pressed "4" which could start "4h" command
@@ -421,7 +396,7 @@ bool FUMInputPreProcessor::IsSimulateEscapeKey(
 {
 	if (InKeyEvent.IsShiftDown() && InKeyEvent.GetKey() == EKeys::Escape)
 	{
-		FUMLogger::NotifySuccess(FText::FromString("Simulate Escape"));
+		Logger.Print("Simulate Escape");
 		static const FKeyEvent EscapeEvent(
 			FKey(EKeys::Escape),
 			FModifierKeysState(),
@@ -439,8 +414,7 @@ void FUMInputPreProcessor::SetMode(FSlateApplication& SlateApp, const EVimMode N
 	if (VimMode != NewMode)
 	{
 		VimMode = NewMode;
-		FUMLogger::NotifySuccess(
-			FText::FromString(UEnum::GetValueAsString(NewMode)), bVisualLog);
+		Logger.Print(UEnum::GetValueAsString(NewMode));
 	}
 	ResetSequence(SlateApp);
 	OnVimModeChanged.Broadcast(NewMode);
@@ -473,23 +447,9 @@ FKeyEvent FUMInputPreProcessor::GetKeyEventFromKey(
 		0, false, 0, 0);
 }
 
-FInputChord FUMInputPreProcessor::GetChordFromKeyEvent(
-	const FKeyEvent& InKeyEvent)
-{
-	const FModifierKeysState& ModState = InKeyEvent.GetModifierKeys();
-	return FInputChord(
-		InKeyEvent.GetKey(),	  // The key
-		ModState.IsShiftDown(),	  // bShift
-		ModState.IsControlDown(), // bCtrl
-		ModState.IsAltDown(),	  // bAlt
-		ModState.IsCommandDown()  // bCmd
-	);
-}
-
 void FUMInputPreProcessor::SimulateMultiTabPresses(
 	FSlateApplication& SlateApp, int32 TimesToRepeat)
 {
-	FUMLogger::NotifySuccess();
 	static const FKeyEvent TabEvent(
 		FKey(EKeys::Tab),
 		FModifierKeysState(),
@@ -521,68 +481,27 @@ void FUMInputPreProcessor::SimulateKeyPress(
 	SlateApp.ProcessKeyUpEvent(SimulatedEvent);
 }
 
-bool FUMInputPreProcessor::GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
-	int32 MinClamp, int32 MaxClamp)
-{
-	static const TMap<FKey, FString> KeyToStringDigits = {
-		{ EKeys::Zero, TEXT("0") },
-		{ EKeys::One, TEXT("1") },
-		{ EKeys::Two, TEXT("2") },
-		{ EKeys::Three, TEXT("3") },
-		{ EKeys::Four, TEXT("4") },
-		{ EKeys::Five, TEXT("5") },
-		{ EKeys::Six, TEXT("6") },
-		{ EKeys::Seven, TEXT("7") },
-		{ EKeys::Eight, TEXT("8") },
-		{ EKeys::Nine, TEXT("9") },
-	};
-
-	const FString* FoundStr = KeyToStringDigits.Find(InKey);
-	if (!FoundStr)
-	{
-		return false;
-	}
-
-	// Convert found string to number for clamping
-	int32 NumValue = FCString::Atoi(**FoundStr);
-
-	// Apply clamping if specified
-	if (MinClamp > 0 || MaxClamp > 0)
-	{
-		// If only min is specified, use the found number as max
-		const int32 EffectiveMax = (MaxClamp > 0) ? MaxClamp : NumValue;
-		// If only max is specified, use 0 as min
-		const int32 EffectiveMin = (MinClamp > 0) ? MinClamp : 0;
-
-		NumValue = FMath::Clamp(NumValue, EffectiveMin, EffectiveMax);
-	}
-
-	// Convert back to string
-	OutStr = FString::FromInt(NumValue);
-	return true;
-}
-
 void FUMInputPreProcessor::DebugInvalidWeakPtr(EUMKeyBindingCallbackType CallbackType)
 {
+	FString Log = "Invalid";
+
 	switch (CallbackType)
 	{
 		case EUMKeyBindingCallbackType::None:
-			FUMLogger::NotifySuccess(
-				FText::FromString("Invalid Weakptr _None"));
+			Log = "Invalid Weakptr _None";
 			break;
 		case EUMKeyBindingCallbackType::NoParam:
-			FUMLogger::NotifySuccess(
-				FText::FromString("Invalid Weakptr _NoParam"));
+			Log = "Invalid Weakptr _NoParam";
 			break;
 		case EUMKeyBindingCallbackType::KeyEventParam:
-			FUMLogger::NotifySuccess(
-				FText::FromString("Invalid Weakptr _KeyEvent"));
+			Log = "Invalid Weakptr _KeyEvent";
 			break;
 		case EUMKeyBindingCallbackType::SequenceParam:
-			FUMLogger::NotifySuccess(
-				FText::FromString("Invalid Weakptr _SequenceParam"));
+			Log = "Invalid Weakptr _SequenceParam";
 			break;
 	}
+
+	Logger.Print(Log, ELogVerbosity::Error, true);
 }
 
 void FUMInputPreProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
@@ -609,7 +528,4 @@ void FUMInputPreProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
 		InKeyEvent.IsPointerEvent() ? TEXT("true") : TEXT("false"),
 		*EventPath,
 		InKeyEvent.GetInputDeviceId().GetId());
-
-	FUMLogger::NotifySuccess(FText::FromString(LogStr));
-	UE_LOG(LogTemp, Warning, TEXT("%s"), *LogStr);
 }

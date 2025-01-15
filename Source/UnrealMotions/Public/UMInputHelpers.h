@@ -72,5 +72,23 @@ public:
 	static void Enter(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	/**
+	 * Converts a numeric key press to its string representation with optional value clamping
+	 * @param InKey - The key to convert
+	 * @param OutStr - Output parameter for the string representation
+	 * @param MinClamp - Optional minimum value to clamp the digit to (0 means no min clamping)
+	 * @param MaxClamp - Optional maximum value to clamp the digit to (0 means no max clamping)
+	 * @return True if the key was a numeric key (0-9)
+	 */
+	static bool GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
+		int32 MinClamp = 0, int32 MaxClamp = 0);
+
+	/**
+	 * Creates an FInputChord from a key event, capturing modifier key states
+	 * @param InKeyEvent - The key event to convert
+	 * @return FInputChord containing the key and modifier state information
+	 */
+	static FInputChord GetChordFromKeyEvent(const FKeyEvent& InKeyEvent);
+
 	static FUMLogger Logger;
 };

@@ -11,6 +11,7 @@
 #include "UMEditorNavigation.h"
 #include "UMEditorCommands.h"
 #include "UMConfig.h"
+#include "LevelEditorActions.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All);
 
@@ -89,13 +90,13 @@ void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 		}
 		case EVimMode::Insert:
 		{
-			// Slight delay before allowing character input
-			// to prevent 'i' from being entered into editable text fields
-			FTimerHandle TimerHandle;
-			GEditor->GetTimerManager()->SetTimer(
-				TimerHandle,
-				[this]() { UMGenericAppMessageHandler->ToggleBlockAllCharInput(false); },
-				0.05f, false);
+			if (bSyntheticInsertToggle)
+			{
+				UMGenericAppMessageHandler->ToggleBlockAllCharInput(false);
+				bSyntheticInsertToggle = false;
+				break;
+			}
+			UMGenericAppMessageHandler->ToggleBlockAllCharInput(false, true);
 			break;
 		}
 		case EVimMode::Visual:
@@ -536,6 +537,20 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::D, EKeys::T, EKeys::N },
 		&FUMEditorCommands::ToggleAllowNotifications);
+
+	// Input.AddKeyBinding_NoParam(
+	// 	{ EKeys::SpaceBar, EKeys::N, EKeys::B },
+	// 	&FLevelEditorActionCallbacks::CreateBlankBlueprintClass);
+
+	Input.AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::N, EKeys::B },
+		[this]() {
+			FSlateApplication& SlateApp = FSlateApplication::Get();
+			bSyntheticInsertToggle = true;
+			InputPP.Pin()->OnRequestVimModeChange.Broadcast(
+				SlateApp, EVimMode::Insert);
+			FLevelEditorActionCallbacks::CreateBlankBlueprintClass();
+		});
 
 	//
 	/////////////////////////////////////////////////////////////////////////

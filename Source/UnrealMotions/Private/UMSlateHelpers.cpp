@@ -2,10 +2,11 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Layout/ChildrenBase.h"
 #include "Widgets/Docking/SDockTab.h"
+#include "Widgets/Input/SEditableText.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
-FUMLogger FUMSlateHelpers::Logger(&LogUMSlateHelpers, false);
+FUMLogger FUMSlateHelpers::Logger(&LogUMSlateHelpers);
 
 bool FUMSlateHelpers::TraverseWidgetTree(
 	const TSharedPtr<SWidget>& ParentWidget,
@@ -13,19 +14,19 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 	const FString& TargetType, int32 SearchCount, int32 Depth)
 {
 	// Log the current widget and depth
-	Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
-		*FString::ChrN(Depth * 2, ' '), // Visual indentation
-		Depth, *ParentWidget->GetTypeAsString()));
+	// Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
+	// 	*FString::ChrN(Depth * 2, ' '), // Visual indentation
+	// 	Depth, *ParentWidget->GetTypeAsString()));
 
 	bool bFoundAllRequested = false;
 
 	if (ParentWidget->GetTypeAsString() == TargetType)
 	{
-		Logger.Print(FString::Printf(
-			TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
-			*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
-			*TargetType));
-		OutWidgets.Add(ParentWidget);
+		// Logger.Print(FString::Printf(
+		// 	TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
+		// 	*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
+		// 	*TargetType));
+		// OutWidgets.Add(ParentWidget);
 
 		// If SearchCount is -1, continue searching but mark that we found at least one
 		// If SearchCount is positive, check if we've found enough
@@ -64,16 +65,16 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 	int32					   Depth)
 {
 	// Log the current widget and depth
-	Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
-		*FString::ChrN(Depth * 2, ' '), // Visual indentation
-		Depth, *ParentWidget->GetTypeAsString()));
+	// Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
+	// 	*FString::ChrN(Depth * 2, ' '), // Visual indentation
+	// 	Depth, *ParentWidget->GetTypeAsString()));
 
 	if (ParentWidget->GetTypeAsString() == TargetType)
 	{
-		Logger.Print(FString::Printf(
-			TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
-			*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
-			*TargetType));
+		// Logger.Print(FString::Printf(
+		// 	TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
+		// 	*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
+		// 	*TargetType));
 
 		OutWidget = ParentWidget;
 		return true;
@@ -360,4 +361,44 @@ bool FUMSlateHelpers::IsVisualTextSelected(FSlateApplication& SlateApp)
 
 	// WidgetAsEditText->SetTextBlockStyle();
 	return WidgetAsEditText->AnyTextSelected();
+}
+//
+// NOTE: Kept here some commented methods for future reference.
+void FUMSlateHelpers::ActivateWindow(const TSharedRef<SWindow> InWindow)
+{
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+	InWindow->BringToFront(true);
+	TSharedRef<SWidget>			   WinContent = InWindow->GetContent();
+	FWindowDrawAttentionParameters DrawParams(
+		EWindowDrawAttentionRequestType::UntilActivated);
+	// Window->DrawAttention(DrawParams);
+	// Window->ShowWindow();
+	// Window->FlashWindow(); // Cool way to visually indicate windows.
+
+	// I was a bit worried about this, but actually it seems that without this
+	// we will have a weird focusing bug. So this actually seems to work pretty
+	// well.
+	// SlateApp.ClearAllUserFocus();
+
+	// NOTE:
+	// This is really interesting. It may help to soildfy focus and what we
+	// actually want! Like pass in the MajorTab->MinorTab->*Widget*
+	// I'm thinking maybe something like find major tab in window function ->
+	// Then we have the major, we can do the check, get the minor, get the widget
+	// and pass it in **before drawing attention**!
+	// Window->SetWidgetToFocusOnActivate();
+
+	// NOTE:
+	// This will focus the window content, which isn't really useful. And it
+	// looks like ->DrawAttention() Seems to do a better job!
+	// SlateApp.SetAllUserFocus(
+	// 	WinContent, EFocusCause::Navigation);
+
+	InWindow->DrawAttention(DrawParams); // Seems to work well!
+
+	if (InWindow->GetContent()->HasAnyUserFocusOrFocusedDescendants())
+		Logger.Print("Window has focus", ELogVerbosity::Verbose, true);
+
+	Logger.Print(FString::Printf(
+		TEXT("Activated Window: %s"), *InWindow->GetTitle().ToString()));
 }

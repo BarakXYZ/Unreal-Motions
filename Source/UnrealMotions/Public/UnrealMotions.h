@@ -2,7 +2,6 @@
 
 #include "Modules/ModuleManager.h"
 
-#include "UMInputPreProcessor.h"
 #include "SUMStatusBarWidget.h"
 #include "UMLogger.h"
 
@@ -16,8 +15,7 @@ public:
 	void BindPostEngineInitDelegates();
 
 private:
-	TSharedPtr<FUMInputPreProcessor> InputProcessor = nullptr;
-	TSharedPtr<SUMBufferVisualizer>	 BVis;
-	TSharedPtr<SUMStatusBarWidget>	 StatWidget;
-	FUMLogger						 Logger;
+	TSharedPtr<SUMBufferVisualizer> BVis;
+	TSharedPtr<SUMStatusBarWidget>	StatWidget;
+	FUMLogger						Logger;
 };

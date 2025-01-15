@@ -50,7 +50,7 @@ public class UnrealMotions : ModuleRules
 				"SceneOutliner",
 				"EditorWidgets",
 				// "Core",
-				// "LevelEditor",
+				"LevelEditor",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

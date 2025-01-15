@@ -265,4 +265,6 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 		int32							 Index = -1;
 	};
 	FTreeViewItemInfo AnchorTreeViewItem;
+
+	bool bSyntheticInsertToggle = false;
 };

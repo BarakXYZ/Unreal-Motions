@@ -5,6 +5,7 @@
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
 #include "Editor.h"
+#include "UMInputHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, Log, All);
@@ -69,7 +70,7 @@ void FUMEditorCommands::OpenContentBrowser(
 	FString				 ContentBrowserId = "ContentBrowserTab";
 	FString				 TabNum;
 
-	if (FUMInputPreProcessor::GetStrDigitFromKey(
+	if (FUMInputHelpers::GetStrDigitFromKey(
 			InKeyEvent.GetKey(), TabNum, 1, 4)) // Valid tabs are only 1-4
 		ContentBrowserId += TabNum;
 	else
