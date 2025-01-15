@@ -7,7 +7,6 @@
 #include "UMInputPreProcessor.h"
 #include "UMGenericAppMessageHandler.h"
 #include "Framework/Application/SlateApplication.h"
-#include "UMVisualModeManager.h"
 #include "EditorSubsystem.h"
 #include "VimEditorSubsystem.generated.h"
 
@@ -34,6 +33,8 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	virtual void Deinitialize() override;
 
+	void WrapAndSetCustomMessageHandler();
+
 	/**
 	 * @brief Binds all Vim command handlers to their respective key sequences.
 	 *
@@ -46,20 +47,6 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	 * - Delete commands (x)
 	 */
 	void BindCommands();
-
-	/**
-	 * DEPRECATED
-	 * @brief Toggles the Vim editor functionality on or off.
-	 *
-	 * @details Manages:
-	 * 1. Input delegate binding/unbinding
-	 * 2. State cleanup on disable
-	 * 3. Notification of status changes
-	 *
-	 * @param bEnable Whether to enable or disable Vim functionality
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Vim Editor Subsystem")
-	void ToggleVim(bool bEnabled);
 
 	/**
 	 * Processes Vim-style navigation input for list views.
@@ -265,13 +252,12 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	EVimMode							PreviousVimMode{ EVimMode::Insert };
 	FKeyEvent							LastNavigationDirection;
 	int32								VisualNavOffsetIndicator{ 0 };
+	const int32							MIN_REPEAT_COUNT = 1;
+	const int32							MAX_REPEAT_COUNT = 999;
 
-	TSharedPtr<FUMGenericAppMessageHandler>		  UMGenericAppMessageHandler;
-	TSharedPtr<FGenericApplicationMessageHandler> OriginGenericAppMessageHandler;
+	TSharedPtr<FUMGenericAppMessageHandler> UMGenericAppMessageHandler;
 
 	FUMLogger Logger;
-
-	TSharedPtr<FUMVisualModeManager> VisModeManager;
 
 	struct FTreeViewItemInfo
 	{

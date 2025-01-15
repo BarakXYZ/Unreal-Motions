@@ -3,29 +3,12 @@
 #include "UMInputPreProcessor.h"
 #include "UMFocusManager.h"
 #include "UMSlateHelpers.h"
-#include "Widgets/Input/SSearchBox.h"
 #include "Widgets/Input/SButton.h"
 #include "Editor.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, Log, All);
 FUMLogger FUMEditorCommands::Logger(&LogUMEditorCommands);
-
-TSharedPtr<FUMEditorCommands> FUMEditorCommands::EditorCommands =
-	MakeShared<FUMEditorCommands>();
-
-FUMEditorCommands::FUMEditorCommands()
-{
-}
-
-FUMEditorCommands::~FUMEditorCommands()
-{
-}
-
-const TSharedPtr<FUMEditorCommands> FUMEditorCommands::Get()
-{
-	return EditorCommands;
-}
 
 void FUMEditorCommands::ClearAllDebugMessages()
 {
@@ -51,12 +34,12 @@ void FUMEditorCommands::ToggleAllowNotifications()
 	if (NotifyManager.AreNotificationsAllowed())
 	{
 		NotifyManager.SetAllowNotifications(false);
-		EditorCommands->Logger.Print("ToggleAllowNotificaiton: False");
+		Logger.Print("ToggleAllowNotificaiton: False");
 	}
 	else
 	{
 		NotifyManager.SetAllowNotifications(true);
-		EditorCommands->Logger.Print("ToggleAllowNotificaiton: True");
+		Logger.Print("ToggleAllowNotificaiton: True");
 	}
 }
 
@@ -188,6 +171,7 @@ void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEv
 	static const FString EditableTextType{ "SEditableText" };
 
 	TSharedPtr<SWidget> SearchContent;
+	FString				TabLabel = "Invalid";
 
 	if (const auto ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow())
 	{
@@ -196,6 +180,7 @@ void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEv
 			if (FUMSlateHelpers::DoesTabResideInWindow(ActiveWindow.ToSharedRef(), MinorTab.ToSharedRef()))
 			{
 				SearchContent = MinorTab->GetContent();
+				TabLabel = MinorTab->GetTabLabel().ToString();
 			}
 			else
 			{
@@ -211,6 +196,18 @@ void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEv
 			// SearchInWidget, SearchBox, SearchBoxType))
 			SearchContent, EditableTexts, EditableTextType))
 	{
+		Logger.Print(TabLabel, ELogVerbosity::Verbose, true);
+		if (TabLabel.StartsWith("Content Browser"))
+		{
+			if (const auto PinText = EditableTexts.Last().Pin())
+			{
+				SlateApp.SetAllUserFocus(
+					PinText, EFocusCause::Navigation);
+				Logger.Print("Found Editable in Content Browser to Focus on!",
+					ELogVerbosity::Verbose, true);
+				return;
+			}
+		}
 		for (const auto& Text : EditableTexts)
 		{
 			if (const auto PinText = Text.Pin())

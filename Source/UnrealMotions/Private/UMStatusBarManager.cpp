@@ -8,6 +8,8 @@
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Widgets/Text/STextBlock.h"
 
+// TODO: Convert this to an Editor Subsystem
+
 // DEFINE_LOG_CATEGORY_STATIC(LogUMStatusBarManager, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMStatusBarManager, Log, All); // Dev
 FUMLogger FUMStatusBarManager::Logger(&LogUMStatusBarManager);

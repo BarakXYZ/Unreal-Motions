@@ -1,7 +1,10 @@
 #include "UMInputHelpers.h"
+#include "Editor.h"
+#include "EditorViewportClient.h"
 #include "Types/SlateEnums.h"
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/SViewport.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMInputHelpers, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMInputHelpers, Log, All); // Dev
@@ -88,6 +91,139 @@ void FUMInputHelpers::SimulateRightClick(
 	// Will remain the original focused widget if not list
 	FUMInputHelpers::SimulateClickOnWidget(
 		SlateApp, FocusedWidget.ToSharedRef(), EKeys::RightMouseButton);
+}
+
+void FUMInputHelpers::ToggleRightClickPress(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// if (const TSharedPtr<SViewport> Viewport = SlateApp.GetGameViewport())
+	// {
+	// 	// Viewport->OnMouseButtonDown();
+	// 	TWeakPtr<ISlateViewport> IView = Viewport->GetViewportInterface();
+	// 	if (const auto View = IView.Pin())
+	// 	{
+	// 		if (const auto AsWidget = View->GetWidget().Pin())
+	// 		{
+	// 			const auto Geometry = AsWidget->GetCachedGeometry();
+	// 			View->OnMouseButtonDown(Geometry, FPointerEvent(0, Geometry.AbsolutePosition, Geometry.AbsolutePosition, TSet<FKey>(), EKeys::RightMouseButton, 0.0f, FModifierKeysState()));
+	// 		}
+	// 	}
+	// }
+
+	if (GetActiveEditorViewportClient())
+	{
+		InputKey(GetActiveEditorViewportClient(), EKeys::K, EInputEvent::IE_Repeat);
+		Logger.Print("Test", ELogVerbosity::Verbose, true);
+	}
+}
+
+FEditorViewportClient* FUMInputHelpers::GetActiveEditorViewportClient()
+{
+	if (GEditor && GEditor->GetActiveViewport())
+	{
+		return static_cast<FEditorViewportClient*>(GEditor->GetActiveViewport()->GetClient());
+	}
+	return nullptr;
+}
+
+void FUMInputHelpers::OrbitAroundPivot(
+	FEditorViewportClient* Client, float DeltaYaw, float DeltaPitch)
+{
+	if (!Client)
+	{
+		return;
+	}
+
+	// Get the current pivot (focus) and the current camera rotation & location
+	const FVector  Pivot = Client->GetLookAtLocation();
+	const FRotator CurrentRot = Client->GetViewRotation();
+	const FVector  CurrentLoc = Client->GetViewLocation();
+
+	// Distance from camera to pivot
+	const float DistanceToPivot = (CurrentLoc - Pivot).Size();
+
+	// New rotation = old rotation + the deltas
+	FRotator NewRotation = CurrentRot;
+	NewRotation.Yaw += DeltaYaw;
+	NewRotation.Pitch += DeltaPitch;
+
+	// Constrain pitch if you want to avoid flipping
+	NewRotation.Pitch = FMath::ClampAngle(NewRotation.Pitch, -89.9f, 89.9f);
+
+	// Convert rotation to a direction vector
+	const FVector NewDirection = NewRotation.Vector();
+
+	// Orbit: place the camera so it remains the same distance from the pivot
+	const FVector NewLocation = Pivot - (NewDirection * DistanceToPivot);
+
+	// Apply back to the viewport
+	Client->SetViewLocation(NewLocation);
+	Client->SetViewRotation(NewRotation);
+}
+
+void FUMInputHelpers::RotateCameraInPlace(
+	FEditorViewportClient* Client, float DeltaYaw, float DeltaPitch)
+{
+	if (!Client)
+	{
+		return;
+	}
+
+	// Get the current camera rotation & location
+	FRotator CurrentRot = Client->GetViewRotation();
+	// We do NOT alter the location, so just store it
+	FVector CurrentLoc = Client->GetViewLocation();
+
+	// Adjust rotation
+	CurrentRot.Yaw += DeltaYaw;
+	CurrentRot.Pitch += DeltaPitch;
+
+	// Optional: clamp pitch to avoid flipping
+	CurrentRot.Pitch = FMath::ClampAngle(CurrentRot.Pitch, -89.9f, 89.9f);
+
+	// Apply updated rotation; keep the same location
+	Client->SetViewLocation(CurrentLoc);
+	Client->SetViewRotation(CurrentRot);
+}
+
+bool FUMInputHelpers::InputKey(
+	FEditorViewportClient* InViewportClient,
+	FKey				   Key,
+	EInputEvent			   Event)
+{
+	FKeyEvent KeyEvent;
+
+	if (Event == IE_Pressed || Event == IE_Repeat)
+	{
+		float Step = 5.0f; // degrees per key press
+
+		if (Key == EKeys::H)
+		{
+			// OrbitAroundPivot(InViewportClient, -Step, 0.0f);
+			RotateCameraInPlace(InViewportClient, -Step, 0.0f);
+			return true;
+		}
+		else if (Key == EKeys::L)
+		{
+			// OrbitAroundPivot(InViewportClient, Step, 0.0f);
+			RotateCameraInPlace(InViewportClient, Step, 0.0f);
+			return true;
+		}
+		else if (Key == EKeys::K)
+		{
+			// OrbitAroundPivot(InViewportClient, 0.0f, Step);
+			RotateCameraInPlace(InViewportClient, 0.0f, Step);
+			return true;
+		}
+		else if (Key == EKeys::J)
+		{
+			// OrbitAroundPivot(InViewportClient, 0.0f, -Step);
+			RotateCameraInPlace(InViewportClient, 0.0f, -Step);
+			return true;
+		}
+	}
+
+	return false; // let other handlers process keys we didn’t handle
 }
 
 bool FUMInputHelpers::AreMouseButtonsPressed(const TSet<FKey>& InButtons)

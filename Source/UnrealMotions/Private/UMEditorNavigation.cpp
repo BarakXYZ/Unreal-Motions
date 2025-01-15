@@ -9,22 +9,6 @@
 DEFINE_LOG_CATEGORY(LogUMEditorNavigation);
 FUMLogger FUMEditorNavigation::Logger(&LogUMEditorNavigation);
 
-TSharedPtr<FUMEditorNavigation> FUMEditorNavigation::EditorNavigation =
-	MakeShared<FUMEditorNavigation>();
-
-FUMEditorNavigation::FUMEditorNavigation()
-{
-}
-
-FUMEditorNavigation::~FUMEditorNavigation()
-{
-}
-
-const TSharedPtr<FUMEditorNavigation> FUMEditorNavigation::Get()
-{
-	return EditorNavigation;
-}
-
 void FUMEditorNavigation::NavigatePanelTabs(
 	FSlateApplication& SlateApp, const FKeyEvent& InKey)
 {

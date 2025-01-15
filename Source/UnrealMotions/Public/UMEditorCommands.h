@@ -7,8 +7,6 @@
 class FUMEditorCommands
 {
 public:
-	FUMEditorCommands();
-	~FUMEditorCommands();
 	const TSharedPtr<FUMEditorCommands> Get();
 
 	static void ClearAllDebugMessages();
@@ -65,8 +63,6 @@ public:
 	 */
 	static void OpenWidgetReflector(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
-
-	static TSharedPtr<FUMEditorCommands> EditorCommands;
 
 	static void FocusSearchBox(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);

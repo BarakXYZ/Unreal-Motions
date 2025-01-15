@@ -498,6 +498,8 @@ public:
 		FSlateApplication& SlateApp, const FKey& SimulatedKey,
 		const FModifierKeysState& ModifierKeys = FModifierKeysState());
 
+	void TestLinearInput(FSlateApplication& SlateApp);
+
 	//
 	/////////////////////////////////////////////////////////////////////////
 
@@ -549,4 +551,7 @@ public:
 	EUMLogMethod UMHelpersLogMethod{ EUMLogMethod::PrintToScreen };
 	bool		 bVisualLog{ true };
 	bool		 bConsoleLog{ false };
+	FUMLogger	 Logger;
+
+	FTimerHandle TimerHandle_LinearPress;
 };

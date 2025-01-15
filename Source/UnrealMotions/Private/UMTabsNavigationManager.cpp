@@ -5,7 +5,6 @@
 #include "Widgets/Docking/SDockTab.h"
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
-// #include "BlueprintEditor.h"
 
 #include "UMLogger.h"
 #include "UMSlateHelpers.h"
@@ -361,19 +360,6 @@ void FUMTabsNavigationManager::DebugTab(const TSharedPtr<SDockTab>& Tab,
 	// FUMLogger::AddDebugMessage(
 	// 	DebugMsg, EUMHelpersLogMethod::PrintToScreen,
 	// 	16.0f, FLinearColor::Yellow, 1.0f, 10);
-}
-
-ENavSpecTabType FUMTabsNavigationManager::GetNavigationSpecificTabType(const TSharedPtr<SDockTab>& Tab)
-{
-	if (Tab)
-	{
-		FString TabId = Tab->GetLayoutIdentifier().ToString();
-		if (TabId.EndsWith(TEXT("Toolkit")))
-			return ENavSpecTabType::Toolkit;
-		else if (TabId.StartsWith(TEXT("LevelEditor")))
-			return ENavSpecTabType::LevelEditor;
-	}
-	return ENavSpecTabType::None;
 }
 
 void FUMTabsNavigationManager::RegisterCycleTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext)

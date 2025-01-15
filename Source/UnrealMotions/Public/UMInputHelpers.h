@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EditorViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/SWidget.h"
 #include "InputCoreTypes.h"
@@ -14,6 +15,22 @@ public:
 
 	static void SimulateRightClick(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	static void ToggleRightClickPress(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	static FEditorViewportClient* GetActiveEditorViewportClient();
+
+	static void OrbitAroundPivot(
+		FEditorViewportClient* Client, float DeltaYaw, float DeltaPitch);
+
+	static void RotateCameraInPlace(
+		FEditorViewportClient* Client, float DeltaYaw, float DeltaPitch);
+
+	static bool InputKey(
+		FEditorViewportClient* InViewportClient,
+		FKey				   Key,
+		EInputEvent			   Event);
 
 	static bool AreMouseButtonsPressed(const TSet<FKey>& InButtons);
 

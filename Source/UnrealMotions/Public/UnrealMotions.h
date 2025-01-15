@@ -19,5 +19,5 @@ private:
 	TSharedPtr<FUMInputPreProcessor> InputProcessor = nullptr;
 	TSharedPtr<SUMBufferVisualizer>	 BVis;
 	TSharedPtr<SUMStatusBarWidget>	 StatWidget;
-	static FUMLogger				 Logger;
+	FUMLogger						 Logger;
 };

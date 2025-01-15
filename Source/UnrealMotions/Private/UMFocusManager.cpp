@@ -633,6 +633,8 @@ void FUMFocusManager::HandleOnWindowChanged(
 	const TSharedPtr<SWindow> PrevWindow,
 	const TSharedPtr<SWindow> NewWindow)
 {
+	FGlobalTabmanager::Get();
+
 	if (NewWindow.IsValid())
 	{
 		Logger.Print(FString::Printf(TEXT("New Window: %s"), *NewWindow->GetTitle().ToString()), ELogVerbosity::Verbose);

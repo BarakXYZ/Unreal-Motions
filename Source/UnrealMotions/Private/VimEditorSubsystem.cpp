@@ -10,68 +10,48 @@
 #include "UMInputHelpers.h"
 #include "UMEditorNavigation.h"
 #include "UMEditorCommands.h"
+#include "UMConfig.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All);
 
-static constexpr int32 MIN_REPEAT_COUNT = 1;
-static constexpr int32 MAX_REPEAT_COUNT = 999;
-
 void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+	if (!FUMConfig::Get()->IsVimEnabled())
+		return;
+
 	Logger.SetLogCategory(&LogVimEditorSubsystem);
-
-	// FSlateApplication& SlateApp = FSlateApplication::Get();
-	const FConfigFile& ConfigFile = FUMLogger::ConfigFile;
-	FString			   OutLog = "Vim Editor Subsystem Initialized: ";
-
-	FString TestGetStr;
-	bool	bStartVim = true;
-
-	if (!ConfigFile.IsEmpty())
-	{
-		ConfigFile.GetBool(*FUMLogger::VimSection, TEXT("bStartVim"), bStartVim);
-
-		// TODO: Remove to a more general place? Debug
-		ConfigFile.GetBool(*FUMLogger::DebugSection, TEXT("bVisualLog"), bVisualLog);
-	}
-
-	ToggleVim(bStartVim);
-	OutLog += bStartVim ? "Enabled by Config." : "Disabled by Config.";
-	FUMLogger::NotifySuccess(FText::FromString(OutLog), bVisualLog);
-
-	VisModeManager = MakeShared<FUMVisualModeManager>();
 
 	VimSubWeak = this;
 	InputPP = FUMInputPreProcessor::Get().ToWeakPtr();
 	BindCommands();
 	Super::Initialize(Collection);
 
-	FCoreDelegates::OnPostEngineInit.AddLambda(
-		[this]() {
-			FSlateApplication&			   SlateApp = FSlateApplication::Get();
-			TSharedPtr<GenericApplication> PlatformApp =
-				SlateApp.GetPlatformApplication();
-			if (!PlatformApp.IsValid())
-			{
-				// Handle error: Slate/PlatformApp not valid
-				return;
-			}
-
-			// 1) Grab the current/original handler
-			TSharedPtr<FGenericApplicationMessageHandler> OriginGenericAppMessageHandler = PlatformApp->GetMessageHandler();
-
-			// 2) Create your chaining handler, passing in the old one
-			UMGenericAppMessageHandler = MakeShared<FUMGenericAppMessageHandler>(OriginGenericAppMessageHandler);
-
-			// 3) Now set the platform app’s active handler to your new one
-			PlatformApp->SetMessageHandler(UMGenericAppMessageHandler.ToSharedRef());
-		});
+	FCoreDelegates::OnPostEngineInit.AddUObject(
+		this, &UVimEditorSubsystem::WrapAndSetCustomMessageHandler);
 }
 
 void UVimEditorSubsystem::Deinitialize()
 {
-	ToggleVim(false);
 	Super::Deinitialize();
+}
+
+void UVimEditorSubsystem::WrapAndSetCustomMessageHandler()
+{
+	TSharedPtr<GenericApplication> PlatformApp =
+		FSlateApplication::Get().GetPlatformApplication();
+	if (!PlatformApp.IsValid())
+		return;
+
+	// Grab the current/original handler
+	TSharedPtr<FGenericApplicationMessageHandler> OriginGenericAppMessageHandler =
+		PlatformApp->GetMessageHandler();
+
+	// Create chaining handler, passing in the old one
+	UMGenericAppMessageHandler =
+		MakeShared<FUMGenericAppMessageHandler>(OriginGenericAppMessageHandler);
+
+	// Set the platform app’s active handler to your new one
+	PlatformApp->SetMessageHandler(UMGenericAppMessageHandler.ToSharedRef());
 }
 
 void UVimEditorSubsystem::OnResetSequence()
@@ -99,7 +79,7 @@ void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 		{
 			// Logger.Print("Vim Mode Changed: Normal Mode", ELogVerbosity::Verbose, true);
 			if (PreviousVimMode == EVimMode::Visual
-				&& VisModeManager->IsVisualTextSelected(SlateApp))
+				&& FUMSlateHelpers::IsVisualTextSelected(SlateApp))
 				FUMInputPreProcessor::SimulateKeyPress(SlateApp, EKeys::Escape);
 
 			UMGenericAppMessageHandler->ToggleBlockAllCharInput(true);
@@ -170,32 +150,6 @@ void UVimEditorSubsystem::CaptureAnchorTreeViewItemSelectionAndIndex(
 			AnchorTreeViewItem.Index = ItemIndex;
 		}
 	}
-}
-
-void UVimEditorSubsystem::ToggleVim(bool bEnable)
-{
-	FString OutLog = bEnable ? "Start Vim: " : "Stop Vim: ";
-
-	if (FSlateApplication::IsInitialized())
-	{
-		if (bEnable)
-		{
-			// TODO:
-		}
-		else
-		{
-			if (PreInputKeyDownDelegateHandle.IsValid())
-			{
-				FSlateApplication::Get().OnApplicationPreInputKeyDownListener().Remove(PreInputKeyDownDelegateHandle);
-				PreInputKeyDownDelegateHandle.Reset(); // Clear the handle to avoid reuse
-				OutLog += "Delegate resetted successfully.";
-			}
-			else
-				OutLog += "Delegate wasn't valid / bound. Skipping.";
-		}
-	}
-
-	FUMLogger::NotifySuccess(FText::FromString(OutLog), bVisualLog);
 }
 
 void UVimEditorSubsystem::NavigateToFirstOrLastItem(
@@ -551,6 +505,10 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::R },
 		&FUMInputHelpers::SimulateRightClick);
+
+	Input.AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, FInputChord(EModifierKey::Shift, EKeys::R) },
+		&FUMInputHelpers::ToggleRightClickPress);
 
 	/////////////////////////////////////////////////////////////////////////
 	//						~ Panel Navigation ~

@@ -6,7 +6,6 @@
 
 const FString FUMLogger::VimSection = TEXT("/Script/Vim");
 const FString FUMLogger::DebugSection = TEXT("/Script/Debug");
-FConfigFile	  FUMLogger::ConfigFile;
 
 FName FUMLogger::LastCategoryNameOutput = "NONE";
 
@@ -336,18 +335,4 @@ void FUMLogger::RemoveAllStringsFromScreen()
 	{
 		UE_LOG(LogTemp, Error, TEXT("Failed to access GEngine."));
 	}
-}
-
-// TODO: Move this somewhere else
-void FUMLogger::SetPluginConfigFile()
-{
-	FString PluginConfigDir = FPaths::ProjectPluginsDir() / TEXT("UnrealMotions") / TEXT("Config");
-	FString ConfigPath = PluginConfigDir / TEXT("DefaultUnrealMotions.ini");
-
-	// Use platform-specific path separators
-	FPaths::MakeStandardFilename(ConfigPath);
-
-	ConfigFile.Read(ConfigPath);
-	if (ConfigFile.IsEmpty())
-		UE_LOG(LogTemp, Error, TEXT("Unreal Motions Config file is Empty!"));
 }

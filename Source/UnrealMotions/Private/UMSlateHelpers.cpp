@@ -344,3 +344,20 @@ TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMinorTab()
 	}
 	return nullptr;
 }
+
+bool FUMSlateHelpers::IsVisualTextSelected(FSlateApplication& SlateApp)
+{
+	const FName EditTextType = "SEditableText";
+
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid())
+		return false;
+	if (!FocusedWidget->GetType().IsEqual(EditTextType))
+		return false;
+
+	TSharedPtr<SEditableText> WidgetAsEditText =
+		StaticCastSharedPtr<SEditableText>(FocusedWidget);
+
+	// WidgetAsEditText->SetTextBlockStyle();
+	return WidgetAsEditText->AnyTextSelected();
+}

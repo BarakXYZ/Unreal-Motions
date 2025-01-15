@@ -3,12 +3,16 @@
 #include "Widgets/InvalidateWidgetReason.h"
 #include "UMInputHelpers.h"
 #include "Editor.h"
+#include "UMConfig.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, Log, All);
 
 void UVimTextEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+	if (!FUMConfig::Get()->IsVimEnabled())
+		return;
+
 	Logger.SetLogCategory(&LogVimTextEditorSubsystem);
 
 	InputPP = FUMInputPreProcessor::Get().ToWeakPtr();

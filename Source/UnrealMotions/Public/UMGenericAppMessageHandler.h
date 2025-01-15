@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericApplicationMessageHandler.h"
 
 /**
@@ -30,8 +31,6 @@ public:
 	{
 		bBlockAllChars = bBlockAllCharInput;
 	}
-
-	bool bBlockAllChars = false;
 
 	//-----------------------------------------------------------------
 	// The ONLY method we actually change is OnKeyChar. Everything else
@@ -365,4 +364,5 @@ public:
 private:
 	/** The original message handler we forward to. */
 	TSharedPtr<FGenericApplicationMessageHandler> OriginalHandler;
+	bool										  bBlockAllChars{ false };
 };

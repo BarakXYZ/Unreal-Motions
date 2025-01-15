@@ -1,34 +1,25 @@
 #include "UnrealMotions.h"
 #include "Framework/Application/SlateApplication.h"
 #include "UMStatusBarManager.h"
+#include "UMConfig.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUnrealMotionsModule, Log, All); // Dev
-FUMLogger FUnrealMotionsModule::Logger(&LogUnrealMotionsModule);
 
 #define LOCTEXT_NAMESPACE "FUnrealMotionsModule"
 
 void FUnrealMotionsModule::StartupModule()
 {
+	Logger = FUMLogger(&LogUnrealMotionsModule);
 	Logger.Print("Unreal Motions: Startup.");
 
-	// TODO: Refactor
-	FUMLogger::SetPluginConfigFile();
+	if (FUMConfig::Get()->IsVimEnabled())
+	{
+		FUMStatusBarManager::Initialize();
 
-	// TODO: Check in the config if the user wants this feature.
-	FUMStatusBarManager::Initialize();
-
-	FCoreDelegates::OnPostEngineInit.AddRaw(
-		this, &FUnrealMotionsModule::BindPostEngineInitDelegates);
-
-	// NOTE: This will only change the in-game navigation config, so not really
-	// helpful.
-	// FCoreDelegates::OnPostEngineInit.AddLambda(
-	// 	[]() {
-	// 		TSharedRef<FUMNavigationConfig> UMNavConfig =
-	// 			MakeShareable(new FUMNavigationConfig());
-	// 		FSlateApplication::Get().SetNavigationConfig(UMNavConfig);
-	// 	});
+		FCoreDelegates::OnPostEngineInit.AddRaw(
+			this, &FUnrealMotionsModule::BindPostEngineInitDelegates);
+	}
 }
 
 void FUnrealMotionsModule::ShutdownModule()

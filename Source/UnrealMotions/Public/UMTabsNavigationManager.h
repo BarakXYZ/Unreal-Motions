@@ -8,13 +8,6 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnNewMajorTabChanged,
 	TWeakPtr<SDockTab> /* New Major Tab */,
 	TWeakPtr<SDockTab> /* New Minor Tab */);
 
-enum class ENavSpecTabType : uint8
-{
-	LevelEditor,
-	Toolkit,
-	None,
-};
-
 class FUMTabsNavigationManager
 {
 public:
@@ -195,14 +188,6 @@ public:
 	bool GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNonMajorTab);
 
 	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
-
-	/** DEPRECATED
-	 * Gets the type of tab for navigation-specific purposes.
-	 * Used to determine how to handle tab navigation for different tab types.
-	 * @param Tab The tab to check the type of
-	 * @return The navigation-specific tab type (LevelEditor, Toolkit, or None)
-	 */
-	ENavSpecTabType GetNavigationSpecificTabType(const TSharedPtr<SDockTab>& Tab);
 
 private:
 	static TSharedPtr<FUMTabsNavigationManager> TabsNavigationManager;

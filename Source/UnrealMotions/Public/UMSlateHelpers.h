@@ -98,5 +98,7 @@ public:
 
 	static TSharedPtr<SDockTab> GetActiveMinorTab();
 
+	static bool IsVisualTextSelected(FSlateApplication& SlateApp);
+
 	static FUMLogger Logger;
 };

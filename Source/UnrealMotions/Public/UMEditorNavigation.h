@@ -9,13 +9,8 @@ DECLARE_LOG_CATEGORY_EXTERN(LogUMEditorNavigation, Log, All);
 class FUMEditorNavigation
 {
 public:
-	FUMEditorNavigation();
-	~FUMEditorNavigation();
-	static const TSharedPtr<FUMEditorNavigation> Get();
-
 	static void NavigatePanelTabs(
 		FSlateApplication& SlateApp, const FKeyEvent& InKey);
 
-	static TSharedPtr<FUMEditorNavigation> EditorNavigation;
-	static FUMLogger					   Logger;
+	static FUMLogger Logger;
 };

@@ -6,6 +6,8 @@
 
 // #include "WidgetDrawerConfig.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogUMInputPreProcessor, Log, All); // Dev
+//
 TSharedPtr<FUMInputPreProcessor>
 	FUMInputPreProcessor::InputPreProcessor{ nullptr };
 
@@ -19,6 +21,8 @@ bool FUMInputPreProcessor::bNativeInputHandling{ false };
 
 FUMInputPreProcessor::FUMInputPreProcessor()
 {
+	Logger = FUMLogger(&LogUMInputPreProcessor);
+
 	OnUMPreProcessorInputInit.AddLambda(
 		[this]() { RegisterDefaultKeyBindings(); });
 
@@ -202,9 +206,28 @@ void FUMInputPreProcessor::RegisterDefaultKeyBindings()
 		});
 }
 
+void FUMInputPreProcessor::TestLinearInput(FSlateApplication& SlateApp)
+{
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+
+	TimerManager->SetTimer(
+		TimerHandle_LinearPress,
+		[this, &SlateApp]() {
+			Logger.Print("LINEAR INPUT", ELogVerbosity::Warning);
+			// TestLinearInput(SlateApp);
+		},
+		0.02f, true);
+}
+
 bool FUMInputPreProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// TEST Linear Input:
+	// if (InKeyEvent.GetKey() == EKeys::LeftBracket)
+	// {
+	// 	TestLinearInput(SlateApp);
+	// }
+
 	// return false;
 	// DebugKeyEvent(InKeyEvent);
 
@@ -291,6 +314,12 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 // that more. Maybe a specific mode desgined for navigation? TODO WIP OK THANK
 bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// TEST Linear Input:
+	// if (InKeyEvent.GetKey() == EKeys::LeftBracket)
+	// {
+	// 	GEditor->GetTimerManager()->ClearTimer(TimerHandle_LinearPress);
+	// }
+
 	OnMouseButtonUpAlertTabForeground.Broadcast();
 	// FUMLogger::NotifySuccess(FText::FromString("Key up!"));
 	// return true;

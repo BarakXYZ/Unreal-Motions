@@ -2,21 +2,13 @@
 #include "Interfaces/IMainFrameModule.h"
 #include "Framework/Commands/UICommandInfo.h"
 #include "Framework/Application/SlateApplication.h"
-// #include "BlueprintEditor.h"
-#include "Misc/PackagePath.h"
-#include "Subsystems/AssetEditorSubsystem.h"
-#include "Editor.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "UMSlateHelpers.h"
 #include "Widgets/Accessibility/SlateCoreAccessibleWidgets.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Widgets/Input/SButton.h"
-#include "GenericPlatform/Accessibility/GenericAccessibleInterfaces.h"
-
-#include "Framework/Application/NavigationConfig.h"
-
 #include "UMLogger.h"
-#include "UnrealMotions.h"
-#include "UMWidgetHelpers.h"
+#include "UMSlateHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMAssetManager, NoLogging, All); // Prod
 // DEFINE_LOG_CATEGORY_STATIC(LogUMAsset, Log, All); // Dev
@@ -149,7 +141,7 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 	ToggleNotificationVisualSelection(NItem.ToSharedRef(), true);
 
 	TWeakPtr<SWidget> FoundWidget = nullptr;
-	if (FUMWidgetHelpers::TraverseWidgetTree(
+	if (FUMSlateHelpers::TraverseWidgetTree(
 			VerBoxNotes->GetSlot(0).GetWidget().ToSharedPtr(),
 			FoundWidget,
 			"SButton"))
