@@ -1,11 +1,10 @@
 #pragma once
 
-#include "CoreMinimal.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/SWidget.h"
 #include "UMInputPreProcessor.h"
-#include "framework/Application/SlateApplication.h"
+#include "Framework/Application/SlateApplication.h"
 #include "EditorSubsystem.h"
 #include "UMFocuserEditorSubsystem.generated.h"
 
@@ -56,10 +55,6 @@ public:
 		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 		const TSharedPtr<SWidget>& NewWidget);
 
-	void OnFocusChangedV2(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
-		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
-		const TSharedPtr<SWidget>& NewWidget);
-
 	void DetectWidgetType(const TSharedRef<SWidget> InWidget);
 
 	/**
@@ -71,9 +66,6 @@ public:
 	 * @note Unreal incorrectly passes the internal delegate params in an inverted order. I've countered it with flipping the values again to compensate.
 	 */
 	void OnActiveTabChanged(
-		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
-
-	void OnActiveTabChangedV2(
 		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
 
 	/**
@@ -88,47 +80,11 @@ public:
 	void OnTabForegrounded(
 		TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
 
-	void OnTabForegroundedV2(
-		TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
-
-	/**
-	 * Updates the currently tracked tab (major or minor).
-	 * @param NewTab The tab to set as current
-	 */
-	void SetCurrentTab(const TSharedRef<SDockTab> NewTab);
-
-	void PreSetCurrentTab();
-
-	void SetActiveMajorTab(const TSharedRef<SDockTab> InTab);
-
-	void SetActiveMinorTab(const TSharedRef<SDockTab> InTab);
-
-	void LogTabChange(const FString& TabType,
-		const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab);
-
-	// Can be called from a few different stages:
-	// If Major Tab Changed
-	// If TabWell Changed
-	// If Minor Tab Changed
-	void SetUserFocus();
-
 	bool ShouldFilterNewWidget(TSharedRef<SWidget> InWidget);
-
-	bool TryFocusLastActiveWidget();
-
-	bool DoesActiveMinorTabResidesInMajorTab(
-		const TSharedRef<SDockTab> InMajorTab);
-
-	bool DoesMinorTabResidesInMajorTab(
-		const TSharedRef<SDockTab> MinorTab, const TSharedRef<SDockTab> MajorTab);
 
 	void HandleOnWindowChanged(
 		const TSharedPtr<SWindow> PrevWindow,
 		const TSharedPtr<SWindow> NewWindow);
-
-	void ToggleVisualLog(bool bIsVisualLog);
-
-	bool TryGetFrontmostMajorTab();
 
 	/**
 	 * Used in the Vim Subsystem. When we remove the current Major Tab, this helps
@@ -153,32 +109,17 @@ public:
 
 	void TrackActiveWindow();
 
-	void LogTabParentWindow(const TSharedRef<SDockTab> InTab);
-
 	bool HasWindowChanged();
 
+	/* Deprecated */
+	bool DoesTabHaveFocus(const TSharedRef<SDockTab> InTab);
+
+	/* Deprecated */
 	bool FindTabWellAndActivateForegroundedTab(const TSharedRef<SDockTab> InMajorTab);
 
 	static bool RemoveActiveMajorTab();
 
 	bool VisualizeParentDockingTabStack(const TSharedRef<SDockTab> InTab);
-
-	void DebugGlobalTabManagerTracking();
-
-	void DebugPrevAndNewMinorTabsMajorTabs(
-		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
-
-	/**
-	 * Try register the in Minor Tab TabWell with the currently active Major Tab.
-	 * @param InBaseMinorTab - The minor tab that resides inside the parent
-	 * TabWell we'll register
-	 */
-	bool RegisterTabWellWithActiveMajorTab(
-		const TSharedRef<SDockTab> InBaseMinorTab);
-
-	bool DoesTabHaveFocus(const TSharedRef<SDockTab> InTab);
-
-	bool TryFocusOnLastActiveWidgetInMinorTab(const TSharedRef<SDockTab> InTab);
 
 	FString TabRoleToString(ETabRole InTabRole);
 
@@ -209,6 +150,44 @@ public:
 	void FocusTabContent(TSharedRef<SDockTab> InTab);
 
 	void OnWindowBeingDestroyed(const SWindow& Window);
+
+	void DebugPrevAndNewMinorTabsMajorTabs(
+		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
+
+	// TODO: protected + friend classes?
+	TWeakPtr<SWindow>  ActiveWindow;
+	TWeakPtr<SDockTab> ActiveMajorTab;
+	TWeakPtr<SWidget>  ActiveTabWell;
+	TWeakPtr<SDockTab> ActiveMinorTab;
+	TWeakPtr<SWidget>  ActiveWidget;
+	TWeakPtr<SWidget>  PrevWidget;
+
+public:
+	FDelegateHandle DelegateHandle_OnActiveTabChanged;
+	FDelegateHandle DelegateHandle_OnTabForegrounded;
+
+	FTimerHandle TimerHandleNewWidgetTracker;
+	FTimerHandle TimerHandleNewMinorTabTracker;
+	FTimerHandle TimerHandleTabForegrounding;
+	FTimerHandle TimerHandle_OnActiveTabChanged;
+
+	FTimerHandle TimerHandle_FocusTabContentFallback;
+
+	TWeakPtr<SDockTab> ForegroundedProcessedTab;
+	bool			   bIsTabForegrounding{ false };
+	bool			   bIsDummyForegroundingCallbackCheck{ false };
+	FUMOnMouseButtonUp OnMouseButtonUp;
+
+	bool			  bHasFilteredAnIncomingNewWidget{ false };
+	bool			  bBypassAutoFocusLastActiveWidget{ false };
+	FUMOnWindowAction OnWindowAction;
+
+	FUMLogger Logger;
+	bool	  bLog{ false };
+	bool	  bVisLogTabFocusFlow{ false };
+
+	// Holds the most recent widget at index 0, and the oldest at the end
+	TArray<TWeakPtr<SWidget>> RecentlyUsedWidgets;
 
 	// ~ Last active Major Tab by Window ID ~
 	// You enter the ID of the Window:
@@ -250,66 +229,6 @@ public:
 	TMap<uint64, TWeakPtr<SWidget>> LastActiveWidgetByMinorTabId;
 
 	TMap<uint64, TWeakPtr<SWidget>> LastActiveWidgetByTabId;
-
-	// TODO: protected + friend classes?
-	TWeakPtr<SWindow>  ActiveWindow;
-	TWeakPtr<SDockTab> ActiveMajorTab;
-	TWeakPtr<SWidget>  ActiveTabWell;
-	TWeakPtr<SDockTab> ActiveMinorTab;
-	TWeakPtr<SWidget>  ActiveWidget;
-	TWeakPtr<SWidget>  PrevWidget;
-
-public:
-	FDelegateHandle DelegateHandle_OnActiveTabChanged;
-	FDelegateHandle DelegateHandle_OnTabForegrounded;
-
-	FTimerHandle TimerHandleNewWidgetTracker;
-	FTimerHandle TimerHandleNewMinorTabTracker;
-	FTimerHandle TimerHandleTabForegrounding;
-	FTimerHandle TimerHandle_OnActiveTabChanged;
-
-	FTimerHandle TimerHandle_FocusTabContentFallback;
-
-	TWeakPtr<SDockTab> ForegroundedProcessedTab;
-	bool			   bIsTabForegrounding{ false };
-	bool			   bIsDummyForegroundingCallbackCheck{ false };
-	FUMOnMouseButtonUp OnMouseButtonUp;
-
-	bool			  bHasFilteredAnIncomingNewWidget{ false };
-	bool			  bBypassAutoFocusLastActiveWidget{ false };
-	FUMOnWindowAction OnWindowAction;
-
-	FUMLogger Logger;
-	bool	  bLog{ false };
-	bool	  bVisLogTabFocusFlow{ false };
-
-	// Holds the most recent widget at index 0, and the oldest at the end
-	TArray<TWeakPtr<SWidget>> RecentlyUsedWidgets;
-
-	// UMFocusManager
-	// It will listen to:
-	// OnWindowChanged
-	// OnMajorTabChanged
-	// OnTabWellChanged
-	// OnMinorTabChanged
-	// OnWidgetChanged -> Set the new widget
-
-	// 1. Have a map of Major Tabs and their Docking Area
-	// 2. Then when moving between major tabs we can try to search and check
-	// if this Docking Area is still valid, if it's not, research it.
-	// 3. After getting the Docking Area, we need to traverse and search for
-	// all the Panel Tabs inside it. We don't even need to store them because
-	// we can assume they will stay the same.
-	// 4. After fetching the panel tabs, we get the last known active panel
-	// tab inside that Docking Area and check if it is still valid and if
-	// it's part of the found Panel Tabs. If it is, we bring focus to it.
-	// Potentially we can check if when iterating the tabs we have a built-in
-	// way to determine which one was the last active one.
-	// If we can find our last known active tab inside this array, or we don't
-	// have one at all because it's a fresh asset or something, we just focus
-	// the first panel tab found (or have some sort of condition to prefer
-	// a specific panel tab (e.g. Event Graph for Blueprints, etc.))
-	// 5. We can then check if
 };
 
 // 1.
