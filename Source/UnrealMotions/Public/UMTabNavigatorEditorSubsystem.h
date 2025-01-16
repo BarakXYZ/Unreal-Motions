@@ -3,29 +3,33 @@
 #include "CoreMinimal.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Docking/TabManager.h"
+#include "EditorSubsystem.h"
+#include "UMTabNavigatorEditorSubsystem.generated.h"
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnNewMajorTabChanged,
 	TWeakPtr<SDockTab> /* New Major Tab */,
 	TWeakPtr<SDockTab> /* New Minor Tab */);
 
-class FUMTabsNavigationManager
+/**
+ *
+ */
+UCLASS()
+class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 {
-public:
-	FUMTabsNavigationManager();
-	~FUMTabsNavigationManager();
+	GENERATED_BODY()
 
 	/**
-	 * Returns the singleton instance of the Tabs Navigation Manager.
-	 * Creates a new instance if one doesn't exist.
-	 * @return Reference to the UMTabsNavigationManager singleton instance
+	 * Depending on if Vim is enabled in the config, will control if the
+	 * subsystem should be created.
 	 */
-	static FUMTabsNavigationManager& Get();
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 
 	/**
-	 * Checks if the Tabs Navigation Manager singleton has been initialized.
-	 * @return true if the manager has been initialized, false otherwise
+	 * @param Collection The subsystem collection being initialized
 	 */
-	static bool IsInitialized();
+	virtual void Initialize(FSubsystemCollectionBase& Collction) override;
+
+	virtual void Deinitialize() override;
 
 	/**
 	 * Initializes keyboard shortcuts for tab navigation (number keys 0-9).
@@ -66,49 +70,6 @@ public:
 	 */
 	void MapTabCommands(const TSharedRef<FUICommandList>& CommandList,
 		const TArray<TSharedPtr<FUICommandInfo>>& CommandInfo, bool bIsMajorTab);
-
-	/**
-	 * Registers necessary Slate event handlers after the engine initialization.
-	 * Start listening to OnActiveTabChanged, OnTabForegrounded & OnFocusChanging.
-	 * Called after FSlateApplication delegates PostEngineInit.
-	 */
-	void RegisterSlateEvents();
-
-	/**
-	 * Being called when a new Minor Tab is being activated.
-	 * Major tabs can also be deduced from this by fetching the TabManagerPtr
-	 * and ->GetActiveMajorTab
-	 * @param PrevActiveTab the currently set, old tab.
-	 * @param NewActiveTab the newly to be set tab.
-	 * @note Unreal incorrectly passes the internal delegate params in an inverted order. I've countered it with flipping the values again to compensate.
-	 */
-	void OnActiveTabChanged(
-		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
-
-	/**
-	 * Being called when a new Minor or Major Tab is being foregrounded, though
-	 * Major Tabs seems to be the main focus of this.
-	 * We're using it as a second layer backup for setting the Major Tab
-	 * in cases where OnActiveTabChanged won't be invoked.
-	 * @param NewActiveTab the newly to be set tab.
-	 * @param PrevActiveTab the currently set, old tab.
-	 * @note In this case, Unreal passes the delegate params in the correctly documented order. So we keep it as is (firstly new tab, then old tab).
-	 */
-	void OnTabForegrounded(
-		TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
-
-	/**
-	 * Called when focus changes between widgets in the editor.
-	 * @param FocusEvent Event data for the focus change
-	 * @param OldWidgetPath Widget path before focus change
-	 * @param OldWidget Previously focused widget
-	 * @param NewWidgetPath Widget path after focus change
-	 * @param NewWidget Newly focused widget
-	 */
-	void OnFocusChanged(
-		const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
-		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
-		const TSharedPtr<SWidget>& NewWidget);
 
 	/**
 	 * Command handler to focus a specific tab in the active window's tab well.
@@ -174,13 +135,6 @@ public:
 	void DebugTab(const TSharedPtr<SDockTab>& Tab,
 		bool bDebugVisualTabRole, FString DelegateType);
 
-	/**
-	 * Called when mouse button is pressed down, can be used to track tab changes.
-	 * Currently unused but kept for potential future use.
-	 * @param PointerEvent Event data for the mouse button press
-	 */
-	void OnMouseButtonDown(const FPointerEvent& PointerEvent);
-
 	/** DEPRECATED
 	 * Return the last active non-major tab. Can be a Panel Tab, a Nomad Tab, etc.
 	 * @param OutNonMajorTab Where we will store the found tab (if any).
@@ -188,9 +142,6 @@ public:
 	bool GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNonMajorTab);
 
 	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
-
-private:
-	static TSharedPtr<FUMTabsNavigationManager> TabsNavigationManager;
 
 public:
 	/**

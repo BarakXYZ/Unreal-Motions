@@ -1,4 +1,4 @@
-#include "UMTabsNavigationManager.h"
+#include "UMTabNavigatorEditorSubsystem.h"
 
 #include "Interfaces/IMainFrameModule.h"
 #include "Framework/Commands/UICommandInfo.h"
@@ -9,16 +9,18 @@
 #include "UMLogger.h"
 #include "UMSlateHelpers.h"
 
-// DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, NoLogging, All); // Prod
-DEFINE_LOG_CATEGORY_STATIC(LogUMTabsNavigation, Log, All); // Dev
+// DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigatorEditorSubsystem, NoLogging, All); // Prod
+DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigatorEditorSubsystem, Log, All); // Dev
 
-#define LOCTEXT_NAMESPACE "UMTabsNavigationManager"
+#define LOCTEXT_NAMESPACE "UMTabNavigatorEditorSubsystem"
 
-TSharedPtr<FUMTabsNavigationManager>
-	FUMTabsNavigationManager::TabsNavigationManager =
-		MakeShared<FUMTabsNavigationManager>();
+bool UUMTabNavigatorEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
+{
+	// return FUMConfig::Get()->IsVimEnabled();
+	return true; // TODO
+}
 
-FUMTabsNavigationManager::FUMTabsNavigationManager()
+void UUMTabNavigatorEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	FInputBindingManager&		InputBindingManager = FInputBindingManager::Get();
 	IMainFrameModule&			MainFrameModule = IMainFrameModule::Get();
@@ -44,33 +46,18 @@ FUMTabsNavigationManager::FUMTabsNavigationManager()
 	RegisterCycleTabNavigation(MainFrameContext);
 	MapCycleTabsNavigation(CommandList);
 
-	FCoreDelegates::OnPostEngineInit.AddRaw(
-		this, &FUMTabsNavigationManager::RegisterSlateEvents);
+	Super::Initialize(Collection);
 }
 
-FUMTabsNavigationManager::~FUMTabsNavigationManager()
+void UUMTabNavigatorEditorSubsystem::Deinitialize()
 {
 	TabChords.Empty();
 	CommandInfoMajorTabs.Empty();
 	CommandInfoMinorTabs.Empty();
+	Super::Deinitialize();
 }
 
-FUMTabsNavigationManager& FUMTabsNavigationManager::Get()
-{
-	if (!FUMTabsNavigationManager::TabsNavigationManager.IsValid())
-	{
-		FUMTabsNavigationManager::TabsNavigationManager =
-			MakeShared<FUMTabsNavigationManager>();
-	}
-	return *FUMTabsNavigationManager::TabsNavigationManager;
-}
-
-bool FUMTabsNavigationManager::IsInitialized()
-{
-	return FUMTabsNavigationManager::TabsNavigationManager.IsValid();
-}
-
-void FUMTabsNavigationManager::InitTabNavInputChords(
+void UUMTabNavigatorEditorSubsystem::InitTabNavInputChords(
 	bool bCtrl, bool bAlt, bool bShift, bool bCmd)
 
 {
@@ -91,7 +78,7 @@ void FUMTabsNavigationManager::InitTabNavInputChords(
 		TabChords.Add(FInputChord(ModifierKeys, Key));
 }
 
-void FUMTabsNavigationManager::RemoveDefaultCommand(
+void UUMTabNavigatorEditorSubsystem::RemoveDefaultCommand(
 	FInputBindingManager& InputBindingManager, FInputChord Command)
 {
 	const TSharedPtr<FUICommandInfo> CheckCommand =
@@ -101,7 +88,7 @@ void FUMTabsNavigationManager::RemoveDefaultCommand(
 		CheckCommand->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 }
 
-void FUMTabsNavigationManager::MapTabCommands(
+void UUMTabNavigatorEditorSubsystem::MapTabCommands(
 	const TSharedRef<FUICommandList>&		  CommandList,
 	const TArray<TSharedPtr<FUICommandInfo>>& CommandInfo, bool bIsMajorTab)
 {
@@ -113,7 +100,7 @@ void FUMTabsNavigationManager::MapTabCommands(
 	}
 }
 
-void FUMTabsNavigationManager::MapCycleTabsNavigation(
+void UUMTabNavigatorEditorSubsystem::MapCycleTabsNavigation(
 	const TSharedRef<FUICommandList>& CommandList)
 {
 	CommandList->MapAction(CmdInfoNextMajorTab,
@@ -137,18 +124,7 @@ void FUMTabsNavigationManager::MapCycleTabsNavigation(
 		EUIActionRepeatMode::RepeatEnabled);
 }
 
-void FUMTabsNavigationManager::RegisterSlateEvents()
-{
-}
-
-//** Isn't currently being used *//
-void FUMTabsNavigationManager::OnMouseButtonDown(const FPointerEvent& PointerEvent)
-{
-	FUMLogger::NotifySuccess(FText::FromString("On Mouse Button Down!"), VisualLog);
-	// Set tab...
-}
-
-bool FUMTabsNavigationManager::TryGetValidTargetTab(
+bool UUMTabNavigatorEditorSubsystem::TryGetValidTargetTab(
 	TSharedPtr<SDockTab>& OutTab, bool bIsMajorTab)
 {
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
@@ -176,12 +152,9 @@ bool FUMTabsNavigationManager::TryGetValidTargetTab(
 	return false;
 }
 
-void FUMTabsNavigationManager::MoveToTabIndex(int32 TabIndex, bool bIsMajorTab)
+void UUMTabNavigatorEditorSubsystem::MoveToTabIndex(
+	int32 TabIndex, bool bIsMajorTab)
 {
-	UE_LOG(LogUMTabsNavigation, Display,
-		TEXT("MoveToTabIndex, Tab Index: %d, bIsMajorTab: %d"),
-		TabIndex, bIsMajorTab);
-
 	TSharedPtr<SDockTab> TargetTab;
 	if (!TryGetValidTargetTab(TargetTab, bIsMajorTab))
 		return;
@@ -194,7 +167,7 @@ void FUMTabsNavigationManager::MoveToTabIndex(int32 TabIndex, bool bIsMajorTab)
 	return;
 }
 
-void FUMTabsNavigationManager::FocusTabIndex(
+void UUMTabNavigatorEditorSubsystem::FocusTabIndex(
 	const TSharedPtr<SWidget>& DockingTabWell, int32 TabIndex, bool bIsMajorTab)
 {
 	FChildren* Tabs = DockingTabWell->GetChildren();
@@ -217,7 +190,7 @@ void FUMTabsNavigationManager::FocusTabIndex(
 	}
 }
 
-void FUMTabsNavigationManager::CycleTabs(bool bIsMajorTab, bool bIsNextTab)
+void UUMTabNavigatorEditorSubsystem::CycleTabs(bool bIsMajorTab, bool bIsNextTab)
 {
 	TSharedPtr<SDockTab> TargetTab;
 	if (!TryGetValidTargetTab(TargetTab, bIsMajorTab))
@@ -257,7 +230,8 @@ void FUMTabsNavigationManager::CycleTabs(bool bIsMajorTab, bool bIsNextTab)
 }
 
 //** Deprecated *//
-bool FUMTabsNavigationManager::GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNonMajorTab)
+bool UUMTabNavigatorEditorSubsystem::GetLastActiveNonMajorTab(
+	TWeakPtr<SDockTab>& OutNonMajorTab)
 {
 	// TODO: Check if by some weird reason this detects something that the
 	// delegate doesn't.
@@ -270,7 +244,7 @@ bool FUMTabsNavigationManager::GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutN
 	return false;
 }
 
-bool FUMTabsNavigationManager::FindActiveMinorTabs()
+bool UUMTabNavigatorEditorSubsystem::FindActiveMinorTabs()
 {
 	TSharedPtr<SDockTab> ActiveMajorTab;
 	if (!TryGetValidTargetTab(ActiveMajorTab, true))
@@ -315,7 +289,8 @@ bool FUMTabsNavigationManager::FindActiveMinorTabs()
 	return false;
 }
 
-void FUMTabsNavigationManager::DebugTab(const TSharedPtr<SDockTab>& Tab,
+void UUMTabNavigatorEditorSubsystem::DebugTab(
+	const TSharedPtr<SDockTab>& Tab,
 	bool bDebugVisualTabRole, FString DelegateType)
 {
 	if (!Tab.IsValid())
@@ -355,14 +330,11 @@ void FUMTabsNavigationManager::DebugTab(const TSharedPtr<SDockTab>& Tab,
 			 "  Layout ID: %s\n"
 			 "  Is Toolkit: %s"),
 		*DelegateType, *Name, *VisualRole, *RegularRole, Id, *LayoutId, bIsToolkit ? TEXT("true") : TEXT("false"));
-	UE_LOG(LogUMTabsNavigation, Display, TEXT("%s"), *DebugMsg);
 	FUMLogger::NotifySuccess(FText::FromString(DebugMsg), VisualLog, 12.0f);
-	// FUMLogger::AddDebugMessage(
-	// 	DebugMsg, EUMHelpersLogMethod::PrintToScreen,
-	// 	16.0f, FLinearColor::Yellow, 1.0f, 10);
 }
 
-void FUMTabsNavigationManager::RegisterCycleTabNavigation(const TSharedPtr<FBindingContext>& MainFrameContext)
+void UUMTabNavigatorEditorSubsystem::RegisterCycleTabNavigation(
+	const TSharedPtr<FBindingContext>& MainFrameContext)
 {
 	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoNextMajorTab,
 		"CycleMajorTabNext", "Cycle Next Major Tab",
@@ -391,7 +363,8 @@ void FUMTabsNavigationManager::RegisterCycleTabNavigation(const TSharedPtr<FBind
  * I've tried to call this in a simple loop (instead of by hand), but no go.
  * DOC:Macro for extending the command list (add more actions to its context)
  */
-void FUMTabsNavigationManager::AddMajorTabsNavigationCommandsToList(TSharedPtr<FBindingContext> MainFrameContext)
+void UUMTabNavigatorEditorSubsystem::AddMajorTabsNavigationCommandsToList(
+	TSharedPtr<FBindingContext> MainFrameContext)
 {
 	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMajorTabs[0],
 		"MoveToMajorTabLast", "Focus Major Last Tab",
@@ -434,7 +407,8 @@ void FUMTabsNavigationManager::AddMajorTabsNavigationCommandsToList(TSharedPtr<F
 		"Activates the ninth major tab in the current tab well", EUserInterfaceActionType::Button, TabChords[9]);
 }
 
-void FUMTabsNavigationManager::AddMinorTabsNavigationCommandsToList(TSharedPtr<FBindingContext> MainFrameContext)
+void UUMTabNavigatorEditorSubsystem::AddMinorTabsNavigationCommandsToList(
+	TSharedPtr<FBindingContext> MainFrameContext)
 {
 	UI_COMMAND_EXT(MainFrameContext.Get(), CommandInfoMinorTabs[0],
 		"MoveToMinorTabLast", "Focus Minor Last Tab",
