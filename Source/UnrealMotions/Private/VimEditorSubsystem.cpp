@@ -15,11 +15,13 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All);
 
+bool UVimEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
+{
+	return FUMConfig::Get()->IsVimEnabled();
+}
+
 void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	if (!FUMConfig::Get()->IsVimEnabled())
-		return;
-
 	Logger.SetLogCategory(&LogVimEditorSubsystem);
 
 	VimSubWeak = this;

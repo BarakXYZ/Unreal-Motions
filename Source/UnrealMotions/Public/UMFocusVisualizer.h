@@ -12,20 +12,9 @@ public:
 	FUMFocusVisualizer();
 	~FUMFocusVisualizer();
 
-	static const TSharedPtr<FUMFocusVisualizer> Get();
+	static TSharedRef<FUMFocusVisualizer> Get();
 
 	void GetLastActiveEditor();
-
-	/** Subscribe to focus changes and set up the debug overlay. */
-	void StartDebugOnFocusChanged();
-
-	/** Called whenever focus changes in Slate. */
-	void DebugOnFocusChanged(
-		const FFocusEvent&		   FocusEvent,
-		const FWeakWidgetPath&	   WeakWidgetPath,
-		const TSharedPtr<SWidget>& OldWidget,
-		const FWidgetPath&		   WidgetPath,
-		const TSharedPtr<SWidget>& NewWidget);
 
 	/**
 	 * Ensures we have created/added the debug overlay widget
@@ -55,7 +44,7 @@ public:
 	 */
 	void OnWindowClosed(const TSharedRef<SWindow>& InWindow);
 
-	static void DrawDebugOutlineOnWidget(const TSharedRef<SWidget> InWidget);
+	void DrawDebugOutlineOnWidget(const TSharedRef<SWidget> InWidget);
 
 private:
 	/**
@@ -73,8 +62,6 @@ private:
 		const TSharedPtr<SWidget>& InWidget);
 
 public:
-	static TSharedPtr<FUMFocusVisualizer> FocusVisualizer;
-
 	FSlateColor				   FocusedBorderColor = FLinearColor(10.0, 10.0, 0.0f);
 	TWeakPtr<SBorder>		   LastActiveBorder = nullptr;
 	TSharedPtr<SUMDebugWidget> DebugWidgetInstance = nullptr;

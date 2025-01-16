@@ -447,7 +447,7 @@ bool FUMFocusManager::VisualizeParentDockingTabStack(
 	{
 		if (const auto PinDocking = DockingTabStack.Pin())
 		{
-			FUMFocusVisualizer::DrawDebugOutlineOnWidget(
+			FUMFocusVisualizer::Get()->DrawDebugOutlineOnWidget(
 				PinDocking.ToSharedRef());
 			return true;
 		}

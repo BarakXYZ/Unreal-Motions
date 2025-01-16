@@ -1,6 +1,4 @@
 #include "UMFocusVisualizer.h"
-
-#include "ILevelEditor.h"
 #include "Layout/PaintGeometry.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "GraphEditor.h"
@@ -8,43 +6,15 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Layout/WidgetPath.h"
 #include "Misc/Optional.h"
-#include "Styling/CoreStyle.h"
 #include "Rendering/DrawElements.h"
 #include "Widgets/SWindow.h"
-#include "Framework/Docking/TabManager.h"
-
-#include "UMTabsNavigationManager.h"
-
-TSharedPtr<FUMFocusVisualizer> FUMFocusVisualizer::FocusVisualizer =
-	MakeShared<FUMFocusVisualizer>();
 
 FUMFocusVisualizer::FUMFocusVisualizer()
 {
-	// FCoreDelegates::OnPostEngineInit.AddLambda([this]() {
-	// 	StartDebugOnFocusChanged();
-	// });
-	StartDebugOnFocusChanged();
-	FUMTabsNavigationManager::Get().OnNewMajorTabChanged.AddLambda(
-		[this](TWeakPtr<SDockTab> MajorTab, TWeakPtr<SDockTab> MinorTab) {
-			// DrawDebugOutlineOnWidget(MinorTab.Pin()->GetContent());
-			// DrawDebugOutlineOnWidget(MajorTab.Pin()->GetContent());
-			// DrawDebugOutlineOnWidget(
-			// 	MinorTab.Pin()->GetParentWidget().ToSharedRef());
-			DrawDebugOutlineOnWidget(
-				MinorTab.Pin()->GetContent());
-		});
 }
 
 FUMFocusVisualizer::~FUMFocusVisualizer()
 {
-	if (LastActiveBorder.IsValid())
-		LastActiveBorder.Reset();
-	if (FSlateApplication::IsInitialized())
-	{
-		FSlateApplication& App = FSlateApplication::Get();
-		App.OnFocusChanging().RemoveAll(this);
-	}
-
 	// Optionally remove all overlays from their windows
 	for (auto& Pair : OverlaysByWindow)
 	{
@@ -56,8 +26,11 @@ FUMFocusVisualizer::~FUMFocusVisualizer()
 	OverlaysByWindow.Empty();
 }
 
-const TSharedPtr<FUMFocusVisualizer> FUMFocusVisualizer::Get()
+TSharedRef<FUMFocusVisualizer> FUMFocusVisualizer::Get()
 {
+	static const TSharedRef<FUMFocusVisualizer> FocusVisualizer =
+		MakeShared<FUMFocusVisualizer>();
+
 	return FocusVisualizer;
 }
 
@@ -114,50 +87,14 @@ void FUMFocusVisualizer::GetLastActiveEditor()
 	// 	AssetEditorToolkit->GetTabManager(); // Not helpful
 }
 
-void FUMFocusVisualizer::StartDebugOnFocusChanged()
-{
-	FSlateApplication& App = FSlateApplication::Get();
-	App.OnFocusChanging().AddRaw(
-		this, &FUMFocusVisualizer::DebugOnFocusChanged);
-}
-
-void FUMFocusVisualizer::DebugOnFocusChanged(
-	const FFocusEvent&		   FocusEvent,
-	const FWeakWidgetPath&	   WeakWidgetPath,
-	const TSharedPtr<SWidget>& OldWidget,
-	const FWidgetPath&		   WidgetPath,
-	const TSharedPtr<SWidget>& NewWidget)
-{
-	return; // Skip all
-	// GetLastActiveEditor();
-
-	// if (!OldWidget.IsValid() || !NewWidget.IsValid())
-	// 	return;
-
-	// FString OldWidgetStr = "Old Widget: " + OldWidget->GetTypeAsString();
-	// FString NewWidgetStr = "New Widget: " + NewWidget->GetTypeAsString();
-
-	// If you only want to debug certain transitions, you can check that here.
-	// E.g. skipping invalid widget transitions, or ignoring certain types:
-	if (!NewWidget.IsValid())
-		return;
-
-	// We potentially want to have a few different overlay layers of debugging
-	// on top of each window:
-	// 1. For the entire Window
-	// 2. For the currently active Major Tab (that resides inside the Window)
-	// 3. For the currently active Minor Tab (that resides inside the Major Tab)
-	// 4. For the currently focused Widget (that resided inside the Minor Tab)
-
-	DrawDebugOutlineOnWidget(NewWidget.ToSharedRef());
-}
-
 void FUMFocusVisualizer::DrawDebugOutlineOnWidget(
 	const TSharedRef<SWidget> InWidget)
 {
+	// I guess this method is inconsistent?
 	// Find the window in which this newly focused widget resides
 	// TSharedPtr<SWindow> FoundWindow =
 	// 	FSlateApplication::Get().FindWidgetWindow(InWidget);
+
 	TSharedPtr<SWindow> FoundWindow =
 		FSlateApplication::Get().GetActiveTopLevelRegularWindow();
 	if (!FoundWindow.IsValid())
@@ -167,10 +104,10 @@ void FUMFocusVisualizer::DrawDebugOutlineOnWidget(
 	// 	FText::FromString("Draw Debug Outline On Widget"));
 
 	// Ensure that window has an overlay
-	FocusVisualizer->CreateOverlayIfNeeded(FoundWindow);
+	CreateOverlayIfNeeded(FoundWindow);
 
 	// Now highlight the new widget in that window
-	FocusVisualizer->UpdateOverlayInWindow(FoundWindow, InWidget);
+	UpdateOverlayInWindow(FoundWindow, InWidget);
 	return;
 }
 

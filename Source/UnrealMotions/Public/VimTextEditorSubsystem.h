@@ -23,6 +23,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 {
 	GENERATED_BODY()
 
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+
 	virtual void Initialize(FSubsystemCollectionBase& Collction) override;
 
 	virtual void Deinitialize() override;

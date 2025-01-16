@@ -19,6 +19,12 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	GENERATED_BODY()
 
 	/**
+	 * Depending on if Vim is enabled in the config, will control if the
+	 * subsystem should be created.
+	 */
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+
+	/**
 	 * @brief Initializes the Vim editor subsystem with configuration settings.
 	 *
 	 * @details Performs the following setup operations:
