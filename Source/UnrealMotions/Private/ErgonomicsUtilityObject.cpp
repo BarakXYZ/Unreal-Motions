@@ -40,7 +40,6 @@ void UErgonomicsUtilityObject::ClearHotkeys(EUMHotkeySection Section, bool bClea
 				Command->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 				if (bClearSecondary)
 					Command->RemoveActiveChord(EMultipleKeyBindingIndex::Secondary);
-				FUMLogger::NotifySuccess(FText::FromString("Command Clear: " + CommandStr));
 			}
 		}
 		OnUtilityObjectAction.Broadcast();
@@ -75,7 +74,6 @@ void UErgonomicsUtilityObject::SetHotkeysToNums(
 						CheckCommand->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 				}
 				Command->SetActiveChord(Chords[i], EMultipleKeyBindingIndex::Primary);
-				FUMLogger::NotifySuccess(FText::FromString("Command Set: " + CommandStr));
 				++i;
 			}
 		}
@@ -121,7 +119,6 @@ void UErgonomicsUtilityObject::DebugBookmarks()
 		FString CommandStr = Command->GetCommandName().ToString();
 		if (CommandStr.StartsWith("SetBookmark"))
 		{
-			FUMLogger::NotifySuccess(FText::FromString(CommandStr));
 			Command->RemoveActiveChord(EMultipleKeyBindingIndex::Primary);
 		}
 	}

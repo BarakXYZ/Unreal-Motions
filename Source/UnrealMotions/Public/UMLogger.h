@@ -112,18 +112,17 @@ public:
 
 	// Variables
 public:
-	static constexpr FLinearColor Lime{ 0.5f, 1.0f, 0.0f };
-	static const FString		  VimSection;
-	static const FString		  DebugSection;
-	FLogCategoryBase*			  LogCategory;
-	FName						  LogCatName;
-	FString						  LogCatStr;
-	int32						  LogCatNameLen;
-	FString						  CategoryDivider;
-	bool						  bShouldLog{ true };
-	bool						  bNotifyAll{ false };
-	bool						  bNotifyErrors{ false };
-	bool						  bNotifyWarnings{ false };
+	FLogCategoryBase* LogCategory;
+	FName			  LogCatName;
+	FString			  LogCatStr;
+	int32			  LogCatNameLen;
+	FString			  CategoryDivider;
+	bool			  bShouldLog{ true };
+	static bool		  bShouldLogGlobal;
+	bool			  bNotifyAll{ false };
+	bool			  bNotifyErrors{ false };
+	bool			  bNotifyWarnings{ false };
 
+	/* Track to know when to visually separate between different categories */
 	static FName LastCategoryNameOutput;
 };

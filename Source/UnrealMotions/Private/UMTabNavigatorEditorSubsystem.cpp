@@ -330,7 +330,6 @@ void UUMTabNavigatorEditorSubsystem::DebugTab(
 			 "  Layout ID: %s\n"
 			 "  Is Toolkit: %s"),
 		*DelegateType, *Name, *VisualRole, *RegularRole, Id, *LayoutId, bIsToolkit ? TEXT("true") : TEXT("false"));
-	FUMLogger::NotifySuccess(FText::FromString(DebugMsg), VisualLog, 12.0f);
 }
 
 void UUMTabNavigatorEditorSubsystem::RegisterCycleTabNavigation(

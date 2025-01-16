@@ -101,11 +101,9 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 	// 			FoundButton,
 	// 			"SButton"))
 	// 	{
-	// 		FUMLogger::NotifySuccess(FText::FromString("Button Found"));
 	// 		return;
 	// 	}
 	// }
-	// FUMLogger::NotifySuccess(FText::FromString("Button NOT Found"));
 	// return;
 
 	TSharedRef<SWidget> ContentWidget = NoteWins[0]->GetContent();
@@ -116,7 +114,6 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 	if (!NoteList.IsValid())
 		return;
 
-	FUMLogger::NotifySuccess(FText::FromString("Notification List Found"));
 	FChildren* NoteListChilds = ContentWidget->GetChildren();
 	if (!NoteListChilds || NoteListChilds->Num() == 0)
 		return;
@@ -126,7 +123,6 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 	if (!VerBoxNotes.IsValid())
 		return;
 
-	FUMLogger::NotifySuccess(FText::FromString("Vertical Box Found"));
 	if (VerBoxNotes->NumSlots() == 0)
 		return;
 
@@ -136,7 +132,6 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 	if (!NItem.IsValid())
 		return;
 	LastFocusedNotificationItem = NItem.ToWeakPtr(); // To toggle visual focus
-	FUMLogger::NotifySuccess(FText::FromString("Notification Item Found"));
 
 	ToggleNotificationVisualSelection(NItem.ToSharedRef(), true);
 
@@ -146,12 +141,10 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 			FoundWidget,
 			"SButton"))
 	{
-		FUMLogger::NotifySuccess(FText::FromString("Found Button (Widget)"));
 		TSharedPtr<SButton> Button =
 			StaticCastSharedPtr<SButton>(FoundWidget.Pin());
 		if (!Button.IsValid())
 			return;
-		FUMLogger::NotifySuccess(FText::FromString("Button Cast Successfully"));
 		SlateApp.ClearAllUserFocus();
 		// We use Navigation as the FocusCause to visually show the selection.
 		SlateApp.SetAllUserFocus(Button, EFocusCause::Navigation);
@@ -186,7 +179,6 @@ void FUMAssetManager::ToggleNotificationVisualSelection(
 
 void FUMAssetManager::OnNotificationsWindowFocusLost()
 {
-	FUMLogger::NotifySuccess();
 }
 
 void FUMAssetManager::RegisterAssetCommands(const TSharedPtr<FBindingContext>& MainFrameContext)

@@ -689,8 +689,6 @@ bool UUMFocuserEditorSubsystem::FindTabWellAndActivateForegroundedTab(
 						// we need to call this manually.
 						if (HasWindowChanged())
 						{
-							Log::NotifySuccess(
-								FText::FromString("Window Changed - Manually Calling OnActiveTabChanged"), bLog);
 							OnActiveTabChanged(nullptr, MinorTab);
 						}
 						return true;

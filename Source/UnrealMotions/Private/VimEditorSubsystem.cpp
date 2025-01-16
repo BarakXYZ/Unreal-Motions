@@ -230,8 +230,7 @@ void UVimEditorSubsystem::HandleTreeViewVisualModeFirstOrLastItemNavigation(
 	if (!AnchorTreeViewItem.Item.IsValid())
 	{
 		CaptureAnchorTreeViewItemSelectionAndIndex(SlateApp);
-		FUMLogger::NotifySuccess(FText::FromString(
-			"Capture Anchor was NOT valid. Now capturing..."));
+		Logger.Print("Capture Anchor was NOT valid. Now capturing...");
 	}
 
 	FKey NavKeyDirection = GetTreeNavigationDirection(ListView, bIsShiftDown);

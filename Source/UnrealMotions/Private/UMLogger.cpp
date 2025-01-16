@@ -4,10 +4,8 @@
 #include "Logging/LogVerbosity.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
-const FString FUMLogger::VimSection = TEXT("/Script/Vim");
-const FString FUMLogger::DebugSection = TEXT("/Script/Debug");
-
 FName FUMLogger::LastCategoryNameOutput = "NONE";
+bool  FUMLogger::bShouldLogGlobal{ false };
 
 FUMLogger::FUMLogger()
 {
@@ -80,7 +78,9 @@ void FUMLogger::Print(
 	float					  Size,
 	const int				  Id)
 {
-	if (!bShouldLog || LogCategory->GetVerbosity() == ELogVerbosity::NoLogging)
+	if (!bShouldLogGlobal
+		|| !bShouldLog
+		|| LogCategory->GetVerbosity() == ELogVerbosity::NoLogging)
 		return;
 
 	PrintToConsole(Message, Verbosity);
@@ -171,34 +171,6 @@ FColor FUMLogger::GetVerbosityColor(ELogVerbosity::Type Verbosity)
 		case ELogVerbosity::NoLogging:
 		default:
 			return FColor::Black; // Black for no logging or unknown
-	}
-}
-
-void FUMLogger::NotifySuccess(
-	const FText&   NotificationText,
-	const bool	   bShouldLog,
-	const float	   Lifetime,
-	const FString& HyperlinkURL,
-	const FText&   HyperlinkText)
-{
-	if (bShouldLog)
-	{
-		// MessageLog.Error
-		// MessageLog.Warning
-		// MessageLog.Note
-		FNotificationInfo Info(NotificationText);
-
-		Info.ExpireDuration = Lifetime;
-		Info.Image = FCoreStyle::Get().GetBrush("Icons.SuccessWithColor");
-
-		if (!HyperlinkURL.IsEmpty())
-		{
-			Info.HyperlinkText = HyperlinkText;
-			Info.Hyperlink = FSimpleDelegate::CreateLambda(
-				[HyperlinkURL]() { FPlatformProcess::LaunchURL(*HyperlinkURL, nullptr, nullptr); });
-		}
-
-		FSlateNotificationManager::Get().AddNotification(Info);
 	}
 }
 

@@ -47,7 +47,6 @@ void FUMEditorCommands::ToggleAllowNotifications()
 void FUMEditorCommands::Undo(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// FUMLogger::NotifySuccess(FText::FromString("UNDO"));
 	FUMInputPreProcessor::SimulateKeyPress(SlateApp,
 		FKey(EKeys::Z),
 		FModifierKeysState(
@@ -176,7 +175,7 @@ void FUMEditorCommands::OpenWidgetReflector(
 			0.01f, // 10ms delay seems to be enough (need to check on mac)
 			false  // Do not loop
 		);
-		FUMLogger::NotifySuccess(FText::AsNumber(FoundButtons.Num()));
+		Logger.Print(FString::FromInt(FoundButtons.Num()));
 	}
 }
 

@@ -58,24 +58,17 @@ void FUMFocusVisualizer::GetLastActiveEditor()
 			ActivationTime = CurrEditorActTime;
 		}
 		// FString OutStr = EditorInstance->GetEditorName().ToString() + ": " + FString::SanitizeFloat(EditorInstance->GetLastActivationTime());
-		// FUMLogger::NotifySuccess(FText::FromString(OutStr));
 	}
 	if (!ActiveEditorInstance)
 		return;
 
 	// FString OutStr = ActiveEditorInstance->GetEditorName().ToString()
 	// 	+ ": " + ActiveEditorInstance->GetEditingAssetTypeName().ToString();
-	// FUMLogger::NotifySuccess(FText::FromString(OutStr));
 
 	FAssetEditorToolkit* AssetEditorToolkit =
 		static_cast<FAssetEditorToolkit*>(ActiveEditorInstance);
 	if (!AssetEditorToolkit)
 		return;
-
-	FUMLogger::NotifySuccess(
-		// FText::FromName(AssetEditorToolkit->GetToolkitName()));
-		AssetEditorToolkit->GetToolkitName());
-	AssetEditorToolkit->GetInlineContent(); // ???
 
 	AssetEditorToolkit->GetObjectsCurrentlyBeingEdited();
 
@@ -99,9 +92,6 @@ void FUMFocusVisualizer::DrawDebugOutlineOnWidget(
 		FSlateApplication::Get().GetActiveTopLevelRegularWindow();
 	if (!FoundWindow.IsValid())
 		return; // Possibly a pop-up or something with no real window
-
-	// FUMLogger::NotifySuccess(
-	// 	FText::FromString("Draw Debug Outline On Widget"));
 
 	// Ensure that window has an overlay
 	CreateOverlayIfNeeded(FoundWindow);
@@ -138,11 +128,8 @@ void FUMFocusVisualizer::CreateOverlayIfNeeded(const TSharedPtr<SWindow>& InWind
 	// Already have an overlay for this window?
 	if (OverlaysByWindow.Contains(InWindow))
 	{
-		// FUMLogger::NotifySuccess(FText::FromString("Window already exists: " + InWindow->GetTitle().ToString()));
 		return;
 	}
-
-	// FUMLogger::NotifySuccess(FText::FromString("New Window Found: " + InWindow->GetTitle().ToString()));
 
 	// Create a new overlay
 	TSharedPtr<SUMFocusDebugOverlay> NewOverlay =
@@ -170,8 +157,6 @@ void FUMFocusVisualizer::UpdateOverlayInWindow(
 		OverlaysByWindow.FindRef(InWindow);
 	if (!OverlayPtr.IsValid())
 		return; // Shouldn’t happen if CreateOverlayIfNeeded was called
-
-	// FUMLogger::NotifySuccess(FText::FromString("Update Overlay In Window"));
 
 	// Now compute geometry. We want geometry relative to the window’s top-left.
 	const FGeometry WidgetGeometry = InWidget->GetCachedGeometry();
@@ -325,5 +310,4 @@ void FUMFocusVisualizer::GetWidgetWindowSpaceGeometry(const TSharedPtr<SWidget>&
 	WindowSpaceGeometry.AppendTransform(
 		TransformCast<FSlateLayoutTransform>(
 			Inverse(WidgetWindow->GetPositionInScreen())));
-	FUMLogger::NotifySuccess(FText::FromString(WindowSpaceGeometry.GetLocalSize().ToString()));
 }
