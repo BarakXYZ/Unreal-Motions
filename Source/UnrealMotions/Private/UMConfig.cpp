@@ -36,13 +36,23 @@ bool FUMConfig::IsValid()
 
 bool FUMConfig::IsVimEnabled()
 {
-	const TCHAR* StartVimVar = TEXT("bStartVim");
-	bool		 bIsVimEnabled;
+	const TCHAR* KeyName = TEXT("bStartVim");
+	bool		 bIsEnabled;
 
-	ConfigFile.GetBool(VimSection, StartVimVar, bIsVimEnabled);
+	ConfigFile.GetBool(VimSection, KeyName, bIsEnabled);
 
-	return bIsVimEnabled;
+	return bIsEnabled;
 
 	// TODO: Remove to a more general place? Debug
 	// ConfigFile.GetBool(*DebugSection, TEXT("bVisualLog"), bVisualLog);
+}
+
+bool FUMConfig::IsTabNavigatorEnabled()
+{
+	const TCHAR* KeyName = TEXT("bIsTabNavigatorEnabled");
+	bool		 bIsEnabled;
+
+	ConfigFile.GetBool(TabSection, KeyName, bIsEnabled);
+
+	return bIsEnabled;
 }

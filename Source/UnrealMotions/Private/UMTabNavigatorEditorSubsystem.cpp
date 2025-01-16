@@ -8,6 +8,7 @@
 
 #include "UMLogger.h"
 #include "UMSlateHelpers.h"
+#include "UMConfig.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigatorEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigatorEditorSubsystem, Log, All); // Dev
@@ -16,8 +17,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigatorEditorSubsystem, Log, All); // Dev
 
 bool UUMTabNavigatorEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
-	// return FUMConfig::Get()->IsVimEnabled();
-	return true; // TODO
+	return FUMConfig::Get()->IsTabNavigatorEnabled();
 }
 
 void UUMTabNavigatorEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
