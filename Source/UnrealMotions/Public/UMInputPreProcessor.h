@@ -486,9 +486,6 @@ private:
 	/** Static instance management */
 	static bool bNativeInputHandling;
 
-	/** Input mode state */
-	static EVimMode VimMode;
-
 	/** Buffer */
 	TArray<FInputChord>			  CurrentSequence;	// Current Input Sequence
 	TWeakPtr<SUMBufferVisualizer> BufferVisualizer; // Pointer to the visualizer
@@ -513,4 +510,7 @@ public:
 	FUMLogger	 Logger;
 
 	FTimerHandle TimerHandle_LinearPress;
+
+	/** Input mode state */
+	static EVimMode VimMode;
 };

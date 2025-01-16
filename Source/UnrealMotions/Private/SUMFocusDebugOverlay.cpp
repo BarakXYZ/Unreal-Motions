@@ -1,4 +1,5 @@
 #include "SUMFocusDebugOverlay.h"
+#include "UMInputPreProcessor.h"
 #include "UMLogger.h"
 
 FUMOnOutlineOverlayVisibilityChanged SUMFocusDebugOverlay::OnOutlineOverlayVisibilityChanged;
@@ -10,8 +11,9 @@ void SUMFocusDebugOverlay::Construct(const FArguments& InArgs)
 	TargetGeometry = InArgs._InitialGeometry;
 
 	// If user provided a default visibility, set it, otherwise “HitTestInvisible”
-	const EVisibility DefaultVis = InArgs._InitialVisibility == EVisibility::Visible
-		? EVisibility::Visible
+	const EVisibility DefaultVis =
+		(FUMInputPreProcessor::VimMode == EVimMode::Insert)
+		? EVisibility::Hidden
 		: EVisibility::HitTestInvisible;
 
 	SetVisibility(DefaultVis);
@@ -23,6 +25,7 @@ void SUMFocusDebugOverlay::Construct(const FArguments& InArgs)
 	OnOutlineOverlayVisibilityChanged.AddRaw(
 		this, &SUMFocusDebugOverlay::HandleOnVisibilityChanged);
 
+	// Refactor to listen from Vim Subsystem
 	FUMInputPreProcessor::Get()->OnVimModeChanged.AddRaw(
 		this, &SUMFocusDebugOverlay::HandleOnVimModeChanged);
 
