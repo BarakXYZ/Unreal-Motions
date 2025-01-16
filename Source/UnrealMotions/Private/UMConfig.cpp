@@ -66,3 +66,13 @@ bool FUMConfig::IsWindowNavigatorEnabled()
 
 	return bIsEnabled;
 }
+
+bool FUMConfig::IsFocuserEnabled()
+{
+	const TCHAR* KeyName = TEXT("bIsFocuserEnabled");
+	bool		 bIsEnabled;
+
+	ConfigFile.GetBool(FocuserSection, KeyName, bIsEnabled);
+
+	return bIsEnabled;
+}

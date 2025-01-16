@@ -2,7 +2,6 @@
 #include "Editor.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
-#include "UMFocusManager.h"
 #include "UMInputPreProcessor.h"
 #include "ISceneOutlinerTreeItem.h"
 #include "Input/Events.h"
@@ -428,10 +427,6 @@ void UVimEditorSubsystem::BindCommands()
 	Input.AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Four },
 		&FUMEditorCommands::OpenContentBrowser);
-
-	// Input.AddKeyBinding_NoParam(
-	// 	{ FInputChord(EModifierKey::Control, EKeys::W) },
-	// 	&FUMFocusManager::RemoveActiveMajorTab);
 
 	//  Move HJKL
 	Input.AddKeyBinding_KeyEvent(

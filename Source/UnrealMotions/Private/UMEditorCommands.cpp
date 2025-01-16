@@ -1,7 +1,7 @@
 #include "UMEditorCommands.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "UMInputPreProcessor.h"
-#include "UMFocusManager.h"
+#include "UMFocuserEditorSubsystem.h"
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
 #include "Editor.h"
@@ -59,8 +59,13 @@ void FUMEditorCommands::Undo(
 void FUMEditorCommands::OpenOutputLog()
 {
 	static const FName LOG = "OutputLog";
-	FUMFocusManager::ActivateNewInvokedTab(FSlateApplication::Get(),
-		FGlobalTabmanager::Get()->TryInvokeTab(FTabId(LOG)));
+
+	UUMFocuserEditorSubsystem* Focuser =
+		GEditor->GetEditorSubsystem<UUMFocuserEditorSubsystem>();
+
+	if (Focuser)
+		Focuser->ActivateNewInvokedTab(FSlateApplication::Get(),
+			FGlobalTabmanager::Get()->TryInvokeTab(FTabId(LOG)));
 }
 
 void FUMEditorCommands::OpenContentBrowser(
@@ -76,8 +81,12 @@ void FUMEditorCommands::OpenContentBrowser(
 	else
 		ContentBrowserId += DEFAULT_TAB_INDEX;
 
-	FUMFocusManager::ActivateNewInvokedTab(SlateApp,
-		FGlobalTabmanager::Get()->TryInvokeTab(FName(*ContentBrowserId)));
+	UUMFocuserEditorSubsystem* Focuser =
+		GEditor->GetEditorSubsystem<UUMFocuserEditorSubsystem>();
+
+	if (Focuser)
+		Focuser->ActivateNewInvokedTab(SlateApp,
+			FGlobalTabmanager::Get()->TryInvokeTab(FName(*ContentBrowserId)));
 }
 
 void FUMEditorCommands::OpenPreferences(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -102,7 +111,14 @@ void FUMEditorCommands::OpenWidgetReflector(
 
 	TSharedPtr<SDockTab> RefTab = // Invoke the Widget Reflector tab
 		FGlobalTabmanager::Get()->TryInvokeTab(FTabId(REFLECTOR));
-	FUMFocusManager::ActivateNewInvokedTab(FSlateApplication::Get(), RefTab); // For proper focus
+
+	UUMFocuserEditorSubsystem* Focuser =
+		GEditor->GetEditorSubsystem<UUMFocuserEditorSubsystem>();
+
+	if (Focuser)
+		Focuser->ActivateNewInvokedTab(FSlateApplication::Get(), RefTab);
+	else
+		return;
 
 	// FGlobalTabmanager::Get()->GetTabManagerForMajorTab(RefTab)->GetPrivateApi().GetLiveDockAreas();
 	TSharedPtr<SWindow> RefWin = RefTab->GetParentWindow();

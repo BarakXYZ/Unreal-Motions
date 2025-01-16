@@ -6,16 +6,40 @@
 #include "Widgets/SWidget.h"
 #include "UMInputPreProcessor.h"
 #include "framework/Application/SlateApplication.h"
+#include "EditorSubsystem.h"
+#include "UMFocuserEditorSubsystem.generated.h"
 
 DECLARE_DELEGATE_RetVal_TwoParams(bool, FUMOnWindowAction, const TSharedRef<FGenericWindow>&, EWindowAction::Type);
 
-class FUMFocusManager
+/**
+ *
+ */
+UCLASS()
+class UNREALMOTIONS_API UUMFocuserEditorSubsystem : public UEditorSubsystem
 {
-public:
-	FUMFocusManager();
-	~FUMFocusManager();
+	GENERATED_BODY()
 
-	static const TSharedPtr<FUMFocusManager>& Get();
+public:
+	/**
+	 * Depending on if Vim is enabled in the config, will control if the
+	 * subsystem should be created.
+	 */
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+
+	/**
+	 * @brief Initializes the Vim editor subsystem with configuration settings.
+	 *
+	 * @details Performs the following setup operations:
+	 * 1. Reads configuration file for startup preferences
+	 * 2. Initializes Vim mode based on config
+	 * 3. Sets up weak pointers and input processor
+	 * 4. Binds command handlers
+	 *
+	 * @param Collection The subsystem collection being initialized
+	 */
+	virtual void Initialize(FSubsystemCollectionBase& Collction) override;
+
+	virtual void Deinitialize() override;
 
 	void RegisterSlateEvents();
 
@@ -124,7 +148,7 @@ public:
 	 * @param SlateApp Reference to Slate application
 	 * @param NewTab Pointer to newly created tab
 	 */
-	static void ActivateNewInvokedTab(
+	void ActivateNewInvokedTab(
 		FSlateApplication& SlateApp, const TSharedPtr<SDockTab> NewTab);
 
 	void TrackActiveWindow();
@@ -235,8 +259,6 @@ public:
 	TWeakPtr<SWidget>  ActiveWidget;
 	TWeakPtr<SWidget>  PrevWidget;
 
-	static const TSharedPtr<FUMFocusManager> FocusManager;
-
 public:
 	FDelegateHandle DelegateHandle_OnActiveTabChanged;
 	FDelegateHandle DelegateHandle_OnTabForegrounded;
@@ -257,9 +279,9 @@ public:
 	bool			  bBypassAutoFocusLastActiveWidget{ false };
 	FUMOnWindowAction OnWindowAction;
 
-	static FUMLogger Logger;
-	bool			 bLog{ false };
-	bool			 bVisLogTabFocusFlow{ false };
+	FUMLogger Logger;
+	bool	  bLog{ false };
+	bool	  bVisLogTabFocusFlow{ false };
 
 	// Holds the most recent widget at index 0, and the oldest at the end
 	TArray<TWeakPtr<SWidget>> RecentlyUsedWidgets;

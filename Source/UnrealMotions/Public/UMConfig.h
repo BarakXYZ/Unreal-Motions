@@ -13,6 +13,7 @@ public:
 	bool						 IsVimEnabled();
 	bool						 IsTabNavigatorEnabled();
 	bool						 IsWindowNavigatorEnabled();
+	bool						 IsFocuserEnabled();
 
 	FConfigFile ConfigFile;
 
@@ -22,5 +23,6 @@ private:
 	const TCHAR* VimSection = TEXT("/Script/Vim");
 	const TCHAR* TabSection = TEXT("/Script/TabNavigator");
 	const TCHAR* WindowSection = TEXT("/Script/WindowNavigator");
+	const TCHAR* FocuserSection = TEXT("/Script/Focuser");
 	const TCHAR* DebugSection = TEXT("/Script/Debug");
 };
