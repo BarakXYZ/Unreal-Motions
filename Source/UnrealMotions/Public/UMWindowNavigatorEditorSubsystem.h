@@ -4,28 +4,33 @@
 #include "Framework/Commands/UICommandList.h"
 #include "Widgets/SWindow.h"
 #include "UMLogger.h"
+#include "EditorSubsystem.h"
+#include "UMWindowNavigatorEditorSubsystem.generated.h"
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnWindowChanged,
 	const TSharedPtr<SWindow> PrevWindow, const TSharedPtr<SWindow> NewWindow);
 
-class FUMWindowsNavigationManager
+/**
+ *
+ */
+UCLASS()
+class UNREALMOTIONS_API UUMWindowNavigatorEditorSubsystem : public UEditorSubsystem
 {
+	GENERATED_BODY()
+
 public:
-	FUMWindowsNavigationManager();
-	~FUMWindowsNavigationManager();
+	/**
+	 * Controlled via the Unreal Motions config; should or shouldn't create the
+	 * subsystem at all.
+	 */
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 
 	/**
-	 * Returns the singleton instance of the Windows Navigation Manager.
-	 * Creates a new instance if one doesn't exist.
-	 * @return Reference to the UMWindowsNavigationManager singleton instance
+	 * @param Collection The subsystem collection being initialized
 	 */
-	static FUMWindowsNavigationManager& Get();
+	virtual void Initialize(FSubsystemCollectionBase& Collction) override;
 
-	/**
-	 * Checks if the Windows Navigation Manager singleton has been initialized.
-	 * @return true if the manager has been initialized, false otherwise
-	 */
-	static bool IsInitialized();
+	virtual void Deinitialize() override;
 
 	/**
 	 * Registers keyboard shortcuts for window navigation in the main frame context.
@@ -41,13 +46,6 @@ public:
 	 * @param CommandList The command list where the actions will be mapped
 	 */
 	void MapCycleWindowsNavigation(const TSharedRef<FUICommandList>& CommandList);
-
-	/**
-	 * Registers necessary Slate event handlers after the engine initialization.
-	 * Sets up window focus tracking and other window-related event handlers.
-	 * Called after FSlateApplication delegates PostEngineInit.
-	 */
-	void RegisterSlateEvents();
 
 	/**
 	 * Detects if the user has moved to a different window and updates tracking accordingly.
@@ -80,8 +78,7 @@ public:
 	static FUMOnWindowChanged OnWindowChanged;
 
 private:
-	static TSharedPtr<FUMWindowsNavigationManager> WindowsNavigationManager;
-	static FUMLogger							   Logger;
+	FUMLogger Logger;
 
 	const FName MainFrameContextName = TEXT("MainFrame");
 

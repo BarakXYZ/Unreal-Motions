@@ -19,8 +19,8 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 	GENERATED_BODY()
 
 	/**
-	 * Depending on if Vim is enabled in the config, will control if the
-	 * subsystem should be created.
+	 * Controlled via the Unreal Motions config; should or shouldn't create the
+	 * subsystem at all.
 	 */
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 

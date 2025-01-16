@@ -9,7 +9,7 @@
 #include "Editor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "UMSlateHelpers.h"
-#include "UMWindowsNavigationManager.h"
+#include "UMWindowNavigatorEditorSubsystem.h"
 #include "UMInputHelpers.h"
 #include "UMFocusVisualizer.h"
 
@@ -77,8 +77,14 @@ void FUMFocusManager::RegisterSlateEvents()
 	//						~ Tabs Delegates ~							  //
 	////////////////////////////////////////////////////////////////////////
 
-	FUMWindowsNavigationManager::Get().OnWindowChanged.AddSP(
-		FocusManager.ToSharedRef(), &FUMFocusManager::HandleOnWindowChanged);
+	// Listen to OnWindowChanged from the Window Navigator
+	// (if it was enabled in the config file):
+	if (const UUMWindowNavigatorEditorSubsystem* WindowNavigator =
+			GEditor->GetEditorSubsystem<UUMWindowNavigatorEditorSubsystem>())
+	{
+		WindowNavigator->OnWindowChanged.AddSP(
+			FocusManager.ToSharedRef(), &FUMFocusManager::HandleOnWindowChanged);
+	}
 }
 
 void FUMFocusManager::DetectWidgetType(const TSharedRef<SWidget> InWidget)

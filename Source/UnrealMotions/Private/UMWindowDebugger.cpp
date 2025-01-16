@@ -1,7 +1,6 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "UMWindowDebugger.h"
-#include "UMWindowsNavigationManager.h"
 #include "Framework/Docking/TabManager.h"
 
 // In the cpp file:

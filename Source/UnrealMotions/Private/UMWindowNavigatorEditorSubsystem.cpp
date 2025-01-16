@@ -1,22 +1,28 @@
 
-#include "UMWindowsNavigationManager.h"
+#include "UMWindowNavigatorEditorSubsystem.h"
 #include "Framework/Docking/TabManager.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Commands/InputBindingManager.h"
+#include "UMConfig.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogUMWindowsNavigation, NoLogging, All); // Prod
-// DEFINE_LOG_CATEGORY_STATIC(LogUMTWindowsNavigation, Log, All); // Dev
-FUMLogger FUMWindowsNavigationManager::Logger(&LogUMWindowsNavigation);
+DEFINE_LOG_CATEGORY_STATIC(LogUMWindowNavigatorEditorSubsystem, NoLogging, All); // Prod
+// DEFINE_LOG_CATEGORY_STATIC(LogUMWindowNavigatorEditorSubsystem, Log, All); // Dev
 
-#define LOCTEXT_NAMESPACE "UMWindowsNavigationManager"
+#define LOCTEXT_NAMESPACE "UMWindowNavigatorEditorSubsystem"
 
-TSharedPtr<FUMWindowsNavigationManager> FUMWindowsNavigationManager::WindowsNavigationManager = MakeShared<FUMWindowsNavigationManager>();
+FUMOnWindowChanged UUMWindowNavigatorEditorSubsystem::OnWindowChanged;
 
-FUMOnWindowChanged FUMWindowsNavigationManager::OnWindowChanged;
-
-FUMWindowsNavigationManager::FUMWindowsNavigationManager()
+bool UUMWindowNavigatorEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
+	return FUMConfig::Get()->IsWindowNavigatorEnabled();
+}
+
+void UUMWindowNavigatorEditorSubsystem::Initialize(
+	FSubsystemCollectionBase& Collection)
+{
+	Logger = FUMLogger(&LogUMWindowNavigatorEditorSubsystem);
+
 	FInputBindingManager&		InputBindingManager = FInputBindingManager::Get();
 	IMainFrameModule&			MainFrameModule = IMainFrameModule::Get();
 	TSharedRef<FUICommandList>& CommandList =
@@ -27,29 +33,15 @@ FUMWindowsNavigationManager::FUMWindowsNavigationManager()
 	RegisterCycleWindowsNavigation(MainFrameContext);
 	MapCycleWindowsNavigation(CommandList);
 
-	FCoreDelegates::OnPostEngineInit.AddRaw(
-		this, &FUMWindowsNavigationManager::RegisterSlateEvents);
+	Super::Initialize(Collection);
 }
 
-FUMWindowsNavigationManager::~FUMWindowsNavigationManager()
+void UUMWindowNavigatorEditorSubsystem::Deinitialize()
 {
+	Super::Deinitialize();
 }
 
-FUMWindowsNavigationManager& FUMWindowsNavigationManager::Get()
-{
-	if (!FUMWindowsNavigationManager::WindowsNavigationManager.IsValid())
-	{
-		FUMWindowsNavigationManager::WindowsNavigationManager = MakeShared<FUMWindowsNavigationManager>();
-	}
-	return *FUMWindowsNavigationManager::WindowsNavigationManager;
-}
-
-bool FUMWindowsNavigationManager::IsInitialized()
-{
-	return FUMWindowsNavigationManager::WindowsNavigationManager.IsValid();
-}
-
-void FUMWindowsNavigationManager::MapCycleWindowsNavigation(
+void UUMWindowNavigatorEditorSubsystem::MapCycleWindowsNavigation(
 	const TSharedRef<FUICommandList>& CommandList)
 {
 	CommandList->MapAction(CmdInfoCycleNextWindow,
@@ -67,21 +59,7 @@ void FUMWindowsNavigationManager::MapCycleWindowsNavigation(
 			[this]() { ToggleRootWindow(); }));
 }
 
-void FUMWindowsNavigationManager::RegisterSlateEvents()
-{
-	FSlateApplication& SlateApp = FSlateApplication::Get();
-
-	// Maybe useful?
-	SlateApp.OnWindowBeingDestroyed().AddLambda([](const SWindow& Window) {
-		// Need to make some checks to filter out non-useful windows
-		// like notification windows (which will cause this to loop for ever *~*)
-		if (Window.IsRegularWindow() && !Window.GetTitle().IsEmpty())
-			Logger.Print(FString::Printf(TEXT("Window Being Destroyed: %s"),
-				*Window.GetTitle().ToString()));
-	});
-}
-
-void FUMWindowsNavigationManager::ToggleRootWindow()
+void UUMWindowNavigatorEditorSubsystem::ToggleRootWindow()
 {
 	const TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow();
 	if (!RootWin.IsValid())
@@ -129,7 +107,7 @@ void FUMWindowsNavigationManager::ToggleRootWindow()
 	}
 }
 
-void FUMWindowsNavigationManager::CycleNoneRootWindows(bool bIsNextWindow)
+void UUMWindowNavigatorEditorSubsystem::CycleNoneRootWindows(bool bIsNextWindow)
 {
 	const TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow();
 	if (!RootWin.IsValid() || !RootWin->HasActiveChildren())
@@ -171,7 +149,7 @@ void FUMWindowsNavigationManager::CycleNoneRootWindows(bool bIsNextWindow)
 	}
 }
 
-void FUMWindowsNavigationManager::RegisterCycleWindowsNavigation(const TSharedPtr<FBindingContext>& MainFrameContext)
+void UUMWindowNavigatorEditorSubsystem::RegisterCycleWindowsNavigation(const TSharedPtr<FBindingContext>& MainFrameContext)
 {
 	UI_COMMAND_EXT(MainFrameContext.Get(), CmdInfoCycleNextWindow,
 		"CycleNoneRootWindowNext", "Cycle None-Root Window Next",

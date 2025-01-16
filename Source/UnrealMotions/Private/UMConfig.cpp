@@ -62,7 +62,7 @@ bool FUMConfig::IsWindowNavigatorEnabled()
 	const TCHAR* KeyName = TEXT("bIsWindowNavigatorEnabled");
 	bool		 bIsEnabled;
 
-	ConfigFile.GetBool(TabSection, KeyName, bIsEnabled);
+	ConfigFile.GetBool(WindowSection, KeyName, bIsEnabled);
 
 	return bIsEnabled;
 }
