@@ -7,7 +7,7 @@ FUMConfig::FUMConfig()
 	Logger = FUMLogger(&LogUMConfig);
 
 	FString UMPluginConfigDir =
-		FPaths::ProjectPluginsDir() / TEXT("UnrealMotions") / TEXT("Config");
+		FPaths::ProjectPluginsDir() / TEXT("Unreal-Motions") / TEXT("Config");
 	FString UMConfigFilePath =
 		UMPluginConfigDir / TEXT("DefaultUnrealMotions.ini");
 
