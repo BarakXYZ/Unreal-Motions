@@ -257,19 +257,43 @@ void UUMFocuserEditorSubsystem::HandleOnWindowChanged(
 		Logger.Print(FString::Printf(TEXT("OnWindowChanged: New Window: %s"),
 			*NewWindow->GetTitle().ToString()));
 
+		// We need to manually activate in order to bring the window to the front
+		// Until this line, Unreal can handle most of the things well natively.
 		FUMSlateHelpers::ActivateWindow(NewWindow.ToSharedRef());
 
-		if (TryFocusFirstFoundMinorTab(NewWindow->GetContent()))
-			return;
+		// This section helps to make sure we'll have focus in case the new window
+		// started with no focus while moving to a different window.
+		// What does that mean?
+		// Well, if we drag-off a Major Tab from a TabWell (making a new window
+		// out of it), our dragged-from window will have no focus. Thus when we
+		// try to return to it, we don't have any focus to come back to.
+		// This is why we manually search for the frontmost Major Tab again and
+		// try to focus it (if there's no focus descendants).
+		FTimerHandle TimerHandle;
+		GEditor->GetTimerManager()->SetTimer(
+			TimerHandle,
+			[this, NewWindow]() {
+				// if (NewWindow.IsValid()
+				// 	&& NewWindow->GetContent()->HasFocusedDescendants())
+				// 	return;
 
-		if (TryFocusFirstFoundSearchBox(NewWindow->GetContent()))
-			return;
+				TSharedPtr<SDockTab> FrontmostMajorTab;
+				if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
+						FrontmostMajorTab))
+				{
+					OnTabForegrounded(FrontmostMajorTab, nullptr);
+				}
+			},
+			0.1f,
+			false);
+		return;
 
-		TSharedPtr<SDockTab> FrontmostMajorTab;
-		if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(FrontmostMajorTab))
-		{
-			OnTabForegrounded(FrontmostMajorTab, nullptr);
-		}
+		// I don't think this is needed
+		// if (TryFocusFirstFoundMinorTab(NewWindow->GetContent()))
+		// 	return;
+
+		// if (TryFocusFirstFoundSearchBox(NewWindow->GetContent()))
+		// 	return;
 	}
 }
 

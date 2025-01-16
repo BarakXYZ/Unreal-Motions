@@ -105,16 +105,26 @@ bool FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
 	static const FString DockWellType{ "SDockingTabWell" };
 	static const FName	 DockType{ "SDockTab" };
 
-	FSlateApplication&			SlateApp = FSlateApplication::Get();
-	TArray<TSharedRef<SWindow>> VisWins;
-	SlateApp.GetAllVisibleWindowsOrdered(VisWins);
-	if (VisWins.IsEmpty())
-		return false;
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+
+	// TArray<TSharedRef<SWindow>> VisWins;
+	// SlateApp.GetAllVisibleWindowsOrdered(VisWins);
+	// if (VisWins.IsEmpty())
+	// 	return false;
 
 	const TSharedPtr<SWindow> ActiveWin =
-		VisWins.Last();
-	// FSlateApplication::Get().GetActiveTopLevelWindow();
-	// SlateApp.GetActiveTopLevelRegularWindow();
+		// VisWins.Last();  // This seems less solid
+
+		// NOTE:
+		// Actually (LOL) not sure if this statement is true. The issue seems to
+		// be that the window just doesn't have any focus to start with (like no
+		// tab was selected once it was left) thus it won't be able to find him?
+		// We want this version of get active top level (not regular) because
+		// window like "Widget Reflector" and such, are considered non-regular
+		// and we won't be able to bring focus to them (or find major tabs in
+		// them) they will essentially be skipped.
+		// FSlateApplication::Get().GetActiveTopLevelWindow();
+		SlateApp.GetActiveTopLevelRegularWindow();
 	if (!ActiveWin.IsValid())
 		return false;
 
