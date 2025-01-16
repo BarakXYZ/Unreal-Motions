@@ -1,8 +1,6 @@
 #include "UMFocuserEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
-// #include "GenericPlatform/GenericWindow.h"
-#include "GenericPlatform/GenericWindow.h"
 #include "Input/Events.h"
 #include "Logging/LogVerbosity.h"
 #include "UMLogger.h"
@@ -10,7 +8,6 @@
 #include "Widgets/Docking/SDockTab.h"
 #include "UMSlateHelpers.h"
 #include "UMWindowNavigatorEditorSubsystem.h"
-#include "UMInputHelpers.h"
 #include "UMFocusVisualizer.h"
 #include "UMConfig.h"
 
@@ -92,10 +89,6 @@ void UUMFocuserEditorSubsystem::OnFocusChanged(const FFocusEvent& FocusEvent, co
 	const FString LogFunc = "OnFocusChanged:\n";
 	FString		  LogOldWidget = "Invalid";
 	FString		  LogNewWidget = "Invalid";
-
-	// Do we wanna track the windows change without necessarily be dependent on
-	// WindowsManager? What does that mean?
-	// FSlateApplication::Get().GetAllVisibleWindowsOrdered();
 
 	if (OldWidget.IsValid() && !ShouldFilterNewWidget(OldWidget.ToSharedRef()))
 	{
@@ -667,18 +660,6 @@ void UUMFocuserEditorSubsystem::OnWindowBeingDestroyed(const SWindow& Window)
 			0.1f, false);
 	}
 	// Logger.Print("Window being destroyed is not Regular");
-}
-
-bool UUMFocuserEditorSubsystem::DoesTabHaveFocus(const TSharedRef<SDockTab> InTab)
-{
-	// Skip widget focusing if there's already any focus (e.g.
-	// user had manually clicked with the mouse)
-	if (InTab->GetContent()->HasAnyUserFocusOrFocusedDescendants())
-	{
-		Logger.Print("DoesTabHaveFocus: Minor had focus... Skipping.", ELogVerbosity::Warning);
-		return true;
-	}
-	return false;
 }
 
 bool UUMFocuserEditorSubsystem::FindTabWellAndActivateForegroundedTab(

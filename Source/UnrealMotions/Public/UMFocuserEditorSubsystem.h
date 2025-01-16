@@ -43,8 +43,6 @@ public:
 	void RegisterSlateEvents();
 
 	/**
-	 * TODO: Document
-	 *
 	 * @param FocusEvent The focus event that triggered the callback
 	 * @param OldWidgetPath Path to the previously focused widget
 	 * @param OldWidget The previously focused widget
@@ -80,6 +78,18 @@ public:
 	void OnTabForegrounded(
 		TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab);
 
+	/**
+	 * Called when a window is in the process of being destroyed.
+	 * For regular windows, initiates a delayed search for a new major tab to focus
+	 * after the window is fully destroyed to avoid detecting the closing window itself.
+	 * @param Window the window that is being destroyed.
+	 * @note Only processes regular windows (IsRegularWindow() == true) and
+	 * ignores others (e.g. ignore Notification Windows).
+	 * When a valid major tab is found, it will be activated and foregrounded with
+	 * a 0.1 second delay.
+	 */
+	void OnWindowBeingDestroyed(const SWindow& Window);
+
 	bool ShouldFilterNewWidget(TSharedRef<SWidget> InWidget);
 
 	void HandleOnWindowChanged(
@@ -90,7 +100,6 @@ public:
 	 * Used in the Vim Subsystem. When we remove the current Major Tab, this helps
 	 * to focus and activate the next frontmost window.
 	 */
-
 	static bool FocusNextFrontmostWindow();
 
 	/**
@@ -107,15 +116,7 @@ public:
 	void ActivateNewInvokedTab(
 		FSlateApplication& SlateApp, const TSharedPtr<SDockTab> NewTab);
 
-	void TrackActiveWindow();
-
 	bool HasWindowChanged();
-
-	/* Deprecated */
-	bool DoesTabHaveFocus(const TSharedRef<SDockTab> InTab);
-
-	/* Deprecated */
-	bool FindTabWellAndActivateForegroundedTab(const TSharedRef<SDockTab> InMajorTab);
 
 	static bool RemoveActiveMajorTab();
 
@@ -149,10 +150,11 @@ public:
 
 	void FocusTabContent(TSharedRef<SDockTab> InTab);
 
-	void OnWindowBeingDestroyed(const SWindow& Window);
-
 	void DebugPrevAndNewMinorTabsMajorTabs(
 		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
+
+	/* Deprecated */
+	bool FindTabWellAndActivateForegroundedTab(const TSharedRef<SDockTab> InMajorTab);
 
 	// TODO: protected + friend classes?
 	TWeakPtr<SWindow>  ActiveWindow;
