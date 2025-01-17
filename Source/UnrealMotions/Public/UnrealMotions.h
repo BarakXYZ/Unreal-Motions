@@ -1,8 +1,6 @@
 #pragma once
 
 #include "Modules/ModuleManager.h"
-
-#include "SUMStatusBarWidget.h"
 #include "UMLogger.h"
 
 class FUnrealMotionsModule : public IModuleInterface
@@ -16,6 +14,5 @@ public:
 
 private:
 	TSharedPtr<SUMBufferVisualizer> BVis;
-	TSharedPtr<SUMStatusBarWidget>	StatWidget;
 	FUMLogger						Logger;
 };

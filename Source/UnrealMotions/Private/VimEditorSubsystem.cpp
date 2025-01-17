@@ -1,5 +1,4 @@
 #include "VimEditorSubsystem.h"
-#include "Editor.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
 #include "UMInputPreProcessor.h"
@@ -21,14 +20,14 @@ bool UVimEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 
 void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	Logger.SetLogCategory(&LogVimEditorSubsystem);
+	Logger = FUMLogger(&LogVimEditorSubsystem);
 
-	VimSubWeak = this;
 	BindCommands();
-	Super::Initialize(Collection);
 
 	FCoreDelegates::OnPostEngineInit.AddUObject(
 		this, &UVimEditorSubsystem::WrapAndSetCustomMessageHandler);
+
+	Super::Initialize(Collection);
 }
 
 void UVimEditorSubsystem::Deinitialize()
@@ -380,6 +379,7 @@ void UVimEditorSubsystem::BindCommands()
 	using VimSub = UVimEditorSubsystem;
 
 	TSharedRef<FUMInputPreProcessor> Input = FUMInputPreProcessor::Get();
+	VimSubWeak = this;
 
 	// Listeners
 	Input->OnResetSequence.AddUObject(

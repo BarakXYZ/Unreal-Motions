@@ -1,4 +1,4 @@
-#include "UMStatusBarManager.h"
+#include "VimStatusBarEditorSubsystem.h"
 #include "Editor.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "LevelEditor.h"
@@ -7,21 +7,23 @@
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Widgets/Text/STextBlock.h"
-
-// TODO: Convert this to an Editor Subsystem
+#include "UMConfig.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMStatusBarManager, NoLogging, All); // Prod
-DEFINE_LOG_CATEGORY_STATIC(LogUMStatusBarManager, Log, All); // Dev
-FUMLogger FUMStatusBarManager::Logger(&LogUMStatusBarManager);
+DEFINE_LOG_CATEGORY_STATIC(LogVimStatusBarEditorSubsystem, Log, All); // Dev
 
 #define LOCTEXT_NAMESPACE "FUnrealMotionsModule"
 
-TSharedPtr<FUMStatusBarManager>
-	FUMStatusBarManager::StatusBarManager = nullptr;
-
-FUMStatusBarManager::FUMStatusBarManager()
+bool UVimStatusBarEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
-	// AddDrawerToLevelEditor();
+	return FUMConfig::Get()->IsVimEnabled();
+}
+
+void UVimStatusBarEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Logger = FUMLogger(&LogVimStatusBarEditorSubsystem);
+
+	// AddDrawerToLevelEditor();  // Deprecated
 
 	// Register a function to be called when menu system is initialized
 	UToolMenus::RegisterStartupCallback(
@@ -31,55 +33,38 @@ FUMStatusBarManager::FUMStatusBarManager()
 
 	// Use the current object as the owner of the menus
 	// This allows us to remove all our custom menus when the
-	// module is unloaded (see ShutdownModule below)
+	// module is unloaded (see Deinitialize below)
 	FToolMenuOwnerScoped OwnerScoped(this);
+
+	// Bind to OnAssetEditorOpened to register new StatusBars
+	FCoreDelegates::OnPostEngineInit.AddUObject(
+		this, &UVimStatusBarEditorSubsystem::BindPostEngineInitDelegates);
+
+	Super::Initialize(Collection);
 }
 
-FUMStatusBarManager::~FUMStatusBarManager()
+void UVimStatusBarEditorSubsystem::Deinitialize()
 {
-	if (FUMStatusBarManager::StatusBarManager.IsValid())
-	{
-		FUMStatusBarManager::StatusBarManager.Reset();
-	}
-
 	// Unregister the startup function
 	UToolMenus::UnRegisterStartupCallback(this);
 
 	// Unregister all our menu extensions
 	UToolMenus::UnregisterOwner(this);
+
+	Super::Deinitialize();
 }
 
-void FUMStatusBarManager::Initialize()
-{
-	if (!StatusBarManager)
-	{
-		StatusBarManager = MakeShared<FUMStatusBarManager>();
-
-		// Now it's safe to bind with AsShared()
-		FCoreDelegates::OnPostEngineInit.AddSP(
-			StatusBarManager.ToSharedRef(),
-			&FUMStatusBarManager::BindPostEngineInitDelegates);
-	}
-}
-
-TSharedPtr<FUMStatusBarManager> FUMStatusBarManager::Get()
-{
-	// Always ensure initialization first
-	Initialize();
-	return StatusBarManager;
-}
-
-void FUMStatusBarManager::BindPostEngineInitDelegates()
+void UVimStatusBarEditorSubsystem::BindPostEngineInitDelegates()
 {
 	if (UAssetEditorSubsystem* AssetEditorSubsystem =
 			GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
 	{
-		AssetEditorSubsystem->OnAssetEditorOpened().AddSP(
-			AsShared(), &FUMStatusBarManager::OnAssetEditorOpened);
+		AssetEditorSubsystem->OnAssetEditorOpened().AddUObject(
+			this, &UVimStatusBarEditorSubsystem::OnAssetEditorOpened);
 	}
 }
 
-void FUMStatusBarManager::OnAssetEditorOpened(UObject* OpenedAsset)
+void UVimStatusBarEditorSubsystem::OnAssetEditorOpened(UObject* OpenedAsset)
 {
 	if (UAssetEditorSubsystem* AssetEditorSubsystem =
 			GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
@@ -106,7 +91,7 @@ void FUMStatusBarManager::OnAssetEditorOpened(UObject* OpenedAsset)
 	}
 }
 
-void FUMStatusBarManager::RegisterToolbarExtension(
+void UVimStatusBarEditorSubsystem::RegisterToolbarExtension(
 	const FString& SerializedStatusBarName)
 {
 	// LookupAvailableModules();  // Debug
@@ -163,7 +148,7 @@ void FUMStatusBarManager::RegisterToolbarExtension(
 	ToolMenus->RefreshAllWidgets();
 }
 
-FString FUMStatusBarManager::CleanupStatusBarName(FString TargetName)
+FString UVimStatusBarEditorSubsystem::CleanupStatusBarName(FString TargetName)
 {
 	// Find the index of the last occurrence of '_'
 	int32 UnderscoreIndex;
@@ -180,7 +165,7 @@ FString FUMStatusBarManager::CleanupStatusBarName(FString TargetName)
 	return TargetName;
 }
 
-void FUMStatusBarManager::AddDrawerToLevelEditor()
+void UVimStatusBarEditorSubsystem::AddDrawerToLevelEditor()
 {
 	IMainFrameModule& MainFrameModule =
 		FModuleManager::LoadModuleChecked<IMainFrameModule>("MainFrame");
@@ -193,7 +178,7 @@ void FUMStatusBarManager::AddDrawerToLevelEditor()
 			});
 }
 
-FWidgetDrawerConfig FUMStatusBarManager::CreateGlobalDrawerConfig()
+FWidgetDrawerConfig UVimStatusBarEditorSubsystem::CreateGlobalDrawerConfig()
 {
 	FName				DrawerId = TEXT("MySimpleDrawer");
 	FWidgetDrawerConfig DrawerConfig(DrawerId);
@@ -209,7 +194,7 @@ FWidgetDrawerConfig FUMStatusBarManager::CreateGlobalDrawerConfig()
 	return DrawerConfig;
 }
 
-void FUMStatusBarManager::RegisterDrawer(const FName& StatusBarName)
+void UVimStatusBarEditorSubsystem::RegisterDrawer(const FName& StatusBarName)
 {
 	// (Optional) If you want to define logic for OnDrawerOpened, OnDrawerDismissed, etc.:
 	// MyDrawerConfig.OnDrawerOpenedDelegate.BindLambda([](FName StatusBarWithDrawerName)
@@ -230,7 +215,7 @@ void FUMStatusBarManager::RegisterDrawer(const FName& StatusBarName)
 	}
 }
 
-void FUMStatusBarManager::LookupAvailableModules()
+void UVimStatusBarEditorSubsystem::LookupAvailableModules()
 {
 	// Names found won't match status bar formatted names :/
 	TArray<FName> ModuleNames;
@@ -238,14 +223,15 @@ void FUMStatusBarManager::LookupAvailableModules()
 
 	for (const FName& ModuleName : ModuleNames)
 	{
-		UE_LOG(LogUMStatusBarManager, Warning,
-			TEXT("Editor App: %s"), *ModuleName.ToString());
+		Logger.Print(
+			FString::Printf(TEXT("Editor App: %s"), *ModuleName.ToString()),
+			ELogVerbosity::Warning);
 	}
 }
 
 // ~ MENU BAR EXTENSION SNIPPET ~ //
 // NOTE: Not currently used, but keeping it for future reference.
-void FUMStatusBarManager::AddMenuBarExtension()
+void UVimStatusBarEditorSubsystem::AddMenuBarExtension()
 {
 	FLevelEditorModule& LevelEditorModule =
 		FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
@@ -255,22 +241,22 @@ void FUMStatusBarManager::AddMenuBarExtension()
 		"Help",
 		EExtensionHook::After,
 		nullptr,
-		FMenuBarExtensionDelegate::CreateRaw(
-			// FToolBarExtensionDelegate::CreateRaw(
-			this, &FUMStatusBarManager::AddMenuBar));
+		FMenuBarExtensionDelegate::CreateUObject(
+			// FToolBarExtensionDelegate::CreateUObject(
+			this, &UVimStatusBarEditorSubsystem::AddMenuBar));
 
 	LevelEditorModule.GetMenuExtensibilityManager()->AddExtender(MenuExtender);
 }
 
-void FUMStatusBarManager::AddMenuBar(FMenuBarBuilder& MenuBarBuilder)
+void UVimStatusBarEditorSubsystem::AddMenuBar(FMenuBarBuilder& MenuBarBuilder)
 {
 	MenuBarBuilder.AddPullDownMenu(
 		FText::FromString("Unreal Motions"),
 		FText::FromString("ToolTip <3"),
-		FNewMenuDelegate::CreateRaw(this, &FUMStatusBarManager::FillMenuBar));
+		FNewMenuDelegate::CreateUObject(this, &UVimStatusBarEditorSubsystem::FillMenuBar));
 }
 
-void FUMStatusBarManager::FillMenuBar(FMenuBuilder& MenuBuilder)
+void UVimStatusBarEditorSubsystem::FillMenuBar(FMenuBuilder& MenuBuilder)
 {
 }
 // ~ MENU BAR EXTENSION SNIPPET ~ //

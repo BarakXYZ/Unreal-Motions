@@ -1,6 +1,5 @@
 #include "UnrealMotions.h"
 #include "Framework/Application/SlateApplication.h"
-#include "UMStatusBarManager.h"
 #include "UMConfig.h"
 #include "UMInputPreProcessor.h"
 
@@ -17,8 +16,6 @@ void FUnrealMotionsModule::StartupModule()
 	// Should be moved to the Vim Subsystem
 	if (FUMConfig::Get()->IsVimEnabled())
 	{
-		FUMStatusBarManager::Initialize();
-
 		FCoreDelegates::OnPostEngineInit.AddRaw(
 			this, &FUnrealMotionsModule::BindPostEngineInitDelegates);
 	}
