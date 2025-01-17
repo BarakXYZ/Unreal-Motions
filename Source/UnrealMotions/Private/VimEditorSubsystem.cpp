@@ -24,8 +24,13 @@ void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	BindCommands();
 
-	FCoreDelegates::OnPostEngineInit.AddUObject(
-		this, &UVimEditorSubsystem::WrapAndSetCustomMessageHandler);
+	FCoreDelegates::OnPostEngineInit.AddLambda([this]() {
+		WrapAndSetCustomMessageHandler();
+
+		// Register our custom Input PreProcessor to handle input
+		FSlateApplication::Get().RegisterInputPreProcessor(
+			FUMInputPreProcessor::Get());
+	});
 
 	Super::Initialize(Collection);
 }
