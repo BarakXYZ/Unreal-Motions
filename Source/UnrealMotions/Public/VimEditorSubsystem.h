@@ -248,7 +248,6 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	DECLARE_DELEGATE_RetVal_TwoParams(FReply, FOnKeyDown, const FGeometry&, const FKeyEvent&);
 
 	TWeakObjectPtr<UVimEditorSubsystem> VimSubWeak{ nullptr };
-	TWeakPtr<FUMInputPreProcessor>		InputPP;
 	EUMLogMethod						UMHelpersLogMethod = EUMLogMethod::PrintToScreen;
 	FDelegateHandle						PreInputKeyDownDelegateHandle;
 	bool								bVisualLog{ true };

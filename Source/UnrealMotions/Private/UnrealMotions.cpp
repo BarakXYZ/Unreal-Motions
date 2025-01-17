@@ -14,6 +14,7 @@ void FUnrealMotionsModule::StartupModule()
 	Logger = FUMLogger(&LogUnrealMotionsModule);
 	Logger.Print("Unreal Motions: Startup.");
 
+	// Should be moved to the Vim Subsystem
 	if (FUMConfig::Get()->IsVimEnabled())
 	{
 		FUMStatusBarManager::Initialize();

@@ -24,7 +24,6 @@ void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Logger.SetLogCategory(&LogVimEditorSubsystem);
 
 	VimSubWeak = this;
-	InputPP = FUMInputPreProcessor::Get().ToWeakPtr();
 	BindCommands();
 	Super::Initialize(Collection);
 
@@ -380,157 +379,155 @@ void UVimEditorSubsystem::BindCommands()
 {
 	using VimSub = UVimEditorSubsystem;
 
-	if (!InputPP.IsValid())
-		return;
-	FUMInputPreProcessor& Input = *InputPP.Pin();
+	TSharedRef<FUMInputPreProcessor> Input = FUMInputPreProcessor::Get();
 
 	// Listeners
-	Input.OnResetSequence.AddUObject(
+	Input->OnResetSequence.AddUObject(
 		this, &VimSub::OnResetSequence);
 
-	Input.OnCountPrefix.AddUObject(
+	Input->OnCountPrefix.AddUObject(
 		this, &VimSub::OnCountPrefix);
 
-	Input.OnVimModeChanged.AddUObject(
+	Input->OnVimModeChanged.AddUObject(
 		this, &VimSub::OnVimModeChanged);
 
 	// ~ Commands ~ //
 	//
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::W },
 		&FUMEditorCommands::OpenWidgetReflector);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, FInputChord(EModifierKey::Shift, EKeys::W) },
 		&FUMEditorCommands::OpenWidgetReflector);
 
-	Input.AddKeyBinding_NoParam(
+	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::O },
 		&FUMEditorCommands::OpenOutputLog);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::P },
 		&FUMEditorCommands::OpenPreferences);
 
 	//** Open Content Browsers 1-4 */
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::One },
 		&FUMEditorCommands::OpenContentBrowser);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Two },
 		&FUMEditorCommands::OpenContentBrowser);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Three },
 		&FUMEditorCommands::OpenContentBrowser);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Four },
 		&FUMEditorCommands::OpenContentBrowser);
 
 	//  Move HJKL
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::H },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::J },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::K },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::L },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 
 	// Selection + Move HJKL
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Shift, EKeys::H) },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Shift, EKeys::J) },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Shift, EKeys::K) },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Shift, EKeys::L) },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Shift, EKeys::G) },
 		VimSubWeak, &VimSub::NavigateToFirstOrLastItem);
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::G, EKeys::G },
 		VimSubWeak, &VimSub::NavigateToFirstOrLastItem);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::U) },
 		VimSubWeak, &VimSub::ScrollHalfPage);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::D) },
 		VimSubWeak, &VimSub::ScrollHalfPage);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::U },
 		&FUMEditorCommands::Undo);
 
 	// Delete item - Simulate the Delete key (WIP)
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::X },
 		&FUMEditorCommands::DeleteItem);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::D },
 		&FUMEditorCommands::DeleteItem);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::Enter },
 		&FUMInputHelpers::Enter);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::N) },
 		&FUMEditorCommands::NavigateNextPrevious);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::P) },
 		&FUMEditorCommands::NavigateNextPrevious);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::F) },
 		&FUMEditorCommands::FocusSearchBox);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::R },
 		&FUMInputHelpers::SimulateRightClick);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, FInputChord(EModifierKey::Shift, EKeys::R) },
 		&FUMInputHelpers::ToggleRightClickPress);
 
 	/////////////////////////////////////////////////////////////////////////
 	//						~ Panel Navigation ~
 	//
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::H) },
 		&FUMEditorNavigation::NavigatePanelTabs);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::J) },
 		&FUMEditorNavigation::NavigatePanelTabs);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::K) },
 		&FUMEditorNavigation::NavigatePanelTabs);
 
-	Input.AddKeyBinding_KeyEvent(
+	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::L) },
 		&FUMEditorNavigation::NavigatePanelTabs);
 
-	Input.AddKeyBinding_NoParam(
+	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::D, EKeys::C },
 		&FUMEditorCommands::ClearAllDebugMessages);
 
-	Input.AddKeyBinding_NoParam(
+	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::D, EKeys::T, EKeys::N },
 		&FUMEditorCommands::ToggleAllowNotifications);
 
@@ -538,12 +535,12 @@ void UVimEditorSubsystem::BindCommands()
 	// 	{ EKeys::SpaceBar, EKeys::N, EKeys::B },
 	// 	&FLevelEditorActionCallbacks::CreateBlankBlueprintClass);
 
-	Input.AddKeyBinding_NoParam(
+	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::N, EKeys::B },
 		[this]() {
 			FSlateApplication& SlateApp = FSlateApplication::Get();
 			bSyntheticInsertToggle = true;
-			InputPP.Pin()->OnRequestVimModeChange.Broadcast(
+			FUMInputPreProcessor::Get()->OnRequestVimModeChange.Broadcast(
 				SlateApp, EVimMode::Insert);
 			FLevelEditorActionCallbacks::CreateBlankBlueprintClass();
 		});
