@@ -14,12 +14,12 @@
 // DEFINE_LOG_CATEGORY_STATIC(UMFocuserEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(UMFocuserEditorSubsystem, Log, All); // Dev
 
-using Log = FUMLogger;
-using Sym = EUMLogSymbol;
-
 bool UUMFocuserEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
-	return FUMConfig::Get()->IsFocuserEnabled();
+	TSharedRef<FUMConfig> Config = FUMConfig::Get();
+
+	// If Vim is enabled, we must enable the Focuser to also exist
+	return Config->IsFocuserEnabled() || Config->IsVimEnabled();
 }
 
 void UUMFocuserEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
