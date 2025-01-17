@@ -1,21 +1,18 @@
-#include "UMInputPreProcessor.h"
+#include "VimInputProcessor.h"
 #include "Editor.h"
 #include "Engine/GameInstance.h"
 #include "Framework/Application/SlateApplication.h"
-#include "StatusBarSubsystem.h"
 #include "UMInputHelpers.h"
-
-// #include "WidgetDrawerConfig.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMInputPreProcessor, Log, All); // Dev
 
-EVimMode FUMInputPreProcessor::VimMode{ EVimMode::Insert };
+EVimMode FVimInputProcessor::VimMode{ EVimMode::Insert };
 
-FOnRequestVimModeChange FUMInputPreProcessor::OnRequestVimModeChange;
+FOnRequestVimModeChange FVimInputProcessor::OnRequestVimModeChange;
 
-bool FUMInputPreProcessor::bNativeInputHandling{ false };
+bool FVimInputProcessor::bNativeInputHandling{ false };
 
-FUMInputPreProcessor::FUMInputPreProcessor()
+FVimInputProcessor::FVimInputProcessor()
 {
 	Logger = FUMLogger(&LogUMInputPreProcessor);
 
@@ -26,18 +23,18 @@ FUMInputPreProcessor::FUMInputPreProcessor()
 			SetMode(SlateApp, NewMode);
 		});
 }
-FUMInputPreProcessor::~FUMInputPreProcessor()
+FVimInputProcessor::~FVimInputProcessor()
 {
 }
 
-TSharedRef<FUMInputPreProcessor> FUMInputPreProcessor::Get()
+TSharedRef<FVimInputProcessor> FVimInputProcessor::Get()
 {
-	static const TSharedRef<FUMInputPreProcessor> InputPreProcessor =
-		MakeShared<FUMInputPreProcessor>();
+	static const TSharedRef<FVimInputProcessor> InputPreProcessor =
+		MakeShared<FVimInputProcessor>();
 	return InputPreProcessor;
 }
 
-void FUMInputPreProcessor::Tick(
+void FVimInputProcessor::Tick(
 	const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor)
 {
 	// if (TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0))
@@ -45,7 +42,7 @@ void FUMInputPreProcessor::Tick(
 }
 
 // Process the current key sequence
-bool FUMInputPreProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+bool FVimInputProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// 1) Add this key to current sequence
 	CurrentSequence.Add(FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent));
@@ -96,7 +93,7 @@ bool FUMInputPreProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const
 	return true;
 }
 
-void FUMInputPreProcessor::ResetSequence(FSlateApplication& SlateApp)
+void FVimInputProcessor::ResetSequence(FSlateApplication& SlateApp)
 {
 	OnResetSequence.Broadcast();
 	CurrentSequence.Empty();
@@ -105,7 +102,7 @@ void FUMInputPreProcessor::ResetSequence(FSlateApplication& SlateApp)
 	ResetBufferVisualizer(SlateApp);
 }
 
-void FUMInputPreProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
+void FVimInputProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
 {
 	if (BufferVisualizer.IsValid())
 	{
@@ -117,7 +114,7 @@ void FUMInputPreProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
 	}
 }
 
-FKeyChordTrieNode* FUMInputPreProcessor::FindOrCreateTrieNode(
+FKeyChordTrieNode* FVimInputProcessor::FindOrCreateTrieNode(
 	const TArray<FInputChord>& Sequence)
 {
 	FKeyChordTrieNode* Current = TrieRoot;
@@ -133,7 +130,7 @@ FKeyChordTrieNode* FUMInputPreProcessor::FindOrCreateTrieNode(
 }
 
 // 1) No-Parameter
-void FUMInputPreProcessor::AddKeyBinding_NoParam(
+void FVimInputProcessor::AddKeyBinding_NoParam(
 	const TArray<FInputChord>& Sequence,
 	TFunction<void()>		   Callback)
 {
@@ -143,7 +140,7 @@ void FUMInputPreProcessor::AddKeyBinding_NoParam(
 }
 
 // 2) Single FKeyEvent param
-void FUMInputPreProcessor::AddKeyBinding_KeyEvent(
+void FVimInputProcessor::AddKeyBinding_KeyEvent(
 	const TArray<FInputChord>&									   Sequence,
 	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback)
 {
@@ -153,7 +150,7 @@ void FUMInputPreProcessor::AddKeyBinding_KeyEvent(
 }
 
 // 3) TArray<FInputChord> param
-void FUMInputPreProcessor::AddKeyBinding_Sequence(
+void FVimInputProcessor::AddKeyBinding_Sequence(
 	const TArray<FInputChord>&												 Sequence,
 	TFunction<void(FSlateApplication& SlateApp, const TArray<FInputChord>&)> Callback)
 {
@@ -162,7 +159,7 @@ void FUMInputPreProcessor::AddKeyBinding_Sequence(
 	Node->CallbackType = EUMKeyBindingCallbackType::SequenceParam;
 }
 
-void FUMInputPreProcessor::RegisterDefaultKeyBindings()
+void FVimInputProcessor::RegisterDefaultKeyBindings()
 {
 	// Create the root node
 	TrieRoot = new FKeyChordTrieNode();
@@ -186,7 +183,7 @@ void FUMInputPreProcessor::RegisterDefaultKeyBindings()
 		});
 }
 
-void FUMInputPreProcessor::TestLinearInput(FSlateApplication& SlateApp)
+void FVimInputProcessor::TestLinearInput(FSlateApplication& SlateApp)
 {
 	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
 
@@ -199,17 +196,16 @@ void FUMInputPreProcessor::TestLinearInput(FSlateApplication& SlateApp)
 		0.02f, true);
 }
 
-bool FUMInputPreProcessor::HandleKeyDownEvent(
+bool FVimInputProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// DebugKeyEvent(InKeyEvent);
+
 	// TEST Linear Input:
 	// if (InKeyEvent.GetKey() == EKeys::LeftBracket)
 	// {
 	// 	TestLinearInput(SlateApp);
 	// }
-
-	// return false;
-	// DebugKeyEvent(InKeyEvent);
 
 	// NOTE:
 	// When we call SlateApp.ProcessKeyDownEvent(), it will trigger another
@@ -223,60 +219,33 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 		return false;
 	}
 
+	// We give an exception to the Escape key to be handled at this stage.
 	if (IsSimulateEscapeKey(SlateApp, InKeyEvent))
 		return true;
 
 	if (ShouldSwitchVimMode(SlateApp, InKeyEvent)) // Return true and reset
 		return true;
 
-	if (VimMode == EVimMode::Insert) // Default
-		return false;				 // Pass on the handling to Unreal native.
+	if (VimMode == EVimMode::Insert)
+		return false; // Default: Pass on the handling to Unreal native.
 
 	if (TrackCountPrefix(SlateApp, InKeyEvent)) // Return if currently counting.
 		return true;
 
-	FKey KeyPressed = InKeyEvent.GetKey();
+	const FKey InKey = InKeyEvent.GetKey();
 
-	if (KeyPressed.IsModifierKey()) // Simply ignore
-		return true;				// or false?
+	if (InKey.IsModifierKey()) // Simply ignore
+		return true;		   // or false?
 
-	// If leader key is pressed, show the buffer visualizer
-	if (KeyPressed == EKeys::SpaceBar && CurrentBuffer.IsEmpty())
-	{
-		CurrentBuffer = ""; // Start a new buffer
-		if (!BufferVisualizer.IsValid())
-		{
-			TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
-			if (ActiveWindow.IsValid())
-			{
-				TSharedPtr<SUMBufferVisualizer> NewVisualizer =
-					SNew(SUMBufferVisualizer);
-				ActiveWindow->AddOverlaySlot()
-					[NewVisualizer.ToSharedRef()];
-				// Set visualizer to ignore mouse input; constructor won't suffice
-				NewVisualizer->SetVisibility(EVisibility::HitTestInvisible);
-				BufferVisualizer = NewVisualizer; // Store as weak pointer
-			}
-		}
-	}
-
-	// Update buffer and visualizer
-	if (CurrentBuffer.IsEmpty())
-		CurrentBuffer = KeyPressed.GetDisplayName().ToString();
-	else
-		CurrentBuffer += " + " + KeyPressed.GetDisplayName().ToString();
-
-	if (BufferVisualizer.IsValid())
-	{
-		BufferVisualizer.Pin()->UpdateBuffer(CurrentBuffer);
-	}
+	CheckIfShouldCreateBufferVisualizer(SlateApp, InKey);
+	UpdateBufferAndVisualizer(InKey);
 
 	return ProcessKeySequence(SlateApp, InKeyEvent);
 	// return true;
 }
 
-// TODO: Check this behavior
-// I think we must return up for the keys we're simulating!
+// TODO:
+// Check this behavior; I think we must return up for the keys we're simulating!
 // That make sense, they essentially never return to be unpressed!
 // We're sending their input to Unreal native (for example, arrow)
 // but never actually sending the key-up, which makes them stay
@@ -288,7 +257,7 @@ bool FUMInputPreProcessor::HandleKeyDownEvent(
 // Need to think about this more.
 // We should about giving navigation using different method so let's think about
 // that more. Maybe a specific mode desgined for navigation? TODO WIP OK THANK
-bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+bool FVimInputProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// TEST Linear Input:
 	// if (InKeyEvent.GetKey() == EKeys::LeftBracket)
@@ -306,7 +275,7 @@ bool FUMInputPreProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const F
 	return false; // Seems to work fine for now.
 }
 
-bool FUMInputPreProcessor::ShouldSwitchVimMode(
+bool FVimInputProcessor::ShouldSwitchVimMode(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	if (InKeyEvent.GetKey() == EKeys::Escape)
@@ -319,7 +288,7 @@ bool FUMInputPreProcessor::ShouldSwitchVimMode(
 	return false;
 }
 
-bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
+bool FVimInputProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
 	// return false;
 	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
@@ -337,7 +306,7 @@ bool FUMInputPreProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateAp
 	return false;
 }
 
-bool FUMInputPreProcessor::TrackCountPrefix(
+bool FVimInputProcessor::TrackCountPrefix(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// Skip processing if either:
@@ -374,7 +343,7 @@ bool FUMInputPreProcessor::TrackCountPrefix(
 	return false;
 }
 
-void FUMInputPreProcessor::SwitchVimModes(
+void FVimInputProcessor::SwitchVimModes(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	const FKey& KeyPressed = InKeyEvent.GetKey();
@@ -391,25 +360,21 @@ void FUMInputPreProcessor::SwitchVimModes(
 	}
 }
 
-bool FUMInputPreProcessor::IsSimulateEscapeKey(
+bool FVimInputProcessor::IsSimulateEscapeKey(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	if (InKeyEvent.IsShiftDown() && InKeyEvent.GetKey() == EKeys::Escape)
 	{
-		Logger.Print("Simulate Escape");
-		static const FKeyEvent EscapeEvent(
-			FKey(EKeys::Escape),
-			FModifierKeysState(),
-			0, 0, 0, 0);
+		static const FKey Escape = EKeys::Escape;
+		SimulateKeyPress(SlateApp, Escape);
 
-		bNativeInputHandling = true;
-		SlateApp.ProcessKeyDownEvent(EscapeEvent);
+		Logger.Print("Simulate Escape");
 		return true;
 	}
 	return false;
 }
 
-void FUMInputPreProcessor::SetMode(FSlateApplication& SlateApp, const EVimMode NewMode)
+void FVimInputProcessor::SetMode(FSlateApplication& SlateApp, const EVimMode NewMode)
 {
 	if (VimMode != NewMode)
 	{
@@ -420,22 +385,22 @@ void FUMInputPreProcessor::SetMode(FSlateApplication& SlateApp, const EVimMode N
 	OnVimModeChanged.Broadcast(NewMode);
 }
 
-FOnVimModeChanged& FUMInputPreProcessor::GetOnVimModeChanged()
+FOnVimModeChanged& FVimInputProcessor::GetOnVimModeChanged()
 {
 	return OnVimModeChanged;
 }
 
-void FUMInputPreProcessor::RegisterOnVimModeChanged(TFunction<void(const EVimMode)> Callback)
+void FVimInputProcessor::RegisterOnVimModeChanged(TFunction<void(const EVimMode)> Callback)
 {
 	OnVimModeChanged.AddLambda(Callback);
 }
 
-void FUMInputPreProcessor::UnregisterOnVimModeChanged(const void* CallbackOwner)
+void FVimInputProcessor::UnregisterOnVimModeChanged(const void* CallbackOwner)
 {
 	OnVimModeChanged.RemoveAll(CallbackOwner);
 }
 
-FKeyEvent FUMInputPreProcessor::GetKeyEventFromKey(
+FKeyEvent FVimInputProcessor::GetKeyEventFromKey(
 	const FKey& InKey, bool bIsShiftDown)
 {
 	const FModifierKeysState ModKeys(bIsShiftDown, bIsShiftDown,
@@ -447,7 +412,7 @@ FKeyEvent FUMInputPreProcessor::GetKeyEventFromKey(
 		0, false, 0, 0);
 }
 
-void FUMInputPreProcessor::SimulateMultiTabPresses(
+void FVimInputProcessor::SimulateMultiTabPresses(
 	FSlateApplication& SlateApp, int32 TimesToRepeat)
 {
 	static const FKeyEvent TabEvent(
@@ -462,12 +427,12 @@ void FUMInputPreProcessor::SimulateMultiTabPresses(
 	}
 }
 
-void FUMInputPreProcessor::ToggleNativeInputHandling(const bool bNativeHandling)
+void FVimInputProcessor::ToggleNativeInputHandling(const bool bNativeHandling)
 {
 	bNativeInputHandling = bNativeHandling;
 }
 
-void FUMInputPreProcessor::SimulateKeyPress(
+void FVimInputProcessor::SimulateKeyPress(
 	FSlateApplication& SlateApp, const FKey& SimulatedKey,
 	const FModifierKeysState& ModifierKeys)
 {
@@ -481,7 +446,50 @@ void FUMInputPreProcessor::SimulateKeyPress(
 	SlateApp.ProcessKeyUpEvent(SimulatedEvent);
 }
 
-void FUMInputPreProcessor::DebugInvalidWeakPtr(EUMKeyBindingCallbackType CallbackType)
+void FVimInputProcessor::CheckIfShouldCreateBufferVisualizer(
+	FSlateApplication& SlateApp, const FKey& InKey)
+{
+	// if leader key is pressed (i.e. SpaceBar), show the buffer visualizer
+	if (InKey == EKeys::SpaceBar && CurrentBuffer.IsEmpty())
+	{
+		CurrentBuffer = ""; // Start a new buffer
+		if (!BufferVisualizer.IsValid())
+		{
+			TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
+			if (ActiveWindow.IsValid())
+			{
+				TSharedPtr<SUMBufferVisualizer> NewVisualizer =
+					SNew(SUMBufferVisualizer);
+				ActiveWindow->AddOverlaySlot()
+					[NewVisualizer.ToSharedRef()];
+				// Set visualizer to ignore mouse input; constructor won't suffice
+				NewVisualizer->SetVisibility(EVisibility::HitTestInvisible);
+				BufferVisualizer = NewVisualizer; // Store as weak pointer
+			}
+		}
+	}
+}
+
+void FVimInputProcessor::UpdateBufferAndVisualizer(const FKey& InKey)
+{
+	// if it's empty; we just want to start the prefix with the pure name
+	if (CurrentBuffer.IsEmpty())
+	{
+		CurrentBuffer = InKey.GetDisplayName().ToString();
+	}
+	else // if it's not empty; also append "+" to have a nice visualization
+	{
+		CurrentBuffer += " + " + InKey.GetDisplayName().ToString();
+	}
+
+	// if the Buffer Slate Widget is still valid; update it to the latest buffer
+	if (const TSharedPtr<SUMBufferVisualizer> PinBufVis = BufferVisualizer.Pin())
+	{
+		PinBufVis->UpdateBuffer(CurrentBuffer);
+	}
+}
+
+void FVimInputProcessor::DebugInvalidWeakPtr(EUMKeyBindingCallbackType CallbackType)
 {
 	FString Log = "Invalid";
 
@@ -504,7 +512,7 @@ void FUMInputPreProcessor::DebugInvalidWeakPtr(EUMKeyBindingCallbackType Callbac
 	Logger.Print(Log, ELogVerbosity::Error, true);
 }
 
-void FUMInputPreProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
+void FVimInputProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
 {
 	FString EventPath = "NONE";
 	if (InKeyEvent.GetEventPath())

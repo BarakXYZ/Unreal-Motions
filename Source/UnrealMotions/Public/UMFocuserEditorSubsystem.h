@@ -3,7 +3,7 @@
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/SWidget.h"
-#include "UMInputPreProcessor.h"
+#include "VimInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "EditorSubsystem.h"
 #include "UMFocuserEditorSubsystem.generated.h"

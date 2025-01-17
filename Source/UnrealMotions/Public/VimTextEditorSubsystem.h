@@ -1,11 +1,11 @@
 #pragma once
 
 #include "UMLogger.h"
-#include "UMInputPreProcessor.h"
 #include "EditorSubsystem.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/SMultiLineEditableText.h"
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
+#include "VimInputProcessor.h"
 #include "VimTextEditorSubsystem.generated.h"
 
 enum class EUMEditableWidgetsFocusState : uint8
@@ -64,10 +64,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool IsNewEditableText(const TSharedRef<SWidget> NewEditableText);
 	bool IsDefaultEditableBuffer(const FString& InBuffer);
 
-	FUMLogger					   Logger;
-	TWeakPtr<FUMInputPreProcessor> InputPP;
-	EVimMode					   CurrentVimMode{ EVimMode::Insert };
-	EVimMode					   PreviousVimMode{ EVimMode::Insert };
+	FUMLogger Logger;
+	EVimMode  CurrentVimMode{ EVimMode::Insert };
+	EVimMode  PreviousVimMode{ EVimMode::Insert };
 
 	TWeakPtr<SWidget>					ActiveEditableGeneric{ nullptr };
 	TWeakPtr<SEditableText>				ActiveEditableText{ nullptr };

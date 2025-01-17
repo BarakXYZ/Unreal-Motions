@@ -45,23 +45,23 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FOnRequestVimModeChange, FSlateApplication&
  */
 DECLARE_MULTICAST_DELEGATE(FUMOnMouseButtonUp);
 
-class FUMInputPreProcessor : public IInputProcessor
+class FVimInputProcessor : public IInputProcessor
 {
 public:
 	/**
 	 * Constructor for the input preprocessor
 	 * @note Registers default key bindings through OnUMPreProcessorInputInit delegate
 	 */
-	FUMInputPreProcessor();
+	FVimInputProcessor();
 
 	/** Destructor */
-	~FUMInputPreProcessor();
+	~FVimInputProcessor();
 
 	/**
 	 * Returns the singleton instance of the input preprocessor
 	 * @return Shared reference to the input preprocessor instance.
 	 */
-	static TSharedRef<FUMInputPreProcessor> Get();
+	static TSharedRef<FVimInputProcessor> Get();
 
 	/**
 	 * Overridden tick function from IInputProcessor
@@ -460,6 +460,12 @@ public:
 		const FModifierKeysState& ModifierKeys = FModifierKeysState());
 
 	void TestLinearInput(FSlateApplication& SlateApp);
+
+	// Buffer Visualizer:
+	void CheckIfShouldCreateBufferVisualizer(
+		FSlateApplication& SlateApp, const FKey& InKey);
+
+	void UpdateBufferAndVisualizer(const FKey& InKey);
 
 	//
 	/////////////////////////////////////////////////////////////////////////

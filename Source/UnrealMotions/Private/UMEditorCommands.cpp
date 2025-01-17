@@ -1,6 +1,6 @@
 #include "UMEditorCommands.h"
 #include "Framework/Notifications/NotificationManager.h"
-#include "UMInputPreProcessor.h"
+#include "VimInputProcessor.h"
 #include "UMFocuserEditorSubsystem.h"
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
@@ -47,7 +47,7 @@ void FUMEditorCommands::ToggleAllowNotifications()
 void FUMEditorCommands::Undo(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	FUMInputPreProcessor::SimulateKeyPress(SlateApp,
+	FVimInputProcessor::SimulateKeyPress(SlateApp,
 		FKey(EKeys::Z),
 		FModifierKeysState(
 			false, false,
@@ -251,12 +251,12 @@ void FUMEditorCommands::DeleteItem(
 {
 	// TODO: Delegate to switch Vim mode to Normal
 
-	FUMInputPreProcessor::OnRequestVimModeChange.Broadcast(SlateApp, EVimMode::Normal);
+	FVimInputProcessor::OnRequestVimModeChange.Broadcast(SlateApp, EVimMode::Normal);
 	FKeyEvent DeleteEvent(
 		FKey(EKeys::Delete),
 		FModifierKeysState(),
 		0, 0, 0, 0);
-	FUMInputPreProcessor::ToggleNativeInputHandling(true);
+	FVimInputProcessor::ToggleNativeInputHandling(true);
 	SlateApp.ProcessKeyDownEvent(DeleteEvent); // Will just block the entire process until the delete window is handled, thus not really helping.
 }
 

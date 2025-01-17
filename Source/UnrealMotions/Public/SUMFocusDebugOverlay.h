@@ -6,7 +6,7 @@
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
-#include "UMInputPreProcessor.h"
+#include "VimInputProcessor.h"
 
 DECLARE_MULTICAST_DELEGATE_OneParam(
 	FUMOnOutlineOverlayVisibilityChanged, bool /* bIsVisible */)

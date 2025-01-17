@@ -1,7 +1,6 @@
 #include "VimEditorSubsystem.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
-#include "UMInputPreProcessor.h"
 #include "ISceneOutlinerTreeItem.h"
 #include "Input/Events.h"
 #include "UMSlateHelpers.h"
@@ -10,6 +9,7 @@
 #include "UMEditorCommands.h"
 #include "UMConfig.h"
 #include "LevelEditorActions.h"
+#include "VimInputProcessor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All);
 
@@ -29,7 +29,7 @@ void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 		// Register our custom Input PreProcessor to handle input
 		FSlateApplication::Get().RegisterInputPreProcessor(
-			FUMInputPreProcessor::Get());
+			FVimInputProcessor::Get());
 	});
 
 	Super::Initialize(Collection);
@@ -85,7 +85,7 @@ void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 			// Logger.Print("Vim Mode Changed: Normal Mode", ELogVerbosity::Verbose, true);
 			if (PreviousVimMode == EVimMode::Visual
 				&& FUMSlateHelpers::IsVisualTextSelected(SlateApp))
-				FUMInputPreProcessor::SimulateKeyPress(SlateApp, EKeys::Escape);
+				FVimInputProcessor::SimulateKeyPress(SlateApp, EKeys::Escape);
 
 			UMGenericAppMessageHandler->ToggleBlockAllCharInput(true);
 			FUMSlateHelpers::UpdateTreeViewSelectionOnExitVisualMode(
@@ -170,7 +170,7 @@ void UVimEditorSubsystem::HandleArrowKeysNavigationToFirstOrLastItem(
 {
 	static const int32 TIMES_TO_NAVIGATE{ 50 };
 	const FKeyEvent	   NavKeyEvent =
-		FUMInputPreProcessor::GetKeyEventFromKey(InKeyEvent.IsShiftDown()
+		FVimInputProcessor::GetKeyEventFromKey(InKeyEvent.IsShiftDown()
 				? EKeys::J
 				: EKeys::K,
 			InKeyEvent.IsShiftDown());
@@ -258,7 +258,7 @@ void UVimEditorSubsystem::HandleTreeViewVisualModeFirstOrLastItemNavigation(
 	for (int32 i{ 0 }; i < TimesToNavigate; ++i)
 	{
 		ProcessVimNavigationInput(SlateApp,
-			FUMInputPreProcessor::GetKeyEventFromKey(
+			FVimInputProcessor::GetKeyEventFromKey(
 				NavKeyDirection,
 				true));
 	}
@@ -285,7 +285,7 @@ void UVimEditorSubsystem::HandleArrowKeysNavigation(
 
 	for (int32 i{ 0 }; i < Count; ++i)
 	{
-		FUMInputPreProcessor::ToggleNativeInputHandling(true);
+		FVimInputProcessor::ToggleNativeInputHandling(true);
 		SlateApp.ProcessKeyDownEvent(OutKeyEvent);
 		SlateApp.ProcessKeyUpEvent(OutKeyEvent);
 	}
@@ -372,7 +372,7 @@ void UVimEditorSubsystem::ScrollHalfPage(
 		NavDirection = FKey(bScrollDown ? EKeys::J : EKeys::K);
 
 	const FKeyEvent KeyEvent =
-		FUMInputPreProcessor::GetKeyEventFromKey(NavDirection,
+		FVimInputProcessor::GetKeyEventFromKey(NavDirection,
 			CurrentVimMode == EVimMode::Visual);
 
 	for (int32 i{ 0 }; i < SCROLL_NUM; ++i)
@@ -383,10 +383,10 @@ void UVimEditorSubsystem::BindCommands()
 {
 	using VimSub = UVimEditorSubsystem;
 
-	TSharedRef<FUMInputPreProcessor> Input = FUMInputPreProcessor::Get();
+	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
 	VimSubWeak = this;
 
-	// Listeners
+	// Input PreProcessor Listeners
 	Input->OnResetSequence.AddUObject(
 		this, &VimSub::OnResetSequence);
 
@@ -396,9 +396,9 @@ void UVimEditorSubsystem::BindCommands()
 	Input->OnVimModeChanged.AddUObject(
 		this, &VimSub::OnVimModeChanged);
 
-	// ~ Commands ~ //
+	//////////////////////////////////////////////////////////////////////////
+	//							~ Commands ~ //
 	//
-
 	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::W },
 		&FUMEditorCommands::OpenWidgetReflector);
@@ -545,7 +545,7 @@ void UVimEditorSubsystem::BindCommands()
 		[this]() {
 			FSlateApplication& SlateApp = FSlateApplication::Get();
 			bSyntheticInsertToggle = true;
-			FUMInputPreProcessor::Get()->OnRequestVimModeChange.Broadcast(
+			FVimInputProcessor::Get()->OnRequestVimModeChange.Broadcast(
 				SlateApp, EVimMode::Insert);
 			FLevelEditorActionCallbacks::CreateBlankBlueprintClass();
 		});

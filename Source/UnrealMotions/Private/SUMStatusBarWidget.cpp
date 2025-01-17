@@ -33,7 +33,7 @@ void SUMStatusBarWidget::Construct(const FArguments& InArgs)
 										.Text(this, &SUMStatusBarWidget::GetStatusBarText)]]];
 
 	// Update the icon when the on vim mode changed.
-	FUMInputPreProcessor::Get()->RegisterOnVimModeChanged(
+	FVimInputProcessor::Get()->RegisterOnVimModeChanged(
 		[this](const EVimMode CurrentVimMode) {
 			UpdateStatusBar(CurrentVimMode);
 		});
@@ -41,7 +41,7 @@ void SUMStatusBarWidget::Construct(const FArguments& InArgs)
 
 SUMStatusBarWidget::~SUMStatusBarWidget()
 {
-	FUMInputPreProcessor::Get()->UnregisterOnVimModeChanged(this);
+	FVimInputProcessor::Get()->UnregisterOnVimModeChanged(this);
 }
 
 void SUMStatusBarWidget::UpdateStatusBar(const EVimMode CurrentVimMode)

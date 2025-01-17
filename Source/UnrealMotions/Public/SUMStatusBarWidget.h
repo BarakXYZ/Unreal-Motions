@@ -4,7 +4,7 @@
 #include "Framework/SlateDelegates.h"
 #include "Templates/SharedPointer.h"
 #include "Widgets/SCompoundWidget.h"
-#include "UMInputPreProcessor.h"
+#include "VimInputProcessor.h"
 
 /**
  * Structure holding information about a specific Vim mode

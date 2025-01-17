@@ -3,7 +3,7 @@
 #include "Types/SlateEnums.h"
 #include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
-#include "UMInputPreProcessor.h"
+#include "VimInputProcessor.h"
 #include "Widgets/Docking/SDockTab.h"
 
 DEFINE_LOG_CATEGORY(LogUMEditorNavigation);
@@ -53,7 +53,7 @@ void FUMEditorNavigation::NavigatePanelTabs(
 			// For some reason the Editor Viewport wants arrows *~* try to mitigate
 			if (ActiveMinorTab->GetLayoutIdentifier().ToString().Equals("LevelEditorViewport"))
 			{
-				FUMInputPreProcessor::SimulateKeyPress(SlateApp, ArrowKey);
+				FVimInputProcessor::SimulateKeyPress(SlateApp, ArrowKey);
 			}
 			else // Others does not want arrows! *~* wtf
 			{

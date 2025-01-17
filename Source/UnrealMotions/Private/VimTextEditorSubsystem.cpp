@@ -17,7 +17,6 @@ void UVimTextEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Logger.SetLogCategory(&LogVimTextEditorSubsystem);
 
-	InputPP = FUMInputPreProcessor::Get().ToWeakPtr();
 	BindCommands();
 	Super::Initialize(Collection);
 
@@ -33,11 +32,9 @@ void UVimTextEditorSubsystem::Deinitialize()
 void UVimTextEditorSubsystem::BindCommands()
 {
 	using VimTextSub = UVimTextEditorSubsystem;
-	if (TSharedPtr<FUMInputPreProcessor> Input = InputPP.Pin())
-	{
-		Input->OnVimModeChanged.AddUObject(
-			this, &VimTextSub::OnVimModeChanged);
-	}
+	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
+	Input->OnVimModeChanged.AddUObject(
+		this, &VimTextSub::OnVimModeChanged);
 }
 
 void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
@@ -329,7 +326,7 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 							false, false, false, false, false, false, false);
 
 						// Default: try to select to the left.
-						FUMInputPreProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeys);
+						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeys);
 
 						// If not text selected: Select to the right.
 						// We're deducing our location by checking if any text
@@ -338,7 +335,7 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 						// simply simulate to the right to select the first char.
 						if (!EditTextBox->AnyTextSelected())
 						{
-							FUMInputPreProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeys);
+							FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeys);
 						}
 					},
 					0.025f, false);

@@ -4,7 +4,6 @@
 #include "Framework/Commands/InputBindingManager.h"
 #include "ISceneOutlinerTreeItem.h"
 #include "UMLogger.h"
-#include "UMInputPreProcessor.h"
 #include "UMGenericAppMessageHandler.h"
 #include "Framework/Application/SlateApplication.h"
 #include "EditorSubsystem.h"

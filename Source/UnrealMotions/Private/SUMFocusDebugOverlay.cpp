@@ -1,5 +1,4 @@
 #include "SUMFocusDebugOverlay.h"
-#include "UMInputPreProcessor.h"
 #include "UMLogger.h"
 
 FUMOnOutlineOverlayVisibilityChanged SUMFocusDebugOverlay::OnOutlineOverlayVisibilityChanged;
@@ -12,7 +11,7 @@ void SUMFocusDebugOverlay::Construct(const FArguments& InArgs)
 
 	// If user provided a default visibility, set it, otherwise “HitTestInvisible”
 	const EVisibility DefaultVis =
-		(FUMInputPreProcessor::VimMode == EVimMode::Insert)
+		(FVimInputProcessor::VimMode == EVimMode::Insert)
 		? EVisibility::Hidden
 		: EVisibility::HitTestInvisible;
 
@@ -26,7 +25,7 @@ void SUMFocusDebugOverlay::Construct(const FArguments& InArgs)
 		this, &SUMFocusDebugOverlay::HandleOnVisibilityChanged);
 
 	// Refactor to listen from Vim Subsystem
-	FUMInputPreProcessor::Get()->OnVimModeChanged.AddRaw(
+	FVimInputProcessor::Get()->OnVimModeChanged.AddRaw(
 		this, &SUMFocusDebugOverlay::HandleOnVimModeChanged);
 
 	// No child content, purely a custom paint widget.
