@@ -84,7 +84,5 @@ public:
 
 	static void OpenLevelBlueprint();
 
-	static void DockCurrentTabInRootWindow();
-
 	static FUMLogger Logger;
 };

@@ -143,6 +143,11 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 
 	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
 
+	void MoveTabToWindow(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void BindVimCommands();
+
 public:
 	/**
 	 * Mentioned in editor preferences as "System-wide" category

@@ -1,6 +1,7 @@
 #include "UMSlateHelpers.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Layout/ChildrenBase.h"
+#include "LevelEditor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Input/SEditableText.h"
 
@@ -441,4 +442,38 @@ FVector2f FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(
 	// Adjust the position to stay within the bounds
 	// return AbsoluteTopRight - FVector2D(Adjustment, Adjustment);
 	return AbsoluteTopRight - Offset;
+}
+
+TSharedPtr<FTabManager> FUMSlateHelpers::GetLevelEditorTabManager()
+{
+	FLevelEditorModule& LevelEditorModule =
+		FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
+
+	if (const TSharedPtr<ILevelEditor> LevelEditorPtr =
+			LevelEditorModule.GetLevelEditorInstance().Pin())
+	{
+		// Get the Tab Manager of the Level Editor
+		if (const TSharedPtr<FTabManager> LevelEditorTabManager =
+				LevelEditorPtr->GetTabManager())
+		{
+			return LevelEditorTabManager;
+		}
+	}
+	return nullptr;
+}
+
+TSharedPtr<SWidget> FUMSlateHelpers::GetTabWellForTabManager(
+	const TSharedRef<FTabManager> InTabManager)
+{
+	// We need the Owner Tab to access the TabWell parent
+	if (const TSharedPtr<SDockTab> LevelEditorTab =
+			InTabManager->GetOwnerTab())
+	{
+		if (const TSharedPtr<SWidget> LevelEditorTabWell =
+				LevelEditorTab->GetParentWidget())
+		{
+			return LevelEditorTabWell;
+		}
+	}
+	return nullptr;
 }

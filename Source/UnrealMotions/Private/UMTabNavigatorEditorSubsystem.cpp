@@ -9,6 +9,8 @@
 #include "UMLogger.h"
 #include "UMSlateHelpers.h"
 #include "UMConfig.h"
+#include "VimInputProcessor.h"
+#include "UMInputHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigatorEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigatorEditorSubsystem, Log, All); // Dev
@@ -17,7 +19,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogUMTabNavigatorEditorSubsystem, Log, All); // Dev
 
 bool UUMTabNavigatorEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
-	return FUMConfig::Get()->IsTabNavigatorEnabled();
+	TSharedRef<FUMConfig> Config = FUMConfig::Get();
+	// if Vim is enabled, TabNavigator must also be enabled.
+	return Config->IsTabNavigatorEnabled() || Config->IsVimEnabled();
 }
 
 void UUMTabNavigatorEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -45,6 +49,9 @@ void UUMTabNavigatorEditorSubsystem::Initialize(FSubsystemCollectionBase& Collec
 	// Register Next & Previous Tab Navigation
 	RegisterCycleTabNavigation(MainFrameContext);
 	MapCycleTabsNavigation(CommandList);
+
+	if (FUMConfig::Get()->IsVimEnabled())
+		BindVimCommands();
 
 	Super::Initialize(Collection);
 }
@@ -330,6 +337,136 @@ void UUMTabNavigatorEditorSubsystem::DebugTab(
 			 "  Layout ID: %s\n"
 			 "  Is Toolkit: %s"),
 		*DelegateType, *Name, *VisualRole, *RegularRole, Id, *LayoutId, bIsToolkit ? TEXT("true") : TEXT("false"));
+}
+
+// Vim Related Functions:
+
+void UUMTabNavigatorEditorSubsystem::MoveTabToWindow(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// Get our target (currently focused) tab.
+	TSharedPtr<SDockTab> ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
+	if (!ActiveMajorTab.IsValid())
+		return;
+
+	// Get the SWindow (to get the Native Window)
+	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
+	if (!ActiveWindow.IsValid())
+		return;
+
+	// We will need the Native Window as a parameter for the MouseDown Simulation
+	TSharedPtr<FGenericWindow> GenericActiveWindow = ActiveWindow->GetNativeWindow();
+	if (!GenericActiveWindow.IsValid())
+		return;
+
+	// Fetch the Level Editor TabWell
+	const TSharedPtr<FTabManager> LevelEditorTabManager =
+		FUMSlateHelpers::GetLevelEditorTabManager();
+	if (!LevelEditorTabManager.IsValid())
+		return;
+
+	const TSharedPtr<SWidget> LevelEditorTabWell =
+		FUMSlateHelpers::GetTabWellForTabManager(LevelEditorTabManager.ToSharedRef());
+	if (!LevelEditorTabWell.IsValid())
+		return;
+
+	// Store the origin position so we can restore it at the end
+	const FVector2f MouseOriginPos = SlateApp.GetCursorPos();
+	// Hide the mouse cursor to reduce flickering (not very important - but nice)
+	SlateApp.GetPlatformApplication()->Cursor->Show(false);
+
+	// Position the mouse over the target (current) tab and simulate a Mouse Press
+	FVector2f MajorTabCenterPos =
+		FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(
+			ActiveMajorTab.ToSharedRef());
+
+	// Move to the center of the tab we want to drag and store current position
+	SlateApp.SetCursorPos(FVector2d(MajorTabCenterPos));
+	const FVector2f MouseTargetTabPos = SlateApp.GetCursorPos(); // Current Pos
+
+	FPointerEvent MousePressEvent(
+		0,
+		0,
+		MouseTargetTabPos,
+		MouseTargetTabPos,
+		TSet<FKey>({ EKeys::LeftMouseButton }),
+		EKeys::LeftMouseButton,
+		0,
+		FModifierKeysState());
+
+	// Simulate Press
+	SlateApp.ProcessMouseButtonDownEvent(GenericActiveWindow, MousePressEvent);
+
+	// Now we want to simulate the move event (to simulate dragging)
+	// Our position hasn't changed so we can continue to use the MouseTargetTabPos
+
+	// Dragging horizontally by 10 units just to trigger the drag at all.
+	FVector2f EndPosition = MouseTargetTabPos + FVector2f(10.0f, 0.0f);
+
+	FPointerEvent MouseMoveEvent(
+		0,									  // PointerIndex
+		EndPosition,						  // ScreenSpacePosition (Goto)
+		MouseTargetTabPos,					  // LastScreenSpacePosition (Prev)
+		TSet<FKey>{ EKeys::LeftMouseButton }, // Currently pressed buttons
+		EKeys::Invalid,						  // No new button pressed
+		0.0f,								  // WheelDelta
+		FModifierKeysState()				  // ModifierKeys
+	);
+
+	// Simulate Move (drag)
+	SlateApp.ProcessMouseMoveEvent(MouseMoveEvent);
+
+	// Now we want to drag our tab to the new TabWell and append it to the end
+	const FVector2f TabWellTargetPosition =
+		FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(
+			LevelEditorTabWell.ToSharedRef());
+
+	// We need a slight delay to let the drag adjust...
+	// This seems to be important; else it won't catch up and break.
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+
+	FTimerHandle TimerHandle_MoveMouseToTabWell;
+	TimerManager->SetTimer(
+		TimerHandle_MoveMouseToTabWell,
+		[&SlateApp, TabWellTargetPosition]() {
+			SlateApp.SetCursorPos(FVector2D(TabWellTargetPosition));
+		},
+		0.025f,
+		false);
+
+	// Release the tab in the new TabWell
+	FTimerHandle   TimerHandle_ReleaseMouseButton;
+	FTimerDelegate Delegate_ReleaseMouseButton;
+	Delegate_ReleaseMouseButton.BindStatic(
+		&FUMInputHelpers::ReleaseMouseButtonAtCurrentPos, EKeys::LeftMouseButton);
+
+	TimerManager->SetTimer(
+		TimerHandle_ReleaseMouseButton,
+		Delegate_ReleaseMouseButton,
+		0.05f,
+		false);
+
+	// Restore the original position of the cursor to where it was pre-shenanigans
+	FTimerHandle TimerHandle_MoveMouseToOrigin;
+	TimerManager->SetTimer(
+		TimerHandle_MoveMouseToOrigin,
+		[&SlateApp, MouseOriginPos]() {
+			SlateApp.SetCursorPos(FVector2D(MouseOriginPos));
+			SlateApp.GetPlatformApplication()->Cursor->Show(true); // Reveal <3
+		},
+		0.06f,
+		false);
+}
+
+void UUMTabNavigatorEditorSubsystem::BindVimCommands()
+{
+	TSharedRef<FVimInputProcessor> VimInputProcessor = FVimInputProcessor::Get();
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		// { EKeys::SpaceBar, EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
+		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
+		MakeWeakObjectPtr(this),
+		&UUMTabNavigatorEditorSubsystem::MoveTabToWindow);
 }
 
 void UUMTabNavigatorEditorSubsystem::RegisterCycleTabNavigation(

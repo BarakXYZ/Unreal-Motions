@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Framework/Docking/TabManager.h"
 #include "ISceneOutlinerTreeItem.h"
 #include "Widgets/Views/STreeView.h"
 #include "Widgets/SWidget.h"
@@ -117,6 +118,11 @@ public:
 	static FVector2f GetWidgetTopRightScreenSpacePosition(
 		const TSharedRef<SWidget> InWidget,
 		const FVector2f			  Offset = FVector2f(20.0f, -20.0f));
+
+	static TSharedPtr<FTabManager> GetLevelEditorTabManager();
+
+	static TSharedPtr<SWidget> GetTabWellForTabManager(
+		const TSharedRef<FTabManager> InTabManager);
 
 	static FUMLogger Logger;
 };

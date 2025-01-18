@@ -561,11 +561,6 @@ void UVimEditorSubsystem::BindCommands()
 		&FLevelEditorActionCallbacks::OpenLevel);
 
 	Input->AddKeyBinding_NoParam(
-		// { EKeys::SpaceBar, EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
-		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
-		&FUMEditorCommands::DockCurrentTabInRootWindow);
-
-	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::T, EKeys::G, EKeys::L },
 		&FUMLogger::ToggleGlobalLogging);
 
