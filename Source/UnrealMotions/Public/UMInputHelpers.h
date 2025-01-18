@@ -83,6 +83,9 @@ public:
 	static bool GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
 		int32 MinClamp = 0, int32 MaxClamp = 0);
 
+	static bool GetDigitFromKey(const FKey& InKey, int32& OutDigit,
+		int32 MinClamp = 0, int32 MaxClamp = 0);
+
 	/**
 	 * Creates an FInputChord from a key event, capturing modifier key states
 	 * @param InKeyEvent - The key event to convert

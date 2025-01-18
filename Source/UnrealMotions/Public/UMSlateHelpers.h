@@ -124,5 +124,7 @@ public:
 	static TSharedPtr<SWidget> GetTabWellForTabManager(
 		const TSharedRef<FTabManager> InTabManager);
 
+	static TSharedPtr<FGenericWindow> GetGenericActiveTopLevelWindow();
+
 	static FUMLogger Logger;
 };

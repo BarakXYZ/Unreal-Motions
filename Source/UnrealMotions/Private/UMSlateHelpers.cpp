@@ -477,3 +477,17 @@ TSharedPtr<SWidget> FUMSlateHelpers::GetTabWellForTabManager(
 	}
 	return nullptr;
 }
+
+TSharedPtr<FGenericWindow> FUMSlateHelpers::GetGenericActiveTopLevelWindow()
+{
+	if (const TSharedPtr<SWindow> ActiveWindow =
+			FSlateApplication::Get().GetActiveTopLevelWindow())
+	{
+		if (const TSharedPtr<FGenericWindow> GenericActiveWindow =
+				ActiveWindow->GetNativeWindow())
+		{
+			return GenericActiveWindow;
+		}
+	}
+	return nullptr;
+}

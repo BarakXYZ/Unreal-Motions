@@ -349,26 +349,64 @@ void UUMTabNavigatorEditorSubsystem::MoveTabToWindow(
 	if (!ActiveMajorTab.IsValid())
 		return;
 
-	// Get the SWindow (to get the Native Window)
-	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
-	if (!ActiveWindow.IsValid())
-		return;
-
 	// We will need the Native Window as a parameter for the MouseDown Simulation
-	TSharedPtr<FGenericWindow> GenericActiveWindow = ActiveWindow->GetNativeWindow();
+	TSharedPtr<FGenericWindow> GenericActiveWindow =
+		FUMSlateHelpers::GetGenericActiveTopLevelWindow();
 	if (!GenericActiveWindow.IsValid())
 		return;
 
-	// Fetch the Level Editor TabWell
-	const TSharedPtr<FTabManager> LevelEditorTabManager =
-		FUMSlateHelpers::GetLevelEditorTabManager();
-	if (!LevelEditorTabManager.IsValid())
-		return;
+	TSharedPtr<SWidget> TargetTabWell;
 
-	const TSharedPtr<SWidget> LevelEditorTabWell =
-		FUMSlateHelpers::GetTabWellForTabManager(LevelEditorTabManager.ToSharedRef());
-	if (!LevelEditorTabWell.IsValid())
-		return;
+	const FKey InKey = InKeyEvent.GetKey();
+	if (InKey == EKeys::Zero)
+	{
+		// Fetch the Level Editor TabWell
+		const TSharedPtr<FTabManager> LevelEditorTabManager =
+			FUMSlateHelpers::GetLevelEditorTabManager();
+		if (!LevelEditorTabManager.IsValid())
+			return;
+
+		TargetTabWell =
+			FUMSlateHelpers::GetTabWellForTabManager(LevelEditorTabManager.ToSharedRef());
+		if (!TargetTabWell.IsValid())
+			return;
+	}
+	else
+	{
+		TArray<TSharedRef<SWindow>> VisibleWindows;
+		SlateApp.GetAllVisibleWindowsOrdered(VisibleWindows);
+
+		TArray<TSharedRef<SWindow>> RegularVisibleWindows;
+		for (const auto& Win : VisibleWindows)
+		{
+			if (Win->IsRegularWindow())
+				RegularVisibleWindows.Add(Win);
+		}
+
+		if (RegularVisibleWindows.IsEmpty())
+			return;
+
+		int32 KeyAsDigit;
+		if (!FUMInputHelpers::GetDigitFromKey(InKey, KeyAsDigit)
+			// Check we have valid amount of windows to answer the input postfix
+			|| KeyAsDigit > RegularVisibleWindows.Num() - 1)
+			return;
+
+		const TSharedRef<SWindow> TargetWindow =
+			RegularVisibleWindows[(RegularVisibleWindows.Num() - 1) - KeyAsDigit];
+
+		// Get the first TabWell in the Target Window (Major Tab's TabWell)
+		TWeakPtr<SWidget> FoundTargetTabWell;
+		if (!FUMSlateHelpers::TraverseWidgetTree(
+				TargetWindow, FoundTargetTabWell, "SDockingTabWell"))
+			return;
+
+		if (const TSharedPtr<SWidget> PinFoundTargetTabWell =
+				FoundTargetTabWell.Pin())
+			TargetTabWell = PinFoundTargetTabWell;
+		else
+			return;
+	}
 
 	// Store the origin position so we can restore it at the end
 	const FVector2f MouseOriginPos = SlateApp.GetCursorPos();
@@ -419,7 +457,7 @@ void UUMTabNavigatorEditorSubsystem::MoveTabToWindow(
 	// Now we want to drag our tab to the new TabWell and append it to the end
 	const FVector2f TabWellTargetPosition =
 		FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(
-			LevelEditorTabWell.ToSharedRef());
+			TargetTabWell.ToSharedRef());
 
 	// We need a slight delay to let the drag adjust...
 	// This seems to be important; else it won't catch up and break.
@@ -465,6 +503,26 @@ void UUMTabNavigatorEditorSubsystem::BindVimCommands()
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		// { EKeys::SpaceBar, EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
+		MakeWeakObjectPtr(this),
+		&UUMTabNavigatorEditorSubsystem::MoveTabToWindow);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		{ EKeys::M, EKeys::T, EKeys::W, EKeys::One },
+		MakeWeakObjectPtr(this),
+		&UUMTabNavigatorEditorSubsystem::MoveTabToWindow);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Two },
+		MakeWeakObjectPtr(this),
+		&UUMTabNavigatorEditorSubsystem::MoveTabToWindow);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Three },
+		MakeWeakObjectPtr(this),
+		&UUMTabNavigatorEditorSubsystem::MoveTabToWindow);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Four },
 		MakeWeakObjectPtr(this),
 		&UUMTabNavigatorEditorSubsystem::MoveTabToWindow);
 }

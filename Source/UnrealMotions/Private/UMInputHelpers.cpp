@@ -341,45 +341,54 @@ void FUMInputHelpers::Enter(
 		EKeys::LeftMouseButton, true /* Double-Click */);
 }
 
-bool FUMInputHelpers::GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
+bool FUMInputHelpers::GetDigitFromKey(const FKey& InKey, int32& OutDigit,
 	int32 MinClamp, int32 MaxClamp)
 {
-	static const TMap<FKey, FString> KeyToStringDigits = {
-		{ EKeys::Zero, TEXT("0") },
-		{ EKeys::One, TEXT("1") },
-		{ EKeys::Two, TEXT("2") },
-		{ EKeys::Three, TEXT("3") },
-		{ EKeys::Four, TEXT("4") },
-		{ EKeys::Five, TEXT("5") },
-		{ EKeys::Six, TEXT("6") },
-		{ EKeys::Seven, TEXT("7") },
-		{ EKeys::Eight, TEXT("8") },
-		{ EKeys::Nine, TEXT("9") },
+	static const TMap<FKey, int32> KeyToDigit = {
+		{ EKeys::Zero, 0 },
+		{ EKeys::One, 1 },
+		{ EKeys::Two, 2 },
+		{ EKeys::Three, 3 },
+		{ EKeys::Four, 4 },
+		{ EKeys::Five, 5 },
+		{ EKeys::Six, 6 },
+		{ EKeys::Seven, 7 },
+		{ EKeys::Eight, 8 },
+		{ EKeys::Nine, 9 },
 	};
 
-	const FString* FoundStr = KeyToStringDigits.Find(InKey);
-	if (!FoundStr)
-	{
+	const int32* FoundDigit = KeyToDigit.Find(InKey);
+	if (!FoundDigit)
 		return false;
-	}
 
-	// Convert found string to number for clamping
-	int32 NumValue = FCString::Atoi(**FoundStr);
+	int32 Digit = *FoundDigit;
 
 	// Apply clamping if specified
 	if (MinClamp > 0 || MaxClamp > 0)
 	{
 		// If only min is specified, use the found number as max
-		const int32 EffectiveMax = (MaxClamp > 0) ? MaxClamp : NumValue;
+		const int32 EffectiveMax = (MaxClamp > 0) ? MaxClamp : Digit;
 		// If only max is specified, use 0 as min
 		const int32 EffectiveMin = (MinClamp > 0) ? MinClamp : 0;
 
-		NumValue = FMath::Clamp(NumValue, EffectiveMin, EffectiveMax);
+		OutDigit = FMath::Clamp(Digit, EffectiveMin, EffectiveMax);
 	}
+	else
+		OutDigit = Digit;
 
-	// Convert back to string
-	OutStr = FString::FromInt(NumValue);
 	return true;
+}
+
+bool FUMInputHelpers::GetStrDigitFromKey(const FKey& InKey, FString& OutStr,
+	int32 MinClamp, int32 MaxClamp)
+{
+	int32 Digit;
+	if (GetDigitFromKey(InKey, Digit, MinClamp, MaxClamp))
+	{
+		OutStr = FString::FromInt(Digit);
+		return true;
+	}
+	return false;
 }
 
 FInputChord FUMInputHelpers::GetChordFromKeyEvent(
