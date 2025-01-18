@@ -9,6 +9,10 @@
 class FUMSlateHelpers
 {
 public:
+	FUMSlateHelpers(const FUMSlateHelpers&) = default;
+	FUMSlateHelpers(FUMSlateHelpers&&) = default;
+	FUMSlateHelpers& operator=(const FUMSlateHelpers&) = default;
+	FUMSlateHelpers& operator=(FUMSlateHelpers&&) = default;
 	/**
 	 * Recursively searches a widget tree for a SDockingTabWell widget.
 	 * @param ParentWidget The root widget to start traversing from
@@ -106,6 +110,13 @@ public:
 	 * @param Window The window to activate
 	 */
 	static void ActivateWindow(const TSharedRef<SWindow> InWindow);
+
+	static FVector2f GetWidgetCenterScreenSpacePosition(
+		const TSharedRef<SWidget> InWidget);
+
+	static FVector2f GetWidgetTopRightScreenSpacePosition(
+		const TSharedRef<SWidget> InWidget,
+		const FVector2f			  Offset = FVector2f(20.0f, -20.0f));
 
 	static FUMLogger Logger;
 };

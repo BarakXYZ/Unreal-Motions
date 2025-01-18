@@ -1,11 +1,16 @@
 #include "UMEditorCommands.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "LevelEditor.h"
+#include "LevelEditorActions.h"
 #include "VimInputProcessor.h"
 #include "UMFocuserEditorSubsystem.h"
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
 #include "Editor.h"
 #include "UMInputHelpers.h"
+#include "Framework/Docking/TabManager.h"
+#include "TabDragDropOperation.h"
+#include "DragAndDrop/AssetDragDropOp.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, Log, All);
@@ -251,7 +256,7 @@ void FUMEditorCommands::DeleteItem(
 {
 	// TODO: Delegate to switch Vim mode to Normal
 
-	FVimInputProcessor::OnRequestVimModeChange.Broadcast(SlateApp, EVimMode::Normal);
+	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
 	FKeyEvent DeleteEvent(
 		FKey(EKeys::Delete),
 		FModifierKeysState(),
@@ -281,4 +286,153 @@ void FUMEditorCommands::NavigateNextPrevious(
 
 	FSlateApplication::Get().ProcessReply(CurrentPath, NavigationReply,
 		nullptr, nullptr);
+}
+
+void FUMEditorCommands::OpenLevelBlueprint()
+{
+	// Get the LevelEditor module
+	FLevelEditorModule& LevelEditorModule =
+		FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
+
+	TWeakPtr<ILevelEditor> LevelEditorInstance =
+		LevelEditorModule.GetLevelEditorInstance();
+
+	if (const TSharedPtr<ILevelEditor> LevelEditor = LevelEditorInstance.Pin())
+	{
+		LevelEditor->GetLevelEditorActions()->TryExecuteAction(
+			FLevelEditorCommands::Get().OpenLevelBlueprint.ToSharedRef());
+	}
+}
+
+void FUMEditorCommands::DockCurrentTabInRootWindow()
+{
+	// Get our target (currently focused) tab.
+	TSharedPtr<SDockTab> ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
+	if (!ActiveMajorTab.IsValid())
+		return;
+
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+
+	// Get the SWindow (to get the Native Window)
+	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
+	if (!ActiveWindow.IsValid())
+		return;
+
+	// We will need the Native Window as a parameter for the MouseDown Simulation
+	TSharedPtr<FGenericWindow> GenericActiveWindow = ActiveWindow->GetNativeWindow();
+	if (!GenericActiveWindow.IsValid())
+		return;
+
+	// Fetch the Level Editor TabWell
+	FLevelEditorModule& LevelEditorModule =
+		FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
+
+	TSharedPtr<ILevelEditor> LevelEditorPtr = LevelEditorModule.GetLevelEditorInstance().Pin();
+	if (!LevelEditorPtr.IsValid())
+		return;
+
+	// Get the Tab Manager of the Level Editor
+	TSharedPtr<FTabManager> LevelEditorTabManager =
+		LevelEditorPtr->GetTabManager();
+	if (!LevelEditorTabManager.IsValid())
+		return;
+
+	// We need the Owner Tab to access the TabWell parent
+	const TSharedPtr<SDockTab> LevelEditorTab =
+		LevelEditorTabManager->GetOwnerTab();
+	if (!LevelEditorTab.IsValid())
+		return;
+
+	// Finally get our targeted TabWell (where we will drag our tab to)
+	const TSharedPtr<SWidget> LevelEditorTabWell =
+		LevelEditorTab->GetParentWidget();
+	if (!LevelEditorTabWell.IsValid())
+		return;
+
+	// Store the origin position so we can restore it at the end
+	const FVector2f MouseOriginPos = SlateApp.GetCursorPos();
+	// Hide the mouse cursor to reduce flickering (not very important - but nice)
+	SlateApp.GetPlatformApplication()->Cursor->Show(false);
+
+	// Position the mouse over the target (current) tab and simulate a Mouse Press
+	FVector2f MajorTabCenterPos =
+		FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(
+			ActiveMajorTab.ToSharedRef());
+
+	// Move to the center of the tab we want to drag and store current position
+	SlateApp.SetCursorPos(FVector2d(MajorTabCenterPos));
+	const FVector2f MouseTargetTabPos = SlateApp.GetCursorPos(); // Current Pos
+
+	FPointerEvent MousePressEvent(
+		0,
+		0,
+		MouseTargetTabPos,
+		MouseTargetTabPos,
+		TSet<FKey>({ EKeys::LeftMouseButton }),
+		EKeys::LeftMouseButton,
+		0,
+		FModifierKeysState());
+
+	// Simulate Press
+	SlateApp.ProcessMouseButtonDownEvent(GenericActiveWindow, MousePressEvent);
+
+	// Now we want to simulate the move event (to simulate dragging)
+	// Our position hasn't changed so we can continue to use the MouseTargetTabPos
+
+	// Dragging horizontally by 10 units just to trigger the drag at all.
+	FVector2f EndPosition = MouseTargetTabPos + FVector2f(10.0f, 0.0f);
+
+	FPointerEvent MouseMoveEvent(
+		0,									  // PointerIndex
+		EndPosition,						  // ScreenSpacePosition (Goto)
+		MouseTargetTabPos,					  // LastScreenSpacePosition (Prev)
+		TSet<FKey>{ EKeys::LeftMouseButton }, // Currently pressed buttons
+		EKeys::Invalid,						  // No new button pressed
+		0.0f,								  // WheelDelta
+		FModifierKeysState()				  // ModifierKeys
+	);
+
+	// Simulate Move (drag)
+	SlateApp.ProcessMouseMoveEvent(MouseMoveEvent);
+
+	// Now we want to drag our tab to the new TabWell and append it to the end
+	const FVector2f TabWellTargetPosition =
+		FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(
+			LevelEditorTabWell.ToSharedRef());
+
+	// We need a slight delay to let the drag adjust...
+	// This seems to be important; else it won't catch up and break.
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+
+	FTimerHandle TimerHandle_MoveMouseToTabWell;
+	TimerManager->SetTimer(
+		TimerHandle_MoveMouseToTabWell,
+		[&SlateApp, TabWellTargetPosition]() {
+			SlateApp.SetCursorPos(FVector2D(TabWellTargetPosition));
+		},
+		0.025f,
+		false);
+
+	// Release the tab in the new TabWell
+	FTimerHandle   TimerHandle_ReleaseMouseButton;
+	FTimerDelegate Delegate_ReleaseMouseButton;
+	Delegate_ReleaseMouseButton.BindStatic(
+		&FUMInputHelpers::ReleaseMouseButtonAtCurrentPos, EKeys::LeftMouseButton);
+
+	TimerManager->SetTimer(
+		TimerHandle_ReleaseMouseButton,
+		Delegate_ReleaseMouseButton,
+		0.05f,
+		false);
+
+	// Restore the original position of the cursor to where it was pre-shenanigans
+	FTimerHandle TimerHandle_MoveMouseToOrigin;
+	TimerManager->SetTimer(
+		TimerHandle_MoveMouseToOrigin,
+		[&SlateApp, MouseOriginPos]() {
+			SlateApp.SetCursorPos(FVector2D(MouseOriginPos));
+			SlateApp.GetPlatformApplication()->Cursor->Show(true); // Reveal <3
+		},
+		0.06f,
+		false);
 }

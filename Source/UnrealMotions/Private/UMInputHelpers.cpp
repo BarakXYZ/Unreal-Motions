@@ -49,8 +49,8 @@ void FUMInputHelpers::SimulateClickOnWidget(
 	// Save the original cursor position that we will go back to after clicking
 	const FVector2D OriginalCursorPosition = SlateApp.GetCursorPos();
 
-	SlateApp.SetPlatformCursorVisibility(false); // Hides the micro mouse flicker
-	SlateApp.SetCursorPos(WidgetCenter);		 // Move to the widget's center
+	SlateApp.GetPlatformApplication()->Cursor->Show(false); // Hide micro flicker
+	SlateApp.SetCursorPos(WidgetCenter);					// Move to the widget's center
 
 	FPointerEvent MouseDownEvent( // Construct the click Pointer Event
 		0,						  // PointerIndex
@@ -74,7 +74,7 @@ void FUMInputHelpers::SimulateClickOnWidget(
 
 	// Move the cursor back to its original position & toggle visibility on
 	SlateApp.SetCursorPos(OriginalCursorPosition);
-	SlateApp.SetPlatformCursorVisibility(true);
+	SlateApp.GetPlatformApplication()->Cursor->Show(true); // Reveal
 }
 
 void FUMInputHelpers::SimulateRightClick(
@@ -393,4 +393,31 @@ FInputChord FUMInputHelpers::GetChordFromKeyEvent(
 		ModState.IsAltDown(),	  // bAlt
 		ModState.IsCommandDown()  // bCmd
 	);
+}
+
+void FUMInputHelpers::ReleaseMouseButtonAtCurrentPos(const FKey KeyToRelease)
+{
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+
+	const FVector2D CurrPos = SlateApp.GetCursorPos();
+	FPointerEvent	MouseUpEvent(
+		  0,				   // PointerIndex
+		  CurrPos,			   // ScreenSpacePosition
+		  CurrPos,			   // LastScreenSpacePosition
+		  TSet<FKey>(),		   // No buttons pressed now
+		  KeyToRelease,		   // EffectingButton (button being released)
+		  0.0f,				   // WheelDelta
+		  FModifierKeysState() // ModifierKeys
+	  );
+	SlateApp.ProcessMouseButtonUpEvent(MouseUpEvent);
+}
+
+void FUMInputHelpers::MoveMouseButtonToPosition(
+	FVector2D TargetPosition)
+{
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+
+	SlateApp.SetCursorPos(TargetPosition);
+
+	// Or move to with the pointer thingy?
 }

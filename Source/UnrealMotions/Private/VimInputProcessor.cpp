@@ -8,8 +8,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogUMInputPreProcessor, Log, All); // Dev
 
 EVimMode FVimInputProcessor::VimMode{ EVimMode::Insert };
 
-FOnRequestVimModeChange FVimInputProcessor::OnRequestVimModeChange;
-
 bool FVimInputProcessor::bNativeInputHandling{ false };
 
 FVimInputProcessor::FVimInputProcessor()
@@ -17,11 +15,6 @@ FVimInputProcessor::FVimInputProcessor()
 	Logger = FUMLogger(&LogUMInputPreProcessor);
 
 	RegisterDefaultKeyBindings();
-
-	OnRequestVimModeChange.AddLambda(
-		[this](FSlateApplication& SlateApp, const EVimMode NewMode) {
-			SetMode(SlateApp, NewMode);
-		});
 }
 FVimInputProcessor::~FVimInputProcessor()
 {
@@ -237,7 +230,9 @@ bool FVimInputProcessor::HandleKeyDownEvent(
 	if (InKey.IsModifierKey()) // Simply ignore
 		return true;		   // or false?
 
-	CheckIfShouldCreateBufferVisualizer(SlateApp, InKey);
+	// TODO: Add a small timer until actually showing the buffer
+	// and retrigger the timer upon keystrokes
+	CheckCreateBufferVisualizer(SlateApp, InKey);
 	UpdateBufferAndVisualizer(InKey);
 
 	return ProcessKeySequence(SlateApp, InKeyEvent);
@@ -280,7 +275,7 @@ bool FVimInputProcessor::ShouldSwitchVimMode(
 {
 	if (InKeyEvent.GetKey() == EKeys::Escape)
 	{
-		SetMode(SlateApp, EVimMode::Normal);
+		SetVimMode(SlateApp, EVimMode::Normal);
 		ResetSequence(SlateApp);
 		return true;
 	}
@@ -290,19 +285,34 @@ bool FVimInputProcessor::ShouldSwitchVimMode(
 
 bool FVimInputProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
+	Logger.Print("Mouse Button Down!", ELogVerbosity::Log, true);
 	// return false;
-	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	if (FocusedWidget.IsValid())
-	{
-		const FSlateWidgetClassData ClassData = FocusedWidget->GetWidgetClass();
-		const FName					WidgetType = ClassData.GetWidgetType();
-		FSlateAttributeDescriptor	AttDesc = ClassData.GetAttributeDescriptor();
-		// AttDesc.DefaultSortOrder();
-		FString WidgetName = FocusedWidget->ToString();
-		FString DebugStr = FString::Printf(TEXT("Widget Type: %s, Widget Name: %s"), *WidgetType.ToString(), *WidgetName);
+	// TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	// if (FocusedWidget.IsValid())
+	// {
+	// 	const FSlateWidgetClassData ClassData = FocusedWidget->GetWidgetClass();
+	// 	const FName					WidgetType = ClassData.GetWidgetType();
+	// 	FSlateAttributeDescriptor	AttDesc = ClassData.GetAttributeDescriptor();
+	// 	// AttDesc.DefaultSortOrder();
+	// 	FString WidgetName = FocusedWidget->ToString();
+	// 	FString DebugStr = FString::Printf(TEXT("Widget Type: %s, Widget Name: %s"), *WidgetType.ToString(), *WidgetName);
 
-		return false;
-	}
+	// 	return false;
+	// }
+	return false;
+}
+
+bool FVimInputProcessor::HandleMouseButtonUpEvent(
+	FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
+{
+	Logger.Print("Mouse Button Up!", ELogVerbosity::Log, true);
+	return false;
+}
+
+bool FVimInputProcessor::HandleMouseMoveEvent(
+	FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
+{
+	// Logger.Print("Mouse Button Move!", ELogVerbosity::Log, true);
 	return false;
 }
 
@@ -349,14 +359,14 @@ void FVimInputProcessor::SwitchVimModes(
 	const FKey& KeyPressed = InKeyEvent.GetKey();
 
 	if (KeyPressed == EKeys::Escape)
-		SetMode(SlateApp, EVimMode::Normal);
+		SetVimMode(SlateApp, EVimMode::Normal);
 
 	if (VimMode == EVimMode::Normal)
 	{
 		if (KeyPressed == EKeys::I)
-			SetMode(SlateApp, EVimMode::Insert);
+			SetVimMode(SlateApp, EVimMode::Insert);
 		if (KeyPressed == EKeys::V)
-			SetMode(SlateApp, EVimMode::Visual);
+			SetVimMode(SlateApp, EVimMode::Visual);
 	}
 }
 
@@ -374,7 +384,7 @@ bool FVimInputProcessor::IsSimulateEscapeKey(
 	return false;
 }
 
-void FVimInputProcessor::SetMode(FSlateApplication& SlateApp, const EVimMode NewMode)
+void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode)
 {
 	if (VimMode != NewMode)
 	{
@@ -446,11 +456,12 @@ void FVimInputProcessor::SimulateKeyPress(
 	SlateApp.ProcessKeyUpEvent(SimulatedEvent);
 }
 
-void FVimInputProcessor::CheckIfShouldCreateBufferVisualizer(
+void FVimInputProcessor::CheckCreateBufferVisualizer(
 	FSlateApplication& SlateApp, const FKey& InKey)
 {
-	// if leader key is pressed (i.e. SpaceBar), show the buffer visualizer
-	if (InKey == EKeys::SpaceBar && CurrentBuffer.IsEmpty())
+	// We probably want to show the buffer not only upon Leaderkey actually
+	// if (InKey == EKeys::SpaceBar && CurrentBuffer.IsEmpty())
+	if (CurrentBuffer.IsEmpty())
 	{
 		CurrentBuffer = ""; // Start a new buffer
 		if (!BufferVisualizer.IsValid())

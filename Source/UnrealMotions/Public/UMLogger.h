@@ -110,6 +110,8 @@ public:
 
 	static void SetPluginConfigFile();
 
+	static void ToggleGlobalLogging();
+
 	// Variables
 public:
 	FLogCategoryBase* LogCategory;

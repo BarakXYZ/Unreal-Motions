@@ -308,3 +308,8 @@ void FUMLogger::RemoveAllStringsFromScreen()
 		UE_LOG(LogTemp, Error, TEXT("Failed to access GEngine."));
 	}
 }
+
+void FUMLogger::ToggleGlobalLogging()
+{
+	bShouldLogGlobal = !bShouldLogGlobal;
+}

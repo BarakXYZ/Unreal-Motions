@@ -1,4 +1,5 @@
 #include "VimEditorSubsystem.h"
+#include "Editor/LevelEditor/Private/SLevelEditorToolBox.h"
 #include "Templates/SharedPointer.h"
 #include "Types/SlateEnums.h"
 #include "ISceneOutlinerTreeItem.h"
@@ -10,6 +11,7 @@
 #include "UMConfig.h"
 #include "LevelEditorActions.h"
 #include "VimInputProcessor.h"
+#include "LevelEditor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All);
 
@@ -335,6 +337,7 @@ bool UVimEditorSubsystem::IsTreeViewVertical(
 {
 	const static FName AssetTileView = "SAssetTileView";
 
+	// Logger.Print(ListView->GetTypeAsString(), ELogVerbosity::Log, true);
 	if (!ListView->GetType().IsEqual(AssetTileView))
 		return true;
 	return false;
@@ -543,12 +546,28 @@ void UVimEditorSubsystem::BindCommands()
 	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::N, EKeys::B },
 		[this]() {
-			FSlateApplication& SlateApp = FSlateApplication::Get();
 			bSyntheticInsertToggle = true;
-			FVimInputProcessor::Get()->OnRequestVimModeChange.Broadcast(
-				SlateApp, EVimMode::Insert);
+			FSlateApplication& SlateApp = FSlateApplication::Get();
+			FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Insert);
 			FLevelEditorActionCallbacks::CreateBlankBlueprintClass();
 		});
+
+	Input->AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::O, EKeys::L, EKeys::B },
+		&FUMEditorCommands::OpenLevelBlueprint);
+
+	Input->AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::O, FInputChord(EModifierKey::Shift, EKeys::L) },
+		&FLevelEditorActionCallbacks::OpenLevel);
+
+	Input->AddKeyBinding_NoParam(
+		// { EKeys::SpaceBar, EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
+		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
+		&FUMEditorCommands::DockCurrentTabInRootWindow);
+
+	Input->AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::T, EKeys::G, EKeys::L },
+		&FUMLogger::ToggleGlobalLogging);
 
 	//
 	/////////////////////////////////////////////////////////////////////////

@@ -412,3 +412,33 @@ void FUMSlateHelpers::ActivateWindow(const TSharedRef<SWindow> InWindow)
 	Logger.Print(FString::Printf(
 		TEXT("Activated Window: %s"), *InWindow->GetTitle().ToString()));
 }
+
+FVector2f FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(
+	const TSharedRef<SWidget> InWidget)
+{
+	const FGeometry& WidgetGeometry = InWidget->GetCachedGeometry();
+	// const FVector2D	 WidgetScreenPosition = WidgetGeometry.GetAbsolutePosition();
+	// const FVector2D	 WidgetSize = WidgetGeometry.GetLocalSize();
+	// return WidgetScreenPosition + (WidgetSize * 0.5f);
+
+	// Calculate the center in screen space
+	return WidgetGeometry.LocalToAbsolute(WidgetGeometry.GetLocalSize() * 0.5f);
+}
+
+FVector2f FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(
+	const TSharedRef<SWidget> InWidget,
+	const FVector2f			  Offset)
+{
+	// Get the cached geometry
+	const FGeometry& WidgetGeometry = InWidget->GetCachedGeometry();
+
+	// Calculate the local top-right position
+	FVector2f LocalTopRight = FVector2f(WidgetGeometry.GetLocalSize().X, 0.0f);
+
+	// Convert local position to absolute screen space
+	FVector2f AbsoluteTopRight = WidgetGeometry.LocalToAbsolute(LocalTopRight);
+
+	// Adjust the position to stay within the bounds
+	// return AbsoluteTopRight - FVector2D(Adjustment, Adjustment);
+	return AbsoluteTopRight - Offset;
+}

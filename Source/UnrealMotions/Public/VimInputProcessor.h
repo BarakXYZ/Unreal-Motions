@@ -34,11 +34,9 @@ DECLARE_MULTICAST_DELEGATE(FUMOnResetSequence);
 /**
  * Delegate that broadcasts when the Vim editing mode changes
  * @param EVimMode - The new mode being switched to (Normal, Insert, or Visual)
- * @note Called after mode changes through SetMode()
+ * @note Called after mode changes through SetVimMode()
  */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnVimModeChanged, const EVimMode);
-
-DECLARE_MULTICAST_DELEGATE_TwoParams(FOnRequestVimModeChange, FSlateApplication&, const EVimMode);
 
 /**
  * Used in Focus Manager for handling foregrounded tabs correctly.
@@ -100,7 +98,7 @@ public:
 	 * mode change delegate
 	 * @param NewMode - The new Vim mode to switch to (Normal, Insert, or Visual)
 	 */
-	void SetMode(FSlateApplication& SlateApp, const EVimMode NewMode);
+	void SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode);
 
 	/**
 	 * Determines if the current key event should trigger a Vim mode switch
@@ -462,7 +460,7 @@ public:
 	void TestLinearInput(FSlateApplication& SlateApp);
 
 	// Buffer Visualizer:
-	void CheckIfShouldCreateBufferVisualizer(
+	void CheckCreateBufferVisualizer(
 		FSlateApplication& SlateApp, const FKey& InKey);
 
 	void UpdateBufferAndVisualizer(const FKey& InKey);
@@ -479,6 +477,12 @@ private:
 	 * @return False to pass through mouse events
 	 */
 	virtual bool HandleMouseButtonDownEvent(
+		FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override;
+
+	virtual bool HandleMouseButtonUpEvent(
+		FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override;
+
+	virtual bool HandleMouseMoveEvent(
 		FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override;
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -503,11 +507,10 @@ private:
 
 public:
 	/** Event delegates */
-	FOnVimModeChanged			   OnVimModeChanged;
-	FUMOnCountPrefix			   OnCountPrefix;
-	FUMOnResetSequence			   OnResetSequence;
-	FUMOnMouseButtonUp			   OnMouseButtonUpAlertTabForeground;
-	static FOnRequestVimModeChange OnRequestVimModeChange;
+	FOnVimModeChanged  OnVimModeChanged;
+	FUMOnCountPrefix   OnCountPrefix;
+	FUMOnResetSequence OnResetSequence;
+	FUMOnMouseButtonUp OnMouseButtonUpAlertTabForeground;
 
 	/** Logging configuration */
 	EUMLogMethod UMHelpersLogMethod{ EUMLogMethod::PrintToScreen };

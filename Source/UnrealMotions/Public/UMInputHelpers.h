@@ -90,5 +90,10 @@ public:
 	 */
 	static FInputChord GetChordFromKeyEvent(const FKeyEvent& InKeyEvent);
 
+	static void ReleaseMouseButtonAtCurrentPos(
+		const FKey KeyToRelease = EKeys::LeftMouseButton);
+
+	static void MoveMouseButtonToPosition(const FVector2D TargetPosition);
+
 	static FUMLogger Logger;
 };

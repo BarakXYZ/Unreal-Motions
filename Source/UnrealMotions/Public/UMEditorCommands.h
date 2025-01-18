@@ -82,5 +82,9 @@ public:
 	static void NavigateNextPrevious(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	static void OpenLevelBlueprint();
+
+	static void DockCurrentTabInRootWindow();
+
 	static FUMLogger Logger;
 };
