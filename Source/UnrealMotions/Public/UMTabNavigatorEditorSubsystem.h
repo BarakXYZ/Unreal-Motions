@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Framework/Commands/InputBindingManager.h"
 #include "Framework/Docking/TabManager.h"
+#include "UMLogger.h"
 #include "EditorSubsystem.h"
 #include "UMTabNavigatorEditorSubsystem.generated.h"
 
@@ -115,12 +116,6 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 	 */
 	bool TryGetValidTargetTab(TSharedPtr<SDockTab>& OutTab, bool bIsMajorTab);
 
-	/**
-	 * Updates the currently tracked tab (major or minor).
-	 * @param NewTab The tab to set as current
-	 */
-	void SetCurrentTab(const TSharedRef<SDockTab> NewTab);
-
 	void LogTabChange(const FString& TabType,
 		const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab);
 
@@ -135,18 +130,27 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 	void DebugTab(const TSharedPtr<SDockTab>& Tab,
 		bool bDebugVisualTabRole, FString DelegateType);
 
-	/** DEPRECATED
-	 * Return the last active non-major tab. Can be a Panel Tab, a Nomad Tab, etc.
-	 * @param OutNonMajorTab Where we will store the found tab (if any).
-	 */
-	bool GetLastActiveNonMajorTab(TWeakPtr<SDockTab>& OutNonMajorTab);
+	/////////////////////////////////////////////////////////////////////////////
+	//							~ Vim Functions ~
+	//
 
-	void HandleOnUserMovedToNewWindow(TWeakPtr<SWindow> NewWindow);
+	bool DragActiveTabToPosition(
+		FSlateApplication& SlateApp, FVector2f TargetPosition);
 
-	void MoveTabToWindow(
+	void MoveActiveTabToWindow(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void MoveActiveTabOut();
+
+	/** Move Active Minor Tab via HJKL (Vim Directions) */
+	void MoveActiveMinorTabToPanel(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void BindVimCommands();
+
+	//
+	//
+	/////////////////////////////////////////////////////////////////////////////
 
 public:
 	/**
@@ -176,5 +180,5 @@ public:
 	FOnActiveTabChanged		   OnActiveTabChanged(FOnActiveTabChanged::FDelegate);
 	FUMOnNewMajorTabChanged	   OnNewMajorTabChanged;
 
-	bool VisualLog{ true };
+	FUMLogger Logger;
 };

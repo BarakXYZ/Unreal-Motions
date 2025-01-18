@@ -329,6 +329,11 @@ bool FUMSlateHelpers::DoesWidgetResideInTab(
 	return false;
 }
 
+// TODO: This needs more work to be more robust and be able to catch:
+// Content Browser, Preferences, Settings, etc.
+// Need some additional debugging and such.
+// Potentially work with the Active Window and verify we're actually
+// fetching an active major tab (one that doesn't reside in an inactive window)
 TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 {
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
@@ -342,6 +347,8 @@ TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 			{
 				return ActiveMajorTab;
 			}
+			else if (ActiveMinorTab->GetVisualTabRole() == ETabRole::MajorTab)
+				return ActiveMinorTab;
 		}
 	}
 	return nullptr;
