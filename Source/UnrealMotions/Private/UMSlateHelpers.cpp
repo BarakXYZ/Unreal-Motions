@@ -330,74 +330,47 @@ bool FUMSlateHelpers::DoesWidgetResideInTab(
 	return false;
 }
 
-// TODO: This needs more work to be more robust and be able to catch:
-// Content Browser, Preferences, Settings, etc.
-// Need some additional debugging and such.
-// Potentially work with the Active Window and verify we're actually
-// fetching an active major tab (one that doesn't reside in an inactive window)
-//
-// Need to debug the traverse results of a window and see what comes up.
 TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 {
-	// UNCOMMENT START
-	// FSlateApplication&		  SlateApp = FSlateApplication::Get();
-	// const TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
-	// if (!ActiveWin.IsValid())
-	// 	return nullptr;
+	// This method is a bit more expensive but way more robust to pick up all
+	// types of Major Tabs (AFAIK)
+	// Possibly we can fallback to this more expensive method after checking if
+	// our fetched Major Tab doesn't reside in our actual Active Window (which
+	// is a strong sign we haven't picked up the correct Major Tab) but not
+	// sure if it is that more efficient as this isn't too expensive anyway.
+	FSlateApplication&		  SlateApp = FSlateApplication::Get();
+	const TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWin.IsValid())
+		return nullptr;
 
-	// // TWeakPtr<SWidget> TargetTabWell;
-	// TWeakPtr<SWidget>		  TargetTab;
-	// TArray<TWeakPtr<SWidget>> FoundTabs;
-	// // if (!TraverseWidgetTree(ActiveWin, TargetTabWell, "SDockingTabWell"))
-	// // if (!TraverseWidgetTree(ActiveWin, TargetTab, "SDockTab"))
-	// if (!TraverseWidgetTree(ActiveWin, FoundTabs, "SDockTab"))
-	// 	return nullptr;
+	TWeakPtr<SWidget> TargetTabWell;
+	if (!TraverseWidgetTree(ActiveWin, TargetTabWell, "SDockingTabWell"))
+		return nullptr;
 
-	// for (const auto& Tab : FoundTabs)
-	// {
-	// 	if (const auto PinTab = Tab.Pin())
-	// 	{
-	// 		const TSharedPtr<SDockTab> AsDockTab =
-	// 			StaticCastSharedPtr<SDockTab>(PinTab);
-	// 		// Logger.Print(FString::Printf(TEXT("Tab: %s"),
-	// 		// 				 *Tabby->GetTabLabel().ToString()),
-	// 		// 	ELogVerbosity::Verbose, true);
-	// 		if (AsDockTab->IsForeground())
-	// 			return AsDockTab;
-	// 	}
-	// }
-	// return nullptr;
+	const TSharedPtr<SWidget> TabWell = TargetTabWell.Pin();
+	if (!TabWell.IsValid())
+		return nullptr;
 
-	// const TSharedPtr<SWidget> TabWell = TargetTab.Pin()->GetParentWidget();
-	// // if (!TargetTabWell.IsValid())
-	// // 	return nullptr;
+	FChildren* Tabs = TabWell->GetChildren();
+	if (!Tabs || Tabs->Num() <= 0)
+		return nullptr;
 
-	// // const TSharedPtr<SWidget> TabWell = TargetTabWell.Pin();
-	// if (!TabWell.IsValid())
-	// 	return nullptr;
+	for (int32 i{ 0 }; i < Tabs->Num(); ++i)
+	{
+		const TSharedRef<SWidget> TabAsWidget = Tabs->GetChildAt(i);
+		if (!TabAsWidget->GetTypeAsString().Equals("SDockTab"))
+			continue;
 
-	// const FChildren* Tabs = TabWell->GetChildren();
-	// // if (!Tabs || Tabs->NumSlot() <= 0)
-	// if (!Tabs || Tabs->Num() <= 0)
-	// 	return nullptr;
+		const TSharedRef<SDockTab> DockTab =
+			StaticCastSharedRef<SDockTab>(TabAsWidget);
 
-	// // for (int32 i{ 0 }; i < Tabs->NumSlot(); ++i)
-	// for (int32 i{ 0 }; i < Tabs->Num(); ++i)
-	// {
-	// 	const TSharedRef<SWidget> TabAsWidget = Tabs->GetSlotAt(i).GetWidget();
-	// 	if (!TabAsWidget->GetTypeAsString().Equals("SDockTab"))
-	// 		continue;
+		if (DockTab->IsForeground())
+			return DockTab;
+	}
 
-	// 	const TSharedRef<SDockTab> DockTab =
-	// 		StaticCastSharedRef<SDockTab>(TabAsWidget);
+	return nullptr;
 
-	// 	if (DockTab->IsForeground())
-	// 		return DockTab;
-	// }
-
-	// return nullptr;
-	// UNCOMMENT END
-
+	// Sadly this method just isn't picking up all types of Major Tabs (AFAIK)
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
 	{
@@ -407,6 +380,14 @@ TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 			if (const TSharedPtr<SDockTab> ActiveMajorTab =
 					GTM->GetMajorTabForTabManager(TabManager.ToSharedRef()))
 			{
+				// Potentially we can check here if this Major Tab resides in
+				// our actual Active Window to check if we're even fetching the
+				// correct Major Tab (and then fallback to the more expensive way)
+				// maybe GetDefactoActiveMajorTab()?
+				// This maybe make sense because in most cases this cheaper
+				// method will suffice. It is really only in edge cases of tabs
+				// like Preferences and such where we will want the more extensive
+				// method.
 				return ActiveMajorTab;
 			}
 			else if (ActiveMinorTab->GetVisualTabRole() == ETabRole::MajorTab)

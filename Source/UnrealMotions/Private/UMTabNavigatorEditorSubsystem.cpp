@@ -135,23 +135,19 @@ void UUMTabNavigatorEditorSubsystem::MapCycleTabsNavigation(
 bool UUMTabNavigatorEditorSubsystem::TryGetValidTargetTab(
 	TSharedPtr<SDockTab>& OutTab, bool bIsMajorTab)
 {
-	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
-	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
+	if (bIsMajorTab)
 	{
-		if (bIsMajorTab)
+		if (const TSharedPtr<SDockTab> ActiveMajorTab =
+				FUMSlateHelpers::GetActiveMajorTab())
 		{
-			if (const TSharedPtr<FTabManager> TabManager =
-					ActiveMinorTab->GetTabManagerPtr())
-			{
-				if (const TSharedPtr<SDockTab> ActiveMajorTab =
-						GTM->GetMajorTabForTabManager(TabManager.ToSharedRef()))
-				{
-					OutTab = ActiveMajorTab;
-					return true;
-				}
-			}
+			OutTab = ActiveMajorTab;
+			return true;
 		}
-		else // Minor Tab
+	}
+	else
+	{
+		if (const TSharedPtr<SDockTab> ActiveMinorTab =
+				FUMSlateHelpers::GetActiveMinorTab())
 		{
 			OutTab = ActiveMinorTab;
 			return true;
