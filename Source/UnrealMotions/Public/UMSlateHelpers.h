@@ -126,5 +126,20 @@ public:
 
 	static TSharedPtr<FGenericWindow> GetGenericActiveTopLevelWindow();
 
+	/**
+	 * @Note we're passing the array by ref, as this is invoked immediately.
+	 */
+	static void SimulateMenuClicks(
+		const TSharedRef<SWidget>		ParentWidget,
+		const TArrayView<const FString> TargetEntries,
+		int32							ArrayIndex = 0);
+
+	/**
+	 * @Note we're passing the array by value cause this is a delegate
+	 *  and our Array will be invalid if passed by ref
+	 */
+	static void GetActiveMenuWindowAndCallSimulateMenuClicks(
+		const TArrayView<const FString> TargetEntries, const int32 ArrayIndex);
+
 	static FUMLogger Logger;
 };

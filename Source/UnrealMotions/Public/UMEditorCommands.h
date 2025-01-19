@@ -84,5 +84,7 @@ public:
 
 	static void OpenLevelBlueprint();
 
+	static void ResetEditorToDefaultLayout();
+
 	static FUMLogger Logger;
 };

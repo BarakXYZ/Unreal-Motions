@@ -505,7 +505,7 @@ void UVimEditorSubsystem::BindCommands()
 		&FUMEditorCommands::FocusSearchBox);
 
 	Input->AddKeyBinding_KeyEvent(
-		{ EKeys::SpaceBar, EKeys::R },
+		{ EKeys::SpaceBar, FInputChord(EModifierKey::Shift, EKeys::R) },
 		&FUMInputHelpers::SimulateRightClick);
 
 	Input->AddKeyBinding_KeyEvent(
@@ -563,6 +563,10 @@ void UVimEditorSubsystem::BindCommands()
 	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::T, EKeys::G, EKeys::L },
 		&FUMLogger::ToggleGlobalLogging);
+
+	Input->AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::R, EKeys::L, EKeys::D },
+		&FUMEditorCommands::ResetEditorToDefaultLayout);
 
 	//
 	/////////////////////////////////////////////////////////////////////////

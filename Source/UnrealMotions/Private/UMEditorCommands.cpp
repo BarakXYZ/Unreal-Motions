@@ -1,7 +1,10 @@
 #include "UMEditorCommands.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "Interfaces/IMainFrameModule.h"
 #include "LevelEditor.h"
 #include "LevelEditorActions.h"
+#include "Logging/LogVerbosity.h"
+#include "Templates/SharedPointer.h"
 #include "VimInputProcessor.h"
 #include "UMFocuserEditorSubsystem.h"
 #include "UMSlateHelpers.h"
@@ -9,8 +12,8 @@
 #include "Editor.h"
 #include "UMInputHelpers.h"
 #include "Framework/Docking/TabManager.h"
-#include "TabDragDropOperation.h"
-#include "DragAndDrop/AssetDragDropOp.h"
+#include "Framework/Docking/LayoutService.h"
+#include "Framework/MultiBox/MultiBox.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, Log, All);
@@ -302,4 +305,25 @@ void FUMEditorCommands::OpenLevelBlueprint()
 		LevelEditor->GetLevelEditorActions()->TryExecuteAction(
 			FLevelEditorCommands::Get().OpenLevelBlueprint.ToSharedRef());
 	}
+}
+
+void FUMEditorCommands::ResetEditorToDefaultLayout()
+{
+	static const FString TitleBarType = "SWindowTitleBar";
+	static const FString TargetEntriesArray[] = {
+		"Window", "Load Layout", "Default Editor Layout"
+	};
+	static const TArrayView<const FString> EntriesView(TargetEntriesArray);
+
+	const TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow();
+	if (!RootWin.IsValid())
+		return;
+
+	// Get SWindowTitleBar; this is where we want to perform our searching
+	TWeakPtr<SWidget> WinTitleBar;
+	if (!FUMSlateHelpers::TraverseWidgetTree(RootWin, WinTitleBar, TitleBarType))
+		return;
+
+	if (const TSharedPtr<SWidget> WinBar = WinTitleBar.Pin())
+		FUMSlateHelpers::SimulateMenuClicks(WinBar.ToSharedRef(), EntriesView);
 }

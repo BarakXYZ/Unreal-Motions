@@ -4,6 +4,7 @@
 #include "LevelEditor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Input/SEditableText.h"
+#include "Widgets/Input/SButton.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
@@ -27,7 +28,7 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 		// 	TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
 		// 	*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
 		// 	*TargetType));
-		// OutWidgets.Add(ParentWidget);
+		OutWidgets.Add(ParentWidget);
 
 		// If SearchCount is -1, continue searching but mark that we found at least one
 		// If SearchCount is positive, check if we've found enough
@@ -497,4 +498,84 @@ TSharedPtr<FGenericWindow> FUMSlateHelpers::GetGenericActiveTopLevelWindow()
 		}
 	}
 	return nullptr;
+}
+
+void FUMSlateHelpers::SimulateMenuClicks(
+	const TSharedRef<SWidget>		ParentWidget,
+	const TArrayView<const FString> TargetEntries,
+	int32							ArrayIndex)
+{
+	static const FString TextBlockType = "STextBlock";
+	static const FString ButtonType = "SButton";
+
+	if (!TargetEntries.IsValidIndex(ArrayIndex))
+		return;
+
+	// Get all Text Blocks in the target parent to look for the the entries.
+	TArray<TWeakPtr<SWidget>> TargetTextBlocks;
+	if (!TraverseWidgetTree(ParentWidget, TargetTextBlocks, TextBlockType))
+		return;
+
+	TSharedPtr<SButton> TargetButton;
+
+	for (const TWeakPtr<SWidget>& Text : TargetTextBlocks)
+	{
+		const TSharedPtr<SWidget> PinText = Text.Pin();
+		if (!PinText.IsValid())
+			continue;
+
+		const TSharedPtr<STextBlock> AsTextBlock =
+			StaticCastSharedPtr<STextBlock>(PinText);
+
+		if (!AsTextBlock->GetText().ToString().Equals(TargetEntries[ArrayIndex]))
+			continue;
+
+		TSharedPtr<SWidget> Parent = AsTextBlock->GetParentWidget();
+		while (Parent.IsValid())
+		{
+			// NOTE:
+			// We can safely search for SButton more generically cause types like:
+			// "SMenuEntryButton", "SSubMenuButton", are considered "SButton".
+			// if we only search for Parent->GetType() we will find the more
+			// specific type (e.g. "SMenuEntryButton"). But like that it's safe.
+			if (Parent->GetWidgetClass().GetWidgetType().ToString().Equals(ButtonType))
+			{
+				TargetButton = StaticCastSharedPtr<SButton>(Parent);
+				++ArrayIndex; // Move to the next entry in the array
+				break;		  // Break for the 'while' loop
+			}
+			else // Continue climbing and searching
+				Parent = Parent->GetParentWidget();
+		}
+		break; // Break from the 'for' loop
+	}
+
+	if (!TargetButton.IsValid())
+		return;
+
+	TargetButton->SimulateClick();
+	if (!TargetEntries.IsValidIndex(ArrayIndex))
+		return; // This will prevent an extra unnecessary call
+
+	// We now want to wait a bit to let the Menu Window to open.
+	// This is important to let the internals of Slate catch-up and find the Win.
+	FTimerDelegate TimerDelegate;
+	TimerDelegate.BindStatic(
+		&FUMSlateHelpers::GetActiveMenuWindowAndCallSimulateMenuClicks,
+		TargetEntries, ArrayIndex);
+
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle, TimerDelegate, 0.025f, false); // Check on MacOS and verify
+}
+
+void FUMSlateHelpers::GetActiveMenuWindowAndCallSimulateMenuClicks(
+	const TArrayView<const FString> TargetEntries, const int32 ArrayIndex)
+{
+	const FSlateApplication&  SlateApp = FSlateApplication::Get();
+	const TSharedPtr<SWindow> MenuWindow = SlateApp.GetActiveTopLevelWindow();
+	if (!MenuWindow.IsValid() || MenuWindow->GetType() != EWindowType::Menu)
+		return; // We're specifcally targeting only Menu Windows (non-regular)
+
+	SimulateMenuClicks(MenuWindow.ToSharedRef(), TargetEntries, ArrayIndex);
 }
