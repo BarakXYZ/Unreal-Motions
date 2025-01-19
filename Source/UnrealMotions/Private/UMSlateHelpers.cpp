@@ -335,8 +335,69 @@ bool FUMSlateHelpers::DoesWidgetResideInTab(
 // Need some additional debugging and such.
 // Potentially work with the Active Window and verify we're actually
 // fetching an active major tab (one that doesn't reside in an inactive window)
+//
+// Need to debug the traverse results of a window and see what comes up.
 TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 {
+	// UNCOMMENT START
+	// FSlateApplication&		  SlateApp = FSlateApplication::Get();
+	// const TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
+	// if (!ActiveWin.IsValid())
+	// 	return nullptr;
+
+	// // TWeakPtr<SWidget> TargetTabWell;
+	// TWeakPtr<SWidget>		  TargetTab;
+	// TArray<TWeakPtr<SWidget>> FoundTabs;
+	// // if (!TraverseWidgetTree(ActiveWin, TargetTabWell, "SDockingTabWell"))
+	// // if (!TraverseWidgetTree(ActiveWin, TargetTab, "SDockTab"))
+	// if (!TraverseWidgetTree(ActiveWin, FoundTabs, "SDockTab"))
+	// 	return nullptr;
+
+	// for (const auto& Tab : FoundTabs)
+	// {
+	// 	if (const auto PinTab = Tab.Pin())
+	// 	{
+	// 		const TSharedPtr<SDockTab> AsDockTab =
+	// 			StaticCastSharedPtr<SDockTab>(PinTab);
+	// 		// Logger.Print(FString::Printf(TEXT("Tab: %s"),
+	// 		// 				 *Tabby->GetTabLabel().ToString()),
+	// 		// 	ELogVerbosity::Verbose, true);
+	// 		if (AsDockTab->IsForeground())
+	// 			return AsDockTab;
+	// 	}
+	// }
+	// return nullptr;
+
+	// const TSharedPtr<SWidget> TabWell = TargetTab.Pin()->GetParentWidget();
+	// // if (!TargetTabWell.IsValid())
+	// // 	return nullptr;
+
+	// // const TSharedPtr<SWidget> TabWell = TargetTabWell.Pin();
+	// if (!TabWell.IsValid())
+	// 	return nullptr;
+
+	// const FChildren* Tabs = TabWell->GetChildren();
+	// // if (!Tabs || Tabs->NumSlot() <= 0)
+	// if (!Tabs || Tabs->Num() <= 0)
+	// 	return nullptr;
+
+	// // for (int32 i{ 0 }; i < Tabs->NumSlot(); ++i)
+	// for (int32 i{ 0 }; i < Tabs->Num(); ++i)
+	// {
+	// 	const TSharedRef<SWidget> TabAsWidget = Tabs->GetSlotAt(i).GetWidget();
+	// 	if (!TabAsWidget->GetTypeAsString().Equals("SDockTab"))
+	// 		continue;
+
+	// 	const TSharedRef<SDockTab> DockTab =
+	// 		StaticCastSharedRef<SDockTab>(TabAsWidget);
+
+	// 	if (DockTab->IsForeground())
+	// 		return DockTab;
+	// }
+
+	// return nullptr;
+	// UNCOMMENT END
+
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
 	{
