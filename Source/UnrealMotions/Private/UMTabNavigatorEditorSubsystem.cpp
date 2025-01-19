@@ -352,7 +352,7 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 		SlateApp.GetAllVisibleWindowsOrdered(VisibleWindows);
 
 		TArray<TSharedRef<SWindow>> RegularVisWins;
-		for (const auto& Win : VisibleWindows)
+		for (const TSharedRef<SWindow>& Win : VisibleWindows)
 		{
 			if (Win->IsRegularWindow())
 				RegularVisWins.Add(Win);
@@ -385,8 +385,7 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 				TargetWindow, FoundTargetTabWell, "SDockingTabWell"))
 			return;
 
-		if (const TSharedPtr<SWidget> PinFoundTargetTabWell =
-				FoundTargetTabWell.Pin())
+		if (const auto PinFoundTargetTabWell = FoundTargetTabWell.Pin())
 			TargetTabWell = PinFoundTargetTabWell;
 		else
 			return;
@@ -400,7 +399,8 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 	// Store the origin position so we can restore it at the end
 	const FVector2f MouseOriginPos = SlateApp.GetCursorPos();
 
-	if (!DragActiveTabToPosition(SlateApp, TabWellTargetPosition))
+	// Perform the dragging
+	if (!DragAndReleaseActiveTabAtPosition(SlateApp, TabWellTargetPosition))
 		return;
 
 	// Restore the original position of the cursor to where it was pre-shenanigans
@@ -419,7 +419,7 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabOut()
 {
 }
 
-bool UUMTabNavigatorEditorSubsystem::DragActiveTabToPosition(
+bool UUMTabNavigatorEditorSubsystem::DragAndReleaseActiveTabAtPosition(
 	FSlateApplication& SlateApp, FVector2f TargetPosition)
 {
 	// Get our target (currently focused) tab.

@@ -134,7 +134,7 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 	//							~ Vim Functions ~
 	//
 
-	bool DragActiveTabToPosition(
+	bool DragAndReleaseActiveTabAtPosition(
 		FSlateApplication& SlateApp, FVector2f TargetPosition);
 
 	void MoveActiveTabToWindow(
