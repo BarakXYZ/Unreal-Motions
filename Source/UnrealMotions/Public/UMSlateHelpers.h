@@ -155,5 +155,15 @@ public:
 	static TSharedPtr<SDockTab> GetLastTabInTabWell(
 		const TSharedRef<SWidget> InTabWell);
 
+	/**
+	 * If a window contains only Nomad Tabs, its TitleBar will be sort of
+	 * shrinked. We need to know that for docking operations to determine our
+	 * offset and dock properly.
+	 * Currently this is being checked by look if the TitleBar contains the
+	 * SMultiBoxWidget. This seems to be a strong indication if whether or not
+	 * this is a "Nomad Window"
+	 */
+	static bool IsNomadWindow(const TSharedRef<SWindow> InWindow);
+
 	static FUMLogger Logger;
 };

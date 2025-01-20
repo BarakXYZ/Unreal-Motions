@@ -240,6 +240,7 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 {
 	TSharedPtr<SWidget> TargetTabWell;
 
+	bool	   bIsNomadWindow = false;
 	const FKey InKey = InKeyEvent.GetKey();
 	if (InKey == EKeys::Zero)
 	{
@@ -253,6 +254,9 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 			FUMSlateHelpers::GetTabWellForTabManager(LevelEditorTabManager.ToSharedRef());
 		if (!TargetTabWell.IsValid())
 			return;
+
+		// NOTE:
+		// Cannot be Nomad Window, as this is the root window.
 	}
 	else
 	{
@@ -287,6 +291,10 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 			? RegularVisWins[KeyAsDigit]
 			: RegularVisWins[(RegularVisWins.Num() - 1) - KeyAsDigit];
 
+		// Check if the targeted window is a Nomad Tabs window.
+		// if so, we will need to target the docking in a specific way (see below)
+		bIsNomadWindow = FUMSlateHelpers::IsNomadWindow(TargetWindow);
+
 		// Get the first TabWell in the Target Window (Major Tab's TabWell)
 		TSharedPtr<SWidget> FoundTargetTabWell;
 		if (!FUMSlateHelpers::TraverseWidgetTree(
@@ -318,11 +326,13 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 
 	// Finally we will drag the tab to the end of the TabWell to append it.
 
-	// If the TabWell has 1 child (tab) within it, we need to offset by the size
-	// of a tab.x to cover some edge cases in windows like Preference, etc.
+	// If the targeted window contains only Nomad Tabs; the TitleBar will be sort
+	// of collapsed (shrinked). Thus we will need to offset by the size
+	// of a tab.x to dock properly.
 	// Else we can slightly offset to the left from the end of the TabWell itself.
+	// This is true if the window contains any real Major Tabs (type)
 	const FVector2f OffsetTabWellTargetPosBy =
-		TargetTabWell->GetChildren()->Num() == 1
+		bIsNomadWindow
 		? FVector2f(-LastTabInWell->GetCachedGeometry().GetAbsoluteSize().X, 0.0f)
 		: FVector2f(-5.0f, 0.0f);
 

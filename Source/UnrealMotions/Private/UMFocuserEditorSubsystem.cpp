@@ -112,7 +112,7 @@ void UUMFocuserEditorSubsystem::OnActiveTabChanged(
 	TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab)
 {
 	const FString LogFunc = "OnActiveTabChanged:\n";
-	// Logger.Print(LogFunc, ELogVerbosity::Verbose, true);
+	Logger.Print(LogFunc, ELogVerbosity::Verbose, true);
 
 	if (!GEditor->IsValidLowLevelFast() || !GEditor->IsTimerManagerValid())
 		return;
@@ -126,7 +126,7 @@ void UUMFocuserEditorSubsystem::OnActiveTabChanged(
 	TimerManager->SetTimer(
 		TimerHandle_OnActiveTabChanged,
 		[this, WeakPrevActiveTab, WeakNewActiveTab]() {
-			if (const auto PrevActiveTab = WeakPrevActiveTab.Pin())
+			if (const TSharedPtr<SDockTab> PrevActiveTab = WeakPrevActiveTab.Pin())
 			{
 				// NOTE:
 				// Intuitively we might think we need to register the Prev
@@ -135,7 +135,7 @@ void UUMFocuserEditorSubsystem::OnActiveTabChanged(
 				// widgets. This happens because when we activate a tab, our
 				// OnFocusChanged event won't acatually trigger! That means
 				// our ActiveWidget is still associated and lives inside the
-				// previously active tab, and should be registered with him.
+				// previously active tab, and should be registered with it.
 				// NOTE:
 				// I'm not sure actually (LOL), perhaps it depends on if we
 				// go through the foregrounding or not? Anyway, we can pass both
@@ -148,9 +148,9 @@ void UUMFocuserEditorSubsystem::OnActiveTabChanged(
 				TryRegisterWidgetWithTab(PrevActiveTab.ToSharedRef());
 			}
 
-			if (const auto NewActiveTab = WeakNewActiveTab.Pin())
+			if (const TSharedPtr<SDockTab> NewActiveTab = WeakNewActiveTab.Pin())
 			{
-				const auto NewTabRef = NewActiveTab.ToSharedRef();
+				const TSharedRef<SDockTab> NewTabRef = NewActiveTab.ToSharedRef();
 				TryRegisterMinorWithParentMajorTab(NewTabRef);
 				TryActivateLastWidgetInTab(NewTabRef);
 				VisualizeParentDockingTabStack(NewTabRef);
@@ -163,9 +163,12 @@ void UUMFocuserEditorSubsystem::OnActiveTabChanged(
 void UUMFocuserEditorSubsystem::OnTabForegrounded(
 	TSharedPtr<SDockTab> NewActiveTab, TSharedPtr<SDockTab> PrevActiveTab)
 {
-	const FString LogFunc = "OnTabForegrounded:\n";
+	// const FString LogFunc = "OnTabForegrounded:\n";
 	// Logger.Print(LogFunc, ELogVerbosity::Verbose, true);
+
 	// DebugPrevAndNewMinorTabsMajorTabs(NewActiveTab, PrevActiveTab);
+
+	// FUMSlateHelpers::LogTab(NewActiveTab.ToSharedRef());
 
 	if (NewActiveTab.IsValid())
 	{
@@ -459,7 +462,7 @@ bool UUMFocuserEditorSubsystem::TryRegisterMinorWithParentMajorTab(
 {
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 
-	// Check if has a valid Tab Manager
+	// Check if the tab has a valid Tab Manager
 	if (const TSharedPtr<FTabManager> MinorTabManager =
 			InMinorTab->GetTabManagerPtr())
 	{
@@ -601,13 +604,12 @@ void UUMFocuserEditorSubsystem::ActivateTab(const TSharedRef<SDockTab> InTab)
 
 void UUMFocuserEditorSubsystem::RecordWidgetUse(TSharedRef<SWidget> InWidget)
 {
-	// Convert to TWeakPtr so we don’t keep it alive forever
+	// Convert to TWeakPtr so we don’t keep it alive after it is destroyed.
 	TWeakPtr<SWidget> WeakWidget = InWidget;
 
-	// Iterate through the array
 	for (int32 i = 0; i < RecentlyUsedWidgets.Num();)
 	{
-		if (const auto& Widget = RecentlyUsedWidgets[i].Pin())
+		if (const TSharedPtr<SWidget>& Widget = RecentlyUsedWidgets[i].Pin())
 		{
 			// Check if this is the widget we want to promote
 			if (InWidget->GetId() == Widget->GetId())
@@ -615,31 +617,23 @@ void UUMFocuserEditorSubsystem::RecordWidgetUse(TSharedRef<SWidget> InWidget)
 				// Remove it from the current position and reinsert at the front
 				RecentlyUsedWidgets.RemoveAt(i);
 				RecentlyUsedWidgets.Insert(WeakWidget, 0);
-				return; // Done, so we can exit early
+				return; // Widget found, return.
 			}
-			else
-			{
-				// Move to the next entry
-				++i;
-			}
+			++i;
 		}
 		else
-		{
 			// Remove invalid widget (stale reference)
-			RecentlyUsedWidgets.RemoveAt(i);
 			// Do not increment i because the array has shifted
-		}
+			RecentlyUsedWidgets.RemoveAt(i);
 	}
 
 	// If we didn’t find the widget, add it to the front
 	RecentlyUsedWidgets.Insert(WeakWidget, 0);
 
 	// Enforce size limit
-	const int32 MaxSize = 10; // or whatever size you want
+	const int32 MaxSize = 10;
 	if (RecentlyUsedWidgets.Num() > MaxSize)
-	{
-		RecentlyUsedWidgets.SetNum(MaxSize);
-	}
+		RecentlyUsedWidgets.SetNum(MaxSize); // Shrink the array if it exceeds Max
 }
 
 FString UUMFocuserEditorSubsystem::TabRoleToString(ETabRole InTabRole)

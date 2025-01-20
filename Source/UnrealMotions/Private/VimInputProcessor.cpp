@@ -285,7 +285,7 @@ bool FVimInputProcessor::ShouldSwitchVimMode(
 
 bool FVimInputProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
-	Logger.Print("Mouse Button Down!", ELogVerbosity::Log, true);
+	// Logger.Print("Mouse Button Down!", ELogVerbosity::Log, true);
 	// return false;
 	// TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
 	// if (FocusedWidget.IsValid())
@@ -305,7 +305,7 @@ bool FVimInputProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp,
 bool FVimInputProcessor::HandleMouseButtonUpEvent(
 	FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
-	Logger.Print("Mouse Button Up!", ELogVerbosity::Log, true);
+	// Logger.Print("Mouse Button Up!", ELogVerbosity::Log, true);
 	return false;
 }
 

@@ -5,6 +5,7 @@
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Input/SEditableText.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/SWindow.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
@@ -706,6 +707,18 @@ void FUMSlateHelpers::LogTab(const TSharedRef<SDockTab> InTab)
 	int32	Id = InTab->GetId();
 	FString LayoutId = InTab->GetLayoutIdentifier().ToString();
 	bool	bIsToolkit = LayoutId.EndsWith(TEXT("Toolkit"));
+	bool	bIsTabPersistable = InTab->GetLayoutIdentifier().IsTabPersistable();
+	FString TabTypeAsString = InTab->GetLayoutIdentifier().TabType.ToString();
+
+	// Log Parent Window
+	const TSharedPtr<SWindow> TabWin = InTab->GetParentWindow();
+	const FString			  WinName = TabWin.IsValid()
+					? TabWin->GetTitle().ToString()
+					: "Invalid Parent Window";
+	// const FString			  WinType = TabWin.IsValid()
+	// 				? "Invalid Parent Window"
+	// 				: TabWin->GetTitle().ToString();
+
 	FString DebugMsg = FString::Printf(
 		TEXT("InTab Details:\n"
 			 "  Name: %s\n"
@@ -713,8 +726,30 @@ void FUMSlateHelpers::LogTab(const TSharedRef<SDockTab> InTab)
 			 "  Regular Role: %s\n"
 			 "  Id: %d\n"
 			 "  Layout ID: %s\n"
-			 "  Is Toolkit: %s"),
-		*Name, *VisualRole, *RegularRole, Id, *LayoutId, bIsToolkit ? TEXT("true") : TEXT("false"));
+			 "  Is Toolkit: %s\n"
+			 "  Is Tab Persistable: %s\n"
+			 "  TabType: %s\n"
+			 "  Parent Window: %s"),
+		*Name,
+		*VisualRole,
+		*RegularRole,
+		Id,
+		*LayoutId,
+		bIsToolkit ? TEXT("true") : TEXT("false"),
+		bIsTabPersistable ? TEXT("true") : TEXT("false"),
+		*TabTypeAsString,
+		*WinName);
 
 	Logger.Print(DebugMsg, ELogVerbosity::Log, true);
+}
+
+bool FUMSlateHelpers::IsNomadWindow(const TSharedRef<SWindow> InWindow)
+{
+	static const FString TitleBarType = "SWindowTitleBar";
+	static const FString MultiBoxType = "SMultiBoxWidget";
+
+	TSharedPtr<SWidget> TitleBar;
+	TSharedPtr<SWidget> MultiBox;
+	return !(TraverseWidgetTree(InWindow, TitleBar, TitleBarType)
+		&& TraverseWidgetTree(TitleBar.ToSharedRef(), MultiBox, MultiBoxType));
 }
