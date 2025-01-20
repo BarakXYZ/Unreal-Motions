@@ -255,3 +255,18 @@ public:
 // Tabs like Preferences, Output Log and Project Setting are considered
 // Nomad Tabs. Nomad tabs are not constrained by the standard tab hierarchy.
 // They can be docked or floated anywhere within the Unreal Engine editor.
+//
+//
+// TODO:
+// Event Graph & Construction Script panels (and other panels) should have default
+// fallback widgets that should be looked when gained focus.
+// If the Event Graph gains focus it should potentially always just go look for
+// the SGraphPanel (or at least as a fallback rather than the cursed
+// SDockingTabStack that still gains focus somehow).
+//
+// Then, we need some method for navigating inside the Blueprint Graph.
+// I'm thinking:
+// 1. General navigation that will mimic dragging the mouse right-click drag.
+// 2. Navigate between nodes.
+// 3. Pulling from a node and straightning both new and old nodes (or old to new).
+//

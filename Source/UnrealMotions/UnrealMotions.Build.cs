@@ -49,8 +49,9 @@ public class UnrealMotions : ModuleRules
 				"ToolMenus",
 				"SceneOutliner",
 				"EditorWidgets",
-				// "Core",
 				"LevelEditor",
+				"GraphEditor",
+				"BlueprintGraph",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

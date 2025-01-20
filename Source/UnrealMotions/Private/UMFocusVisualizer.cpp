@@ -34,52 +34,6 @@ TSharedRef<FUMFocusVisualizer> FUMFocusVisualizer::Get()
 	return FocusVisualizer;
 }
 
-void FUMFocusVisualizer::GetLastActiveEditor()
-{
-	UAssetEditorSubsystem* AssetEditorSubsystem =
-		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
-
-	const TArray<UObject*> EditedAssets{ AssetEditorSubsystem->GetAllEditedAssets() };
-	IAssetEditorInstance*  ActiveEditorInstance{ nullptr };
-	double				   ActivationTime{ 0 };
-
-	// Seems to not be correct when some assets are in a separated window!
-	// But we can still match and fetch the currently edited asset by comparing
-	// against the major tab label or something
-	for (UObject* EditedAsset : EditedAssets)
-	{
-		IAssetEditorInstance* EditorInstance =
-			AssetEditorSubsystem->FindEditorForAsset(EditedAsset, false);
-
-		double CurrEditorActTime = EditorInstance->GetLastActivationTime();
-		if (CurrEditorActTime > ActivationTime)
-		{
-			ActiveEditorInstance = EditorInstance;
-			ActivationTime = CurrEditorActTime;
-		}
-		// FString OutStr = EditorInstance->GetEditorName().ToString() + ": " + FString::SanitizeFloat(EditorInstance->GetLastActivationTime());
-	}
-	if (!ActiveEditorInstance)
-		return;
-
-	// FString OutStr = ActiveEditorInstance->GetEditorName().ToString()
-	// 	+ ": " + ActiveEditorInstance->GetEditingAssetTypeName().ToString();
-
-	FAssetEditorToolkit* AssetEditorToolkit =
-		static_cast<FAssetEditorToolkit*>(ActiveEditorInstance);
-	if (!AssetEditorToolkit)
-		return;
-
-	AssetEditorToolkit->GetObjectsCurrentlyBeingEdited();
-
-	TSharedPtr<IToolkitHost> ToolkitHost = AssetEditorToolkit->GetToolkitHost();
-	ToolkitHost->GetActiveViewportSize();
-	UTypedElementCommonActions* Actions = ToolkitHost->GetCommonActions();
-
-	// TSharedPtr<FTabManager> TabManager =
-	// 	AssetEditorToolkit->GetTabManager(); // Not helpful
-}
-
 void FUMFocusVisualizer::DrawDebugOutlineOnWidget(
 	const TSharedRef<SWidget> InWidget)
 {

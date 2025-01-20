@@ -13,10 +13,5 @@ class UNREALMOTIONS_API UUMFocusDebuggerUtilityWidget : public UEditorUtilityWid
 	GENERATED_BODY()
 
 	UFUNCTION(BlueprintCallable, Category = "Unreal Motions: Focus Debugger")
-	void DebugFocus(
-		FString& OutActiveWindowName,
-		FString& OutActiveMajorTabName,
-		FString& OutActiveMinorTabName,
-		FString& OutActiveMinorTabMajorTabParentName,
-		FString& OutActiveWidgetName);
+	void DebugFocus(TMap<FString, FString>& OutMap);
 };

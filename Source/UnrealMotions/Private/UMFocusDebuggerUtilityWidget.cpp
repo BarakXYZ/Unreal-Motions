@@ -4,27 +4,22 @@
 #include "UMSlateHelpers.h"
 #include "Widgets/Docking/SDockTab.h"
 
-void UUMFocusDebuggerUtilityWidget::DebugFocus(
-	FString& OutActiveWindowName,
-	FString& OutActiveMajorTabName,
-	FString& OutActiveMinorTabName,
-	FString& OutActiveMinorTabMajorTabParentName,
-	FString& OutActiveWidgetName)
+void UUMFocusDebuggerUtilityWidget::DebugFocus(TMap<FString, FString>& OutMap)
 {
 	static const FString DefaultName = "NotFound / Invalid";
 	FSlateApplication&	 SlateApp = FSlateApplication::Get();
 
 	if (const TSharedPtr<SWindow> ActiveWindow =
 			SlateApp.GetActiveTopLevelRegularWindow())
-		OutActiveWindowName = ActiveWindow->GetTitle().ToString();
+		OutMap.Add("ActiveWindow", ActiveWindow->GetTitle().ToString());
 	else
-		OutActiveWindowName = DefaultName;
+		OutMap.Add("ActiveWindow", DefaultName);
 
 	TSharedPtr<SDockTab> FrontmostMajorTab;
 	if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(FrontmostMajorTab))
-		OutActiveMajorTabName = FrontmostMajorTab->GetTabLabel().ToString();
+		OutMap.Add("ActiveMajorTab", FrontmostMajorTab->GetTabLabel().ToString());
 	else
-		OutActiveMajorTabName = DefaultName;
+		OutMap.Add("ActiveMajorTab", DefaultName);
 
 	TSharedRef<FGlobalTabmanager>
 		GTM = FGlobalTabmanager::Get();
@@ -32,22 +27,22 @@ void UUMFocusDebuggerUtilityWidget::DebugFocus(
 	if (const TSharedPtr<SDockTab> ActiveMinorTab =
 			FUMSlateHelpers::GetActiveMinorTab())
 	{
-		OutActiveMinorTabName = ActiveMinorTab->GetTabLabel().ToString();
+		OutMap.Add("ActiveMinorTab", ActiveMinorTab->GetTabLabel().ToString());
 
 		if (const auto ParentMajorTab = FUMSlateHelpers::GetActiveMajorTab())
 		{
-			OutActiveMinorTabMajorTabParentName =
-				ActiveMinorTab->GetTabLabel().ToString();
+			OutMap.Add("ActiveMinorTabMajorTabParent",
+				ActiveMinorTab->GetTabLabel().ToString());
 		}
 	}
 	else
 	{
-		OutActiveMinorTabName = DefaultName;
-		OutActiveMinorTabMajorTabParentName = DefaultName;
+		OutMap.Add("ActiveMinorTab", DefaultName);
+		OutMap.Add("ActiveMinorTabMajorTabParent", DefaultName);
 	}
 
 	if (const auto ActiveWidget = SlateApp.GetUserFocusedWidget(0))
-		OutActiveWidgetName = ActiveWidget->GetTypeAsString();
+		OutMap.Add("ActiveWidget", ActiveWidget->GetTypeAsString());
 	else
-		OutActiveWidgetName = DefaultName;
+		OutMap.Add("ActiveWidget", DefaultName);
 }
