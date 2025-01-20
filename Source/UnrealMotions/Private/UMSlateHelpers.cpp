@@ -11,8 +11,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
 FUMLogger FUMSlateHelpers::Logger(&LogUMSlateHelpers);
 
 bool FUMSlateHelpers::TraverseWidgetTree(
-	const TSharedPtr<SWidget>& ParentWidget,
-	TArray<TWeakPtr<SWidget>>& OutWidgets,
+	const TSharedRef<SWidget>	 ParentWidget,
+	TArray<TSharedPtr<SWidget>>& OutWidgets,
 	const FString& TargetType, int32 SearchCount, int32 Depth)
 {
 	// Log the current widget and depth
@@ -44,9 +44,9 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 	{
 		for (int32 i{ 0 }; i < Children->Num(); ++i)
 		{
-			TSharedPtr<SWidget> Child = Children->GetChildAt(i);
-			bool				bChildFound = TraverseWidgetTree(
-				   Child, OutWidgets, TargetType, SearchCount, Depth + 1);
+			const TSharedRef<SWidget> Child = Children->GetChildAt(i);
+			bool					  bChildFound = TraverseWidgetTree(
+				 Child, OutWidgets, TargetType, SearchCount, Depth + 1);
 
 			// If SearchCount is -1, accumulate the "found" status
 			if (SearchCount == -1)
@@ -61,10 +61,10 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 }
 
 bool FUMSlateHelpers::TraverseWidgetTree(
-	const TSharedPtr<SWidget>& ParentWidget,
-	TWeakPtr<SWidget>&		   OutWidget,
-	const FString&			   TargetType,
-	int32					   Depth)
+	const TSharedRef<SWidget> ParentWidget,
+	TSharedPtr<SWidget>&	  OutWidget,
+	const FString&			  TargetType,
+	int32					  Depth)
 {
 	// Log the current widget and depth
 	// Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
@@ -88,7 +88,7 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 	{
 		for (int32 i = 0; i < Children->Num(); ++i)
 		{
-			TSharedPtr<SWidget> Child = Children->GetChildAt(i);
+			const TSharedRef<SWidget> Child = Children->GetChildAt(i);
 			if (TraverseWidgetTree(Child, OutWidget, TargetType, Depth + 1))
 				return true;
 		}
@@ -130,11 +130,11 @@ bool FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
 	if (!ActiveWin.IsValid())
 		return false;
 
-	TWeakPtr<SWidget> FoundWidget;
+	TSharedPtr<SWidget> FoundWidget;
 	if (!TraverseWidgetTree(ActiveWin->GetContent(), FoundWidget, DockWellType))
 		return false;
 
-	if (FChildren* Tabs = FoundWidget.Pin()->GetChildren())
+	if (FChildren* Tabs = FoundWidget->GetChildren())
 	{
 		for (int32 i{ 0 }; i < Tabs->Num(); ++i)
 		{
@@ -332,48 +332,13 @@ bool FUMSlateHelpers::DoesWidgetResideInTab(
 
 TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 {
-	// This method is a bit more expensive but way more robust to pick up all
-	// types of Major Tabs (AFAIK)
-	// Possibly we can fallback to this more expensive method after checking if
-	// our fetched Major Tab doesn't reside in our actual Active Window (which
-	// is a strong sign we haven't picked up the correct Major Tab) but not
-	// sure if it is that more efficient as this isn't too expensive anyway.
-	FSlateApplication&		  SlateApp = FSlateApplication::Get();
-	const TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
-	if (!ActiveWin.IsValid())
-		return nullptr;
-
-	TWeakPtr<SWidget> TargetTabWell;
-	if (!TraverseWidgetTree(ActiveWin, TargetTabWell, "SDockingTabWell"))
-		return nullptr;
-
-	const TSharedPtr<SWidget> TabWell = TargetTabWell.Pin();
-	if (!TabWell.IsValid())
-		return nullptr;
-
-	FChildren* Tabs = TabWell->GetChildren();
-	if (!Tabs || Tabs->Num() <= 0)
-		return nullptr;
-
-	for (int32 i{ 0 }; i < Tabs->Num(); ++i)
-	{
-		const TSharedRef<SWidget> TabAsWidget = Tabs->GetChildAt(i);
-		if (!TabAsWidget->GetTypeAsString().Equals("SDockTab"))
-			continue;
-
-		const TSharedRef<SDockTab> DockTab =
-			StaticCastSharedRef<SDockTab>(TabAsWidget);
-
-		if (DockTab->IsForeground())
-			return DockTab;
-	}
-
-	return nullptr;
+	return GetDefactoMajorTab();
 
 	// Sadly this method just isn't picking up all types of Major Tabs (AFAIK)
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
 	{
+		LogTab(ActiveMinorTab.ToSharedRef());
 		if (const TSharedPtr<FTabManager> TabManager =
 				ActiveMinorTab->GetTabManagerPtr())
 		{
@@ -388,13 +353,43 @@ TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 				// method will suffice. It is really only in edge cases of tabs
 				// like Preferences and such where we will want the more extensive
 				// method.
+				LogTab(ActiveMajorTab.ToSharedRef());
 				return ActiveMajorTab;
 			}
-			else if (ActiveMinorTab->GetVisualTabRole() == ETabRole::MajorTab)
-				return ActiveMinorTab;
+			// Is it any good?
+			// else if (ActiveMinorTab->GetVisualTabRole() == ETabRole::MajorTab)
+			// 	return ActiveMinorTab;
 		}
 	}
 	return nullptr;
+}
+
+TSharedPtr<SDockTab> FUMSlateHelpers::GetDefactoMajorTab()
+{
+	// This method is a bit more expensive but way more robust to pick up all
+	// types of Major Tabs (AFAIK)
+	// Possibly we can fallback to this more expensive method after checking if
+	// our fetched Major Tab doesn't reside in our actual Active Window (which
+	// is a strong sign we haven't picked up the correct Major Tab) but not
+	// sure if it is that more efficient as this isn't too expensive anyway.
+
+	static const FString TabWellType = "SDockingTabWell";
+	static const FString TabType = "SDockTab";
+
+	FSlateApplication&		  SlateApp = FSlateApplication::Get();
+	const TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWin.IsValid())
+		return nullptr;
+
+	// Find the first TabWell in our currently active window.
+	TSharedPtr<SWidget> TargetTabWell;
+	if (!TraverseWidgetTree(ActiveWin.ToSharedRef(), TargetTabWell, TabWellType))
+		return nullptr;
+
+	if (!TargetTabWell.IsValid())
+		return nullptr;
+
+	return GetForegroundTabInTabWell(TargetTabWell.ToSharedRef());
 }
 
 TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMinorTab()
@@ -484,14 +479,33 @@ FVector2f FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(
 	const FGeometry& WidgetGeometry = InWidget->GetCachedGeometry();
 
 	// Calculate the local top-right position
-	FVector2f LocalTopRight = FVector2f(WidgetGeometry.GetLocalSize().X, 0.0f);
+	const FVector2f LocalTopRight = FVector2f(WidgetGeometry.GetLocalSize().X, 0.0f);
 
 	// Convert local position to absolute screen space
-	FVector2f AbsoluteTopRight = WidgetGeometry.LocalToAbsolute(LocalTopRight);
+	const FVector2f AbsoluteTopRight = WidgetGeometry.LocalToAbsolute(LocalTopRight);
 
 	// Adjust the position to stay within the bounds
 	// return AbsoluteTopRight - FVector2D(Adjustment, Adjustment);
-	return AbsoluteTopRight - Offset;
+	return AbsoluteTopRight + Offset;
+}
+
+FVector2f FUMSlateHelpers::GetWidgetCenterRightScreenSpacePosition(
+	const TSharedRef<SWidget> InWidget,
+	const FVector2f			  Offset)
+{
+	// Get the cached geometry
+	const FGeometry& WidgetGeometry = InWidget->GetCachedGeometry();
+
+	// Calculate the local center-right position
+	const FVector2f LocalCenterRight =
+		FVector2f(WidgetGeometry.GetLocalSize().X,
+			WidgetGeometry.GetLocalSize().Y * 0.5f);
+
+	// Convert local position to absolute screen space
+	const FVector2f AbsoluteCenterRight = WidgetGeometry.LocalToAbsolute(LocalCenterRight);
+
+	// Adjust the position by the offset
+	return AbsoluteCenterRight + Offset;
 }
 
 TSharedPtr<FTabManager> FUMSlateHelpers::GetLevelEditorTabManager()
@@ -554,20 +568,19 @@ void FUMSlateHelpers::SimulateMenuClicks(
 		return;
 
 	// Get all Text Blocks in the target parent to look for the the entries.
-	TArray<TWeakPtr<SWidget>> TargetTextBlocks;
+	TArray<TSharedPtr<SWidget>> TargetTextBlocks;
 	if (!TraverseWidgetTree(ParentWidget, TargetTextBlocks, TextBlockType))
 		return;
 
 	TSharedPtr<SButton> TargetButton;
 
-	for (const TWeakPtr<SWidget>& Text : TargetTextBlocks)
+	for (const TSharedPtr<SWidget>& Text : TargetTextBlocks)
 	{
-		const TSharedPtr<SWidget> PinText = Text.Pin();
-		if (!PinText.IsValid())
+		if (!Text.IsValid())
 			continue;
 
 		const TSharedPtr<STextBlock> AsTextBlock =
-			StaticCastSharedPtr<STextBlock>(PinText);
+			StaticCastSharedPtr<STextBlock>(Text);
 
 		if (!AsTextBlock->GetText().ToString().Equals(TargetEntries[ArrayIndex]))
 			continue;
@@ -620,4 +633,88 @@ void FUMSlateHelpers::GetActiveMenuWindowAndCallSimulateMenuClicks(
 		return; // We're specifcally targeting only Menu Windows (non-regular)
 
 	SimulateMenuClicks(MenuWindow.ToSharedRef(), TargetEntries, ArrayIndex);
+}
+
+TSharedPtr<SDockTab> FUMSlateHelpers::GetForegroundTabInTabWell(
+	const TSharedRef<SWidget> InTabWell)
+{
+	static const FString TabType = "SDockTab";
+
+	FChildren* Tabs = InTabWell->GetChildren();
+	if (!Tabs)
+		return nullptr;
+
+	// Find and return the first Foregrounded Tab inside that TabWell.
+	const int32 TNum = Tabs->Num();
+	for (int32 i{ 0 }; i < TNum; ++i)
+	{
+		const TSharedRef<SWidget> TabAsWidget = Tabs->GetChildAt(i);
+		if (!TabAsWidget->GetTypeAsString().Equals(TabType))
+			continue;
+
+		const TSharedRef<SDockTab> DockTab =
+			StaticCastSharedRef<SDockTab>(TabAsWidget);
+
+		if (DockTab->IsForeground())
+			return DockTab;
+	}
+	return nullptr;
+}
+
+TSharedPtr<SDockTab> FUMSlateHelpers::GetLastTabInTabWell(
+	const TSharedRef<SWidget> InTabWell)
+{
+	static const FString TabType = "SDockTab";
+
+	FChildren* Tabs = InTabWell->GetChildren();
+	if (!Tabs)
+		return nullptr;
+
+	const int32 TNum = Tabs->Num();
+	if (TNum > 0)
+	{
+		const TSharedRef<SWidget> TabAsWidget = Tabs->GetChildAt(TNum - 1);
+		if (TabAsWidget->GetTypeAsString().Equals(TabType))
+			return StaticCastSharedRef<SDockTab>(TabAsWidget);
+	}
+	return nullptr;
+}
+
+void FUMSlateHelpers::LogTab(const TSharedRef<SDockTab> InTab)
+{
+	auto GetRoleString = [](ETabRole TabRole) -> FString {
+		switch (TabRole)
+		{
+			case ETabRole::MajorTab:
+				return TEXT("MajorTab");
+			case ETabRole::PanelTab:
+				return TEXT("PanelTab");
+			case ETabRole::NomadTab:
+				return TEXT("NomadTab");
+			case ETabRole::DocumentTab:
+				return TEXT("DocumentTab");
+			case ETabRole::NumRoles:
+				return TEXT("NumRoles");
+			default:
+				return TEXT("Unknown");
+		}
+	};
+
+	FString VisualRole = GetRoleString(InTab->GetVisualTabRole());
+	FString RegularRole = GetRoleString(InTab->GetTabRole());
+	FString Name = InTab->GetTabLabel().ToString();
+	int32	Id = InTab->GetId();
+	FString LayoutId = InTab->GetLayoutIdentifier().ToString();
+	bool	bIsToolkit = LayoutId.EndsWith(TEXT("Toolkit"));
+	FString DebugMsg = FString::Printf(
+		TEXT("InTab Details:\n"
+			 "  Name: %s\n"
+			 "  Visual Role: %s\n"
+			 "  Regular Role: %s\n"
+			 "  Id: %d\n"
+			 "  Layout ID: %s\n"
+			 "  Is Toolkit: %s"),
+		*Name, *VisualRole, *RegularRole, Id, *LayoutId, bIsToolkit ? TEXT("true") : TEXT("false"));
+
+	Logger.Print(DebugMsg, ELogVerbosity::Log, true);
 }

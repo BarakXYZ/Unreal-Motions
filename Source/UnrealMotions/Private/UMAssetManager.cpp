@@ -135,14 +135,12 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 
 	ToggleNotificationVisualSelection(NItem.ToSharedRef(), true);
 
-	TWeakPtr<SWidget> FoundWidget = nullptr;
+	TSharedPtr<SWidget> Button;
 	if (FUMSlateHelpers::TraverseWidgetTree(
-			VerBoxNotes->GetSlot(0).GetWidget().ToSharedPtr(),
-			FoundWidget,
+			VerBoxNotes->GetSlot(0).GetWidget(),
+			Button,
 			"SButton"))
 	{
-		TSharedPtr<SButton> Button =
-			StaticCastSharedPtr<SButton>(FoundWidget.Pin());
 		if (!Button.IsValid())
 			return;
 		SlateApp.ClearAllUserFocus();

@@ -12,8 +12,6 @@
 #include "Editor.h"
 #include "UMInputHelpers.h"
 #include "Framework/Docking/TabManager.h"
-#include "Framework/Docking/LayoutService.h"
-#include "Framework/MultiBox/MultiBox.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, Log, All);
@@ -133,17 +131,17 @@ void FUMEditorCommands::OpenWidgetReflector(
 		return;
 
 	// Fetching the first (maybe only) instance of this (parent of our target)
-	TWeakPtr<SWidget> FoundWidget;
+	TSharedPtr<SWidget> FoundWidget;
 	if (!FUMSlateHelpers::TraverseWidgetTree(
-			RefWin, FoundWidget, "SToolBarButtonBlock"))
+			RefWin.ToSharedRef(), FoundWidget, "SToolBarButtonBlock"))
 		return;
 
 	// Locate the button within it
 	if (FUMSlateHelpers::TraverseWidgetTree(
-			FoundWidget.Pin(), FoundWidget, "SButton"))
+			FoundWidget.ToSharedRef(), FoundWidget, "SButton"))
 	{
 		TSharedPtr<SButton> Button =
-			StaticCastSharedPtr<SButton>(FoundWidget.Pin());
+			StaticCastSharedPtr<SButton>(FoundWidget);
 		if (!Button)
 			return;
 		Button->SimulateClick(); // Will spawn a fetchable Menu Box (&& SWindow)
@@ -154,7 +152,7 @@ void FUMEditorCommands::OpenWidgetReflector(
 			return;
 
 		// Find all menu entry buttons in the found window
-		TArray<TWeakPtr<SWidget>> FoundButtons;
+		TArray<TSharedPtr<SWidget>> FoundButtons;
 		if (!FUMSlateHelpers::TraverseWidgetTree(
 				ChildRefWins[0], FoundButtons, "SMenuEntryButton"))
 			return;
@@ -162,7 +160,7 @@ void FUMEditorCommands::OpenWidgetReflector(
 		if (FoundButtons.Num() == 0 || !FoundButtons[1].IsValid())
 			return;
 		TSharedPtr<SButton> EntryButton = // SMenuEntry inherits from SButton
-			StaticCastSharedPtr<SButton>(FoundButtons[1].Pin());
+			StaticCastSharedPtr<SButton>(FoundButtons[1]);
 		if (!EntryButton.IsValid())
 			return;
 
@@ -215,15 +213,15 @@ void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEv
 	else
 		return;
 
-	TArray<TWeakPtr<SWidget>> EditableTexts;
+	TArray<TSharedPtr<SWidget>> EditableTexts;
 	if (FUMSlateHelpers::TraverseWidgetTree(
 			// SearchInWidget, SearchBox, SearchBoxType))
-			SearchContent, EditableTexts, EditableTextType))
+			SearchContent.ToSharedRef(), EditableTexts, EditableTextType))
 	{
 		Logger.Print(TabLabel, ELogVerbosity::Verbose, true);
 		if (TabLabel.StartsWith("Content Browser"))
 		{
-			if (const auto PinText = EditableTexts.Last().Pin())
+			if (const auto PinText = EditableTexts.Last())
 			{
 				SlateApp.SetAllUserFocus(
 					PinText, EFocusCause::Navigation);
@@ -234,12 +232,12 @@ void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEv
 		}
 		for (const auto& Text : EditableTexts)
 		{
-			if (const auto PinText = Text.Pin())
+			if (Text)
 			{
-				if (PinText->GetVisibility() == EVisibility::Visible)
+				if (Text->GetVisibility() == EVisibility::Visible)
 				{
 					SlateApp.SetAllUserFocus(
-						PinText, EFocusCause::Navigation);
+						Text, EFocusCause::Navigation);
 					Logger.Print("Found Editable Search Box to Focus On!",
 						ELogVerbosity::Verbose, true);
 					return;
@@ -320,10 +318,10 @@ void FUMEditorCommands::ResetEditorToDefaultLayout()
 		return;
 
 	// Get SWindowTitleBar; this is where we want to perform our searching
-	TWeakPtr<SWidget> WinTitleBar;
-	if (!FUMSlateHelpers::TraverseWidgetTree(RootWin, WinTitleBar, TitleBarType))
+	TSharedPtr<SWidget> WinBar;
+	if (!FUMSlateHelpers::TraverseWidgetTree(RootWin.ToSharedRef(), WinBar, TitleBarType))
 		return;
 
-	if (const TSharedPtr<SWidget> WinBar = WinTitleBar.Pin())
+	if (WinBar.IsValid())
 		FUMSlateHelpers::SimulateMenuClicks(WinBar.ToSharedRef(), EntriesView);
 }

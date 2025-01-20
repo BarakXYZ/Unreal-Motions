@@ -119,8 +119,6 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 	void LogTabChange(const FString& TabType,
 		const TWeakPtr<SDockTab>& CurrentTab, const TSharedRef<SDockTab>& NewTab);
 
-	bool FindActiveMinorTabs();
-
 	/**
 	 * Prints debug information about a tab.
 	 * @param Tab Tab to debug
@@ -133,9 +131,6 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 	/////////////////////////////////////////////////////////////////////////////
 	//							~ Vim Functions ~
 	//
-
-	bool DragAndReleaseActiveTabAtPosition(
-		FSlateApplication& SlateApp, FVector2f TargetPosition);
 
 	void MoveActiveTabToWindow(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);

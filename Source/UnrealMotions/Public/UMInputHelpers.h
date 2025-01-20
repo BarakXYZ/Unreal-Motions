@@ -93,10 +93,30 @@ public:
 	 */
 	static FInputChord GetChordFromKeyEvent(const FKeyEvent& InKeyEvent);
 
-	static void ReleaseMouseButtonAtCurrentPos(
+	static void ReleaseMouseButton(
 		const FKey KeyToRelease = EKeys::LeftMouseButton);
 
 	static void MoveMouseButtonToPosition(const FVector2D TargetPosition);
+
+	/**
+	 * Drag and release widget at the given position.
+	 */
+	static bool DragAndReleaseWidgetAtPosition(
+		const TSharedRef<SWidget> InWidget,
+		const FVector2f			  TargetPosition);
+
+	/**
+	 * Drag widget to each given position with a small delay in between each move;
+	 * releasing the widget at the final (last) position in the array.
+	 */
+	static bool DragAndReleaseWidgetAtPosition(
+		const TSharedRef<SWidget> InWidget,
+		const TArray<FVector2f>&  TargetPositions,
+		const float				  MoveOffsetDelay = 0.050f);
+
+	static bool SimulateMousePressAtPosition(const FVector2f TargetPosition, const FKey MouseButtonToSimulate = EKeys::LeftMouseButton);
+
+	static void TriggerDragInPlace();
 
 	static FUMLogger Logger;
 };

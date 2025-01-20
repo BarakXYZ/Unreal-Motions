@@ -233,94 +233,6 @@ void UUMTabNavigatorEditorSubsystem::CycleTabs(bool bIsMajorTab, bool bIsNextTab
 		NewTab->ActivateInParent(ETabActivationCause::SetDirectly);
 }
 
-bool UUMTabNavigatorEditorSubsystem::FindActiveMinorTabs()
-{
-	TSharedPtr<SDockTab> ActiveMajorTab;
-	if (!TryGetValidTargetTab(ActiveMajorTab, true))
-		return false;
-
-	// All panel tabs live inside a Docking Area. So we should really search
-	// only within it.
-	TWeakPtr<SWidget> DockingArea;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
-			ActiveMajorTab->GetContent(), DockingArea, "SDockingArea"))
-		return false;
-
-	// Next stop will be the splitter within it, which also includes all.
-	TWeakPtr<SWidget> Splitter;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
-			ActiveMajorTab->GetContent(), Splitter, "SSplitter"))
-		return false;
-
-	// Collect all SDockTab(s)
-	TArray<TWeakPtr<SWidget>>
-		FoundPanelTabs;
-	if (FUMSlateHelpers::TraverseWidgetTree(
-			Splitter.Pin(), FoundPanelTabs, "SDockTab"))
-	{
-		for (const auto& Tab : FoundPanelTabs)
-		{
-			TSharedPtr<SDockTab> DockTab =
-				StaticCastSharedRef<SDockTab>(Tab.Pin().ToSharedRef());
-		}
-		const int32 TabIndex = FMath::RandRange(0, FoundPanelTabs.Num() - 1);
-		if (const TSharedPtr<SDockTab> DockTab = StaticCastSharedRef<SDockTab>(FoundPanelTabs[TabIndex].Pin().ToSharedRef()))
-		{
-			FSlateApplication::Get().ClearAllUserFocus();
-			DockTab->ActivateInParent(ETabActivationCause::SetDirectly);
-			FSlateApplication::Get().SetAllUserFocus(
-				DockTab->GetContent(), EFocusCause::Navigation);
-
-			OnNewMajorTabChanged.Broadcast(ActiveMajorTab, DockTab);
-			return true;
-		}
-	}
-	return false;
-}
-
-void UUMTabNavigatorEditorSubsystem::DebugTab(
-	const TSharedPtr<SDockTab>& Tab,
-	bool bDebugVisualTabRole, FString DelegateType)
-{
-	if (!Tab.IsValid())
-		return;
-
-	auto GetRoleString = [](ETabRole TabRole) -> FString {
-		switch (TabRole)
-		{
-			case ETabRole::MajorTab:
-				return TEXT("MajorTab");
-			case ETabRole::PanelTab:
-				return TEXT("PanelTab");
-			case ETabRole::NomadTab:
-				return TEXT("NomadTab");
-			case ETabRole::DocumentTab:
-				return TEXT("DocumentTab");
-			case ETabRole::NumRoles:
-				return TEXT("NumRoles");
-			default:
-				return TEXT("Unknown");
-		}
-	};
-
-	FString VisualRole = GetRoleString(Tab->GetVisualTabRole());
-	FString RegularRole = GetRoleString(Tab->GetTabRole());
-	FString Name = Tab->GetTabLabel().ToString();
-	int32	Id = Tab->GetId();
-	FString LayoutId = Tab->GetLayoutIdentifier().ToString();
-	bool	bIsToolkit = LayoutId.EndsWith(TEXT("Toolkit"));
-	FString DebugMsg = FString::Printf(
-		TEXT("Called From: %s\n"
-			 "Tab Details:\n"
-			 "  Name: %s\n"
-			 "  Visual Role: %s\n"
-			 "  Regular Role: %s\n"
-			 "  Id: %d\n"
-			 "  Layout ID: %s\n"
-			 "  Is Toolkit: %s"),
-		*DelegateType, *Name, *VisualRole, *RegularRole, Id, *LayoutId, bIsToolkit ? TEXT("true") : TEXT("false"));
-}
-
 // Vim Related Functions:
 
 void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
@@ -370,34 +282,70 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 		const TSharedPtr<SWindow> RootWindow =
 			FGlobalTabmanager::Get()->GetRootWindow();
 
-		TSharedPtr<SWindow> TargetWindow =
+		TSharedRef<SWindow> TargetWindow =
 			(RootWindow.IsValid() && RootWindow->IsActive())
 			? RegularVisWins[KeyAsDigit]
 			: RegularVisWins[(RegularVisWins.Num() - 1) - KeyAsDigit];
 
 		// Get the first TabWell in the Target Window (Major Tab's TabWell)
-		TWeakPtr<SWidget> FoundTargetTabWell;
+		TSharedPtr<SWidget> FoundTargetTabWell;
 		if (!FUMSlateHelpers::TraverseWidgetTree(
 				TargetWindow, FoundTargetTabWell, "SDockingTabWell"))
 			return;
 
-		if (const auto PinFoundTargetTabWell = FoundTargetTabWell.Pin())
-			TargetTabWell = PinFoundTargetTabWell;
+		if (FoundTargetTabWell.IsValid())
+			TargetTabWell = FoundTargetTabWell;
 		else
 			return;
 	}
+	const TSharedPtr<SDockTab> LastTabInWell =
+		FUMSlateHelpers::GetLastTabInTabWell(TargetTabWell.ToSharedRef());
+	if (!LastTabInWell.IsValid())
+		return;
 
-	// We want to drag our tab to the new TabWell and append it to the end
-	const FVector2f TabWellTargetPosition =
-		FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(
-			TargetTabWell.ToSharedRef());
+	// The drag motion we want to perform now, in order to cover a all edge cases
+	// where the dragging will append before the last tab (or not be able to dock
+	// at all) is to drag to the center of the last tab, wait a tiny bit, then
+	// drag to the end of the TabWell.
+	// The reason we can't directly drag to the end of the TabWell is because of
+	// focus and heirarchy of layers, it won't detect our dragging if we won't
+	// firstly drag to the center of the last tab.
+
+	// First, we're dragging to the targeted last tab center position.
+	const FVector2f DragToPos_LastTabCenter =
+		FUMSlateHelpers::GetWidgetCenterRightScreenSpacePosition(
+			LastTabInWell.ToSharedRef());
+
+	// Finally we will drag the tab to the end of the TabWell to append it.
+
+	// If the TabWell has 1 child (tab) within it, we need to offset by the size
+	// of a tab.x to cover some edge cases in windows like Preference, etc.
+	// Else we can slightly offset to the left from the end of the TabWell itself.
+	const FVector2f OffsetTabWellTargetPosBy =
+		TargetTabWell->GetChildren()->Num() == 1
+		? FVector2f(-LastTabInWell->GetCachedGeometry().GetAbsoluteSize().X, 0.0f)
+		: FVector2f(-5.0f, 0.0f);
+
+	const FVector2f DragToPos_TargetTabWellCenterRight =
+		FUMSlateHelpers::GetWidgetCenterRightScreenSpacePosition(
+			TargetTabWell.ToSharedRef(), OffsetTabWellTargetPosBy);
+
+	// This is the array of positions we will pass on.
+	// Firstly we move to the last tab center, then right edge of TabWell.
+	TArray<FVector2f> TargetPositions({ DragToPos_LastTabCenter,
+		DragToPos_TargetTabWellCenterRight });
 
 	// Store the origin position so we can restore it at the end
 	const FVector2f MouseOriginPos = SlateApp.GetCursorPos();
 
-	// Perform the dragging
-	if (!DragAndReleaseActiveTabAtPosition(SlateApp, TabWellTargetPosition))
-		return;
+	const float MoveOffsetDelay = 0.050f; // Each move in the array will delay by
+	const float TotalOffsetDelay = TargetPositions.Num() * MoveOffsetDelay;
+
+	// Perform the dragging & releasing of the tab
+	if (const TSharedPtr<SDockTab> MajTab = FUMSlateHelpers::GetActiveMajorTab())
+		if (!FUMInputHelpers::DragAndReleaseWidgetAtPosition(
+				MajTab.ToSharedRef(), TargetPositions, MoveOffsetDelay))
+			return;
 
 	// Restore the original position of the cursor to where it was pre-shenanigans
 	FTimerHandle TimerHandle_MoveMouseToOrigin;
@@ -407,101 +355,13 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 			SlateApp.SetCursorPos(FVector2D(MouseOriginPos));
 			SlateApp.GetPlatformApplication()->Cursor->Show(true); // Reveal <3
 		},
-		0.06f,
+		// We want to compensate on the release delay too, so MoveOffset * 2
+		(TotalOffsetDelay) + (MoveOffsetDelay * 2),
 		false);
 }
 
 void UUMTabNavigatorEditorSubsystem::MoveActiveTabOut()
 {
-}
-
-bool UUMTabNavigatorEditorSubsystem::DragAndReleaseActiveTabAtPosition(
-	FSlateApplication& SlateApp, FVector2f TargetPosition)
-{
-	// Get our target (currently focused) tab.
-	TSharedPtr<SDockTab> ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
-	if (!ActiveMajorTab.IsValid())
-		return false;
-
-	// Calculate the active tab center, which is where we will position to mouse
-	// to simulate the mouse press on top of.
-	FVector2f MajorTabCenterPos =
-		FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(
-			ActiveMajorTab.ToSharedRef());
-
-	// We will need the Native Window as a parameter for the MouseDown Simulation
-	TSharedPtr<FGenericWindow> GenericActiveWindow =
-		FUMSlateHelpers::GetGenericActiveTopLevelWindow();
-	if (!GenericActiveWindow.IsValid())
-		return false;
-
-	// Hide the mouse cursor to reduce flickering (not very important - but nice)
-	SlateApp.GetPlatformApplication()->Cursor->Show(false);
-
-	// Move to the center of the tab we want to drag and store current position
-	SlateApp.SetCursorPos(FVector2d(MajorTabCenterPos));
-	const FVector2f MouseTargetTabPos = SlateApp.GetCursorPos(); // Current Pos
-
-	FPointerEvent MousePressEvent(
-		0,
-		0,
-		MouseTargetTabPos,
-		MouseTargetTabPos,
-		TSet<FKey>({ EKeys::LeftMouseButton }),
-		EKeys::LeftMouseButton,
-		0,
-		FModifierKeysState());
-
-	// Simulate Press
-	SlateApp.ProcessMouseButtonDownEvent(GenericActiveWindow, MousePressEvent);
-
-	// Now we want to simulate the move event (to simulate dragging)
-	// Our position hasn't changed so we can continue to use the MouseTargetTabPos
-
-	// Dragging horizontally by 10 units just to trigger the drag at all.
-	// 10 seems to be around the minimum to trigger the dragging.
-	// TODO: Test on more screen resolutions and on MacOS
-	FVector2f EndPosition = MouseTargetTabPos + FVector2f(10.0f, 0.0f);
-
-	FPointerEvent MouseMoveEvent(
-		0,									  // PointerIndex
-		EndPosition,						  // ScreenSpacePosition (Goto)
-		MouseTargetTabPos,					  // LastScreenSpacePosition (Prev)
-		TSet<FKey>{ EKeys::LeftMouseButton }, // Currently pressed buttons
-		EKeys::Invalid,						  // No new button pressed
-		0.0f,								  // WheelDelta
-		FModifierKeysState()				  // ModifierKeys
-	);
-
-	// Simulate Move (drag)
-	SlateApp.ProcessMouseMoveEvent(MouseMoveEvent);
-
-	// We need a slight delay to let the drag adjust...
-	// This seems to be important; else it won't catch up and break.
-	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
-
-	FTimerHandle TimerHandle_MoveMouseToTabWell;
-	TimerManager->SetTimer(
-		TimerHandle_MoveMouseToTabWell,
-		[&SlateApp, TargetPosition]() {
-			SlateApp.SetCursorPos(FVector2D(TargetPosition));
-		},
-		0.025f,
-		false);
-
-	// Release the tab in the new TabWell
-	FTimerHandle   TimerHandle_ReleaseMouseButton;
-	FTimerDelegate Delegate_ReleaseMouseButton;
-	Delegate_ReleaseMouseButton.BindStatic(
-		&FUMInputHelpers::ReleaseMouseButtonAtCurrentPos, EKeys::LeftMouseButton);
-
-	TimerManager->SetTimer(
-		TimerHandle_ReleaseMouseButton,
-		Delegate_ReleaseMouseButton,
-		0.05f,
-		false);
-
-	return true;
 }
 
 void UUMTabNavigatorEditorSubsystem::BindVimCommands()

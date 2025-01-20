@@ -392,12 +392,12 @@ bool UUMFocuserEditorSubsystem::TryFocusLastActiveMinorForMajorTab(
 
 bool UUMFocuserEditorSubsystem::TryFocusFirstFoundMinorTab(TSharedRef<SWidget> InContent)
 {
-	TWeakPtr<SWidget> FirstMinorTabAsWidget;
+	TSharedPtr<SWidget> FirstMinorTabAsWidget;
 	if (FUMSlateHelpers::TraverseWidgetTree(
 			InContent, FirstMinorTabAsWidget, "SDockTab"))
 	{
 		const TSharedPtr<SDockTab> FirstMinorTab =
-			StaticCastSharedPtr<SDockTab>(FirstMinorTabAsWidget.Pin());
+			StaticCastSharedPtr<SDockTab>(FirstMinorTabAsWidget);
 
 		ActivateTab(FirstMinorTab.ToSharedRef());
 		Logger.Print("Minor Tab Found: Fallback to focus first Minor Tab.",
@@ -413,7 +413,7 @@ bool UUMFocuserEditorSubsystem::TryFocusFirstFoundSearchBox(
 	TSharedRef<SWidget> InContent)
 {
 	// FSlateApplication& SlateApp = FSlateApplication::Get();
-	TWeakPtr<SWidget> EditableTextAsWidget;
+	TSharedPtr<SWidget> EditableTextAsWidget;
 	if (FUMSlateHelpers::TraverseWidgetTree(
 			// NewActiveTab->GetContent(), SearchBoxAsWidget, "SSearchBox"))
 			InContent, EditableTextAsWidget, "SEditableText"))
@@ -426,11 +426,11 @@ bool UUMFocuserEditorSubsystem::TryFocusFirstFoundSearchBox(
 		GEditor->GetTimerManager()->SetTimer(
 			TimerHandle,
 			[EditableTextAsWidget]() {
-				if (const auto Editable = EditableTextAsWidget.Pin())
+				if (EditableTextAsWidget.IsValid())
 				{
 					FSlateApplication& SlateApp = FSlateApplication::Get();
 					SlateApp.ClearAllUserFocus();
-					SlateApp.SetAllUserFocus(Editable,
+					SlateApp.SetAllUserFocus(EditableTextAsWidget,
 						EFocusCause::Navigation);
 				}
 			},

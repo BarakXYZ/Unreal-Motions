@@ -24,11 +24,11 @@ public:
 	 * @return true if OutWidgets >= SearchCount, or OutWidget > 0 if SearchCount is set to -1, false otherwise
 	 */
 	static bool TraverseWidgetTree(
-		const TSharedPtr<SWidget>& ParentWidget,
-		TArray<TWeakPtr<SWidget>>& OutWidgets,
-		const FString&			   TargetType,
-		int32					   SearchCount = -1,
-		int32					   Depth = 0);
+		const TSharedRef<SWidget>	 ParentWidget,
+		TArray<TSharedPtr<SWidget>>& OutWidgets,
+		const FString&				 TargetType,
+		int32						 SearchCount = -1,
+		int32						 Depth = 0);
 
 	/**
 	 * Recursively searches a widget tree for a single widget of the specified type.
@@ -39,10 +39,10 @@ public:
 	 * @return true if a widget was found, false otherwise
 	 */
 	static bool TraverseWidgetTree(
-		const TSharedPtr<SWidget>& ParentWidget,
-		TWeakPtr<SWidget>&		   OutWidget,
-		const FString&			   TargetType,
-		int32					   Depth = 0);
+		const TSharedRef<SWidget> ParentWidget,
+		TSharedPtr<SWidget>&	  OutWidget,
+		const FString&			  TargetType,
+		int32					  Depth = 0);
 
 	static bool GetFrontmostForegroundedMajorTab(TSharedPtr<SDockTab>& OutMajorTab);
 
@@ -101,6 +101,8 @@ public:
 
 	static TSharedPtr<SDockTab> GetActiveMajorTab();
 
+	static TSharedPtr<SDockTab> GetDefactoMajorTab();
+
 	static TSharedPtr<SDockTab> GetActiveMinorTab();
 
 	static bool IsVisualTextSelected(FSlateApplication& SlateApp);
@@ -117,7 +119,11 @@ public:
 
 	static FVector2f GetWidgetTopRightScreenSpacePosition(
 		const TSharedRef<SWidget> InWidget,
-		const FVector2f			  Offset = FVector2f(20.0f, -20.0f));
+		const FVector2f			  Offset = FVector2f(0.0f, 0.0f));
+
+	static FVector2f GetWidgetCenterRightScreenSpacePosition(
+		const TSharedRef<SWidget> InWidget,
+		const FVector2f			  Offset = FVector2f(0.0f, 0.0f));
 
 	static TSharedPtr<FTabManager> GetLevelEditorTabManager();
 
@@ -140,6 +146,14 @@ public:
 	 */
 	static void GetActiveMenuWindowAndCallSimulateMenuClicks(
 		const TArrayView<const FString> TargetEntries, const int32 ArrayIndex);
+
+	static void LogTab(const TSharedRef<SDockTab> InTab);
+
+	static TSharedPtr<SDockTab> GetForegroundTabInTabWell(
+		const TSharedRef<SWidget> InTabWell);
+
+	static TSharedPtr<SDockTab> GetLastTabInTabWell(
+		const TSharedRef<SWidget> InTabWell);
 
 	static FUMLogger Logger;
 };
