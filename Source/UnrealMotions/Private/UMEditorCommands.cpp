@@ -187,9 +187,9 @@ void FUMEditorCommands::OpenWidgetReflector(
 
 void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	static const FString SearchBoxType{ "SSearchBox" };
-	static const FString AssetSearchBoxType{ "SAssetSearchBox" };
-	static const FString FilterSearchBoxType{ "SFilterSearchBox" };
+	// static const FString SearchBoxType{ "SSearchBox" };
+	// static const FString AssetSearchBoxType{ "SAssetSearchBox" };
+	// static const FString FilterSearchBoxType{ "SFilterSearchBox" };
 	static const FString EditableTextType{ "SEditableText" };
 
 	TSharedPtr<SWidget> SearchContent;
@@ -249,6 +249,21 @@ void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEv
 	{
 		Logger.Print("Could not find any Editable Text to focus on.",
 			ELogVerbosity::Error, true);
+	}
+}
+
+void FUMEditorCommands::FindNearestSearchBox(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	static const FString EditableType = "SEditableText";
+	if (const TSharedPtr<SWidget> FocusedWidget =
+			SlateApp.GetUserFocusedWidget(0))
+	{
+		if (const TSharedPtr<SWidget> FoundWidget =
+				FUMSlateHelpers::FindNearstWidgetType(FocusedWidget.ToSharedRef(), EditableType))
+		{
+			SlateApp.SetAllUserFocus(FoundWidget.ToSharedRef(), EFocusCause::Navigation);
+		}
 	}
 }
 

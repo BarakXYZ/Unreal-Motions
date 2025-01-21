@@ -502,7 +502,7 @@ void UVimEditorSubsystem::BindCommands()
 
 	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::F) },
-		&FUMEditorCommands::FocusSearchBox);
+		&FUMEditorCommands::FindNearestSearchBox);
 
 	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, FInputChord(EModifierKey::Shift, EKeys::R) },

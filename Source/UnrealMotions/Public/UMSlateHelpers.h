@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Framework/Docking/TabManager.h"
 #include "ISceneOutlinerTreeItem.h"
+#include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Views/STreeView.h"
 #include "Widgets/SWidget.h"
 #include "UMLogger.h"
@@ -42,13 +43,31 @@ public:
 		const TSharedRef<SWidget> ParentWidget,
 		TSharedPtr<SWidget>&	  OutWidget,
 		const FString&			  TargetType,
+		const uint64			  IgnoreWidgetId = INDEX_NONE,
 		int32					  Depth = 0);
+
+	static bool TraverseWidgetTree(
+		const TSharedRef<SWidget> ParentWidget,
+		TSharedPtr<SWidget>&	  OutWidget,
+		const uint64			  LookupWidgetId,
+		const uint64			  IgnoreWidgetId = INDEX_NONE,
+		int32					  Depth = 0);
+
+	static TSharedPtr<SWidget> FindNearstWidgetType(
+		const TSharedRef<SWidget> StartWidget,
+		const FString&			  TargetType);
+
+	static void LogTraversalSearch(const int32 Depth,
+		const TSharedRef<SWidget>			   CurrWidget);
+	static void LogTraverseFoundWidget(const int32 Depth,
+		const TSharedRef<SWidget> CurrWidget, const FString& TargetType);
 
 	static bool GetFrontmostForegroundedMajorTab(TSharedPtr<SDockTab>& OutMajorTab);
 
 	static bool GetParentDockingTabStackAsWidget(
 		const TSharedRef<SWidget> ParentWidget,
-		TWeakPtr<SWidget>&		  OutDockingTabStack);
+		TWeakPtr<SWidget>&		  OutDockingTabStack,
+		const ETabRole			  TabRole = ETabRole::PanelTab);
 
 	///////////////////////////////////////////////////////////////////////////
 	//						~ List View Helpers ~
@@ -164,6 +183,12 @@ public:
 	 * this is a "Nomad Window"
 	 */
 	static bool IsNomadWindow(const TSharedRef<SWindow> InWindow);
+
+	static bool CheckReplaceIfWindowChanged(
+		const TSharedPtr<SWindow> CurrWin,
+		TSharedPtr<SWindow>&	  OutNewWinIfChanged);
+
+	static void LogWidgetResidesInTab(const TSharedRef<SDockTab> ParentTab, const TSharedRef<SWidget> ChildWidget, bool bDoesWidgetResidesInTab);
 
 	static FUMLogger Logger;
 };

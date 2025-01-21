@@ -120,7 +120,9 @@ public:
 
 	static bool RemoveActiveMajorTab();
 
-	bool VisualizeParentDockingTabStack(const TSharedRef<SDockTab> InTab);
+	bool VisualizeParentDockingTabStack(
+		const TSharedRef<SDockTab> InTab,
+		const ETabRole			   TabRole = ETabRole::PanelTab);
 
 	FString TabRoleToString(ETabRole InTabRole);
 
@@ -153,16 +155,15 @@ public:
 	void DebugPrevAndNewMinorTabsMajorTabs(
 		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
 
-	/* Deprecated */
-	bool FindTabWellAndActivateForegroundedTab(const TSharedRef<SDockTab> InMajorTab);
+	void CheckWindowChanged();
 
 	// TODO: protected + friend classes?
-	TWeakPtr<SWindow>  ActiveWindow;
-	TWeakPtr<SDockTab> ActiveMajorTab;
-	TWeakPtr<SWidget>  ActiveTabWell;
-	TWeakPtr<SDockTab> ActiveMinorTab;
-	TWeakPtr<SWidget>  ActiveWidget;
-	TWeakPtr<SWidget>  PrevWidget;
+	TWeakPtr<SWindow>  TrackedActiveWindow;
+	TWeakPtr<SDockTab> TrackedActiveMajorTab;
+	TWeakPtr<SWidget>  TrackedActiveTabWell;
+	TWeakPtr<SDockTab> TrackedActiveMinorTab;
+	TWeakPtr<SWidget>  TrackedActiveWidget;
+	TWeakPtr<SWidget>  TrackedPrevWidget;
 
 public:
 	FDelegateHandle DelegateHandle_OnActiveTabChanged;
@@ -172,6 +173,9 @@ public:
 	FTimerHandle TimerHandleNewMinorTabTracker;
 	FTimerHandle TimerHandleTabForegrounding;
 	FTimerHandle TimerHandle_OnActiveTabChanged;
+	FTimerHandle TimerHandle_OnWindowChanged;
+	FTimerHandle TimerHandle_OnWindowBeingDestroyed;
+	FTimerHandle TimerHandle_TryActivateLastWidgetInTab;
 
 	FTimerHandle TimerHandle_FocusTabContentFallback;
 

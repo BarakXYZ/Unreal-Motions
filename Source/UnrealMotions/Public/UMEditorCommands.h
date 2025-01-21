@@ -64,6 +64,9 @@ public:
 	static void FocusSearchBox(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	static void FindNearestSearchBox(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	/**
 	 * ~ WIP ~
 	 * @brief Deletes the currently selected item.

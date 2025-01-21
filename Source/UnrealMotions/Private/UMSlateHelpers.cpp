@@ -16,19 +16,12 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 	TArray<TSharedPtr<SWidget>>& OutWidgets,
 	const FString& TargetType, int32 SearchCount, int32 Depth)
 {
-	// Log the current widget and depth
-	// Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
-	// 	*FString::ChrN(Depth * 2, ' '), // Visual indentation
-	// 	Depth, *ParentWidget->GetTypeAsString()));
-
+	// LogTraversalSearch(Depth, ParentWidget);
 	bool bFoundAllRequested = false;
 
 	if (ParentWidget->GetTypeAsString() == TargetType)
 	{
-		// Logger.Print(FString::Printf(
-		// 	TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
-		// 	*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
-		// 	*TargetType));
+		// LogTraverseFoundWidget(Depth, ParentWidget, TargetType);
 		OutWidgets.Add(ParentWidget);
 
 		// If SearchCount is -1, continue searching but mark that we found at least one
@@ -65,20 +58,13 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 	const TSharedRef<SWidget> ParentWidget,
 	TSharedPtr<SWidget>&	  OutWidget,
 	const FString&			  TargetType,
+	const uint64			  IgnoreWidgetId,
 	int32					  Depth)
 {
-	// Log the current widget and depth
-	// Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s"),
-	// 	*FString::ChrN(Depth * 2, ' '), // Visual indentation
-	// 	Depth, *ParentWidget->GetTypeAsString()));
-
+	// LogTraversalSearch(Depth, ParentWidget);
 	if (ParentWidget->GetTypeAsString() == TargetType)
 	{
-		// Logger.Print(FString::Printf(
-		// 	TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
-		// 	*FString::ChrN(Depth * 2, ' '), Depth, *ParentWidget->ToString(),
-		// 	*TargetType));
-
+		// LogTraverseFoundWidget(Depth, ParentWidget, TargetType);
 		OutWidget = ParentWidget;
 		return true;
 	}
@@ -90,11 +76,71 @@ bool FUMSlateHelpers::TraverseWidgetTree(
 		for (int32 i = 0; i < Children->Num(); ++i)
 		{
 			const TSharedRef<SWidget> Child = Children->GetChildAt(i);
-			if (TraverseWidgetTree(Child, OutWidget, TargetType, Depth + 1))
+
+			if (IgnoreWidgetId != INDEX_NONE && Child->GetId() == IgnoreWidgetId)
+				continue;
+
+			if (TraverseWidgetTree(Child, OutWidget, TargetType,
+					IgnoreWidgetId, Depth + 1))
 				return true;
 		}
 	}
 	return false;
+}
+
+bool FUMSlateHelpers::TraverseWidgetTree(
+	const TSharedRef<SWidget> ParentWidget,
+	TSharedPtr<SWidget>&	  OutWidget,
+	const uint64			  LookupWidgetId,
+	const uint64			  IgnoreWidgetId,
+	int32					  Depth)
+{
+	LogTraversalSearch(Depth, ParentWidget);
+	if (ParentWidget->GetId() == LookupWidgetId)
+	{
+		// LogTraverseFoundWidget(Depth, ParentWidget, "LookupId");
+		OutWidget = ParentWidget;
+		return true;
+	}
+
+	// Recursively traverse the children of the current widget
+	FChildren* Children = ParentWidget->GetChildren();
+	if (Children)
+	{
+		for (int32 i = 0; i < Children->Num(); ++i)
+		{
+			const TSharedRef<SWidget> Child = Children->GetChildAt(i);
+
+			if (IgnoreWidgetId != INDEX_NONE && Child->GetId() == IgnoreWidgetId)
+				continue;
+
+			if (TraverseWidgetTree(Child, OutWidget, LookupWidgetId,
+					IgnoreWidgetId, Depth + 1))
+				return true;
+		}
+	}
+	return false;
+}
+
+TSharedPtr<SWidget> FUMSlateHelpers::FindNearstWidgetType(
+	const TSharedRef<SWidget> StartWidget,
+	const FString&			  TargetType)
+{
+	uint64				IgnoreWidgetId = StartWidget->GetId();
+	TSharedPtr<SWidget> FoundWidget;
+	TSharedPtr<SWidget> Parent = StartWidget->GetParentWidget();
+
+	while (Parent.IsValid())
+	{
+		if (TraverseWidgetTree(Parent.ToSharedRef(), FoundWidget,
+				TargetType, IgnoreWidgetId))
+			return FoundWidget;
+
+		// Update the ignore parent ID, as we've just traversed all its children.
+		IgnoreWidgetId = Parent->GetId();
+		Parent = Parent->GetParentWidget(); // Climb up to the next parent
+	}
+	return nullptr;
 }
 
 // We can't rely on the GlobalTabmanager for this because our current minor tab
@@ -159,21 +205,38 @@ bool FUMSlateHelpers::GetFrontmostForegroundedMajorTab(
 }
 
 bool FUMSlateHelpers::GetParentDockingTabStackAsWidget(
-	const TSharedRef<SWidget> ParentWidget, TWeakPtr<SWidget>& OutDockingTabStack)
+	const TSharedRef<SWidget> ParentWidget,
+	TWeakPtr<SWidget>& OutDockingTabStack, const ETabRole TabRole)
 {
 	static const FString DockType = "SDockingTabStack";
-	// return TraverseWidgetTree(ParentWidget, OutDockingTabStack, DockType);
+	const FString		 SplitterType = "SSplitter";
 
-	TSharedPtr<SWidget> CursorWidget = ParentWidget->GetParentWidget();
-	if (CursorWidget.IsValid())
-		while (!CursorWidget->GetTypeAsString().Equals(DockType))
-		{
-			CursorWidget = CursorWidget->GetParentWidget();
-			if (!CursorWidget.IsValid())
-				return false;
-		}
-	OutDockingTabStack = CursorWidget;
-	return true;
+	// TODO: better method for getting the proper content for Nomad Tabs
+	// const FString LookupType =
+	// 	TabRole == ETabRole::NomadTab
+	// 	? SplitterType
+	// 	: DockType;
+
+	if (const TSharedPtr<SWidget> DockingTabStack =
+			FindNearstWidgetType(ParentWidget, DockType))
+	{
+		OutDockingTabStack = DockingTabStack;
+		return true;
+	}
+	return false;
+
+	// Not sure what is better
+	// TSharedPtr<SWidget> CursorWidget = ParentWidget->GetParentWidget();
+	// if (CursorWidget.IsValid())
+	// 	// while (!CursorWidget->GetTypeAsString().Equals(DockType))
+	// 	while (!CursorWidget->GetTypeAsString().Equals(LookupType))
+	// 	{
+	// 		CursorWidget = CursorWidget->GetParentWidget();
+	// 		if (!CursorWidget.IsValid())
+	// 			return false;
+	// 	}
+	// OutDockingTabStack = CursorWidget;
+	// return true;
 }
 
 bool FUMSlateHelpers::IsValidTreeViewType(const FString& InWidgetType)
@@ -305,30 +368,47 @@ bool FUMSlateHelpers::DoesWidgetResideInTab(
 {
 	FWidgetPath ParentWidgetPath;
 	FWidgetPath ChildWidgetPath;
-	if (FSlateApplication::Get().FindPathToWidget(ChildWidget, ChildWidgetPath))
+	if (!FSlateApplication::Get().FindPathToWidget(ChildWidget, ChildWidgetPath))
+		return false;
+
+	// if (ParentTab->GetTabRole() == ETabRole::NomadTab)
+	// {
+	// 	TSharedPtr<SWidget> _;
+	// 	if (TraverseWidgetTree(ParentTab->GetContent(), _, ChildWidget->GetId()))
+	// 	{
+	// 		LogWidgetResidesInTab(ParentTab, ChildWidget, true);
+	// 		return true;
+	// 	}
+	// }
+	// else if (ChildWidgetPath.ContainsWidget(&ParentTab->GetContent().Get()))
+	if (ChildWidgetPath.ContainsWidget(&ParentTab->GetContent().Get()))
 	{
-		if (ChildWidgetPath.ContainsWidget(&ParentTab->GetContent().Get()))
-		{
-			Logger.Print(
-				FString::Printf(
-					TEXT("Tab %s contain Widget %s"),
-					*ParentTab->GetTabLabel().ToString(),
-					*ChildWidget->GetTypeAsString()),
-				ELogVerbosity::Verbose);
-			return true;
-		}
-		else
-		{
-			Logger.Print(
-				FString::Printf(
-					TEXT("Tab %s does NOT contain Widget %s"),
-					*ParentTab->GetTabLabel().ToString(),
-					*ChildWidget->GetTypeAsString()),
-				ELogVerbosity::Warning);
-			return false;
-		}
+		LogWidgetResidesInTab(ParentTab, ChildWidget, true);
+		return true;
 	}
+
+	LogWidgetResidesInTab(ParentTab, ChildWidget, false);
 	return false;
+}
+
+void FUMSlateHelpers::LogWidgetResidesInTab(const TSharedRef<SDockTab> ParentTab, const TSharedRef<SWidget> ChildWidget, bool bDoesWidgetResidesInTab)
+{
+	const bool bVisLog = true;
+	if (bDoesWidgetResidesInTab)
+		Logger.Print(
+			FString::Printf(
+				TEXT("Tab %s contain Widget %s"),
+				*ParentTab->GetTabLabel().ToString(),
+				*ChildWidget->GetTypeAsString()),
+			ELogVerbosity::Verbose, bVisLog);
+	else
+		Logger.Print(
+			FString::Printf(
+				TEXT("Tab %s does NOT contain Widget %s, ID: %d"),
+				*ParentTab->GetTabLabel().ToString(),
+				*ChildWidget->GetTypeAsString(),
+				ChildWidget->GetId()),
+			ELogVerbosity::Warning, bVisLog);
 }
 
 TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
@@ -743,6 +823,21 @@ void FUMSlateHelpers::LogTab(const TSharedRef<SDockTab> InTab)
 	Logger.Print(DebugMsg, ELogVerbosity::Log, true);
 }
 
+void FUMSlateHelpers::LogTraversalSearch(const int32 Depth, const TSharedRef<SWidget> CurrWidget)
+{
+	Logger.Print(FString::Printf(TEXT("%s[Depth: %d] Checking widget: %s ID: %d"),
+		*FString::ChrN(Depth * 2, ' '), // Visual indentation
+		Depth, *CurrWidget->GetTypeAsString(), CurrWidget->GetId()));
+}
+
+void FUMSlateHelpers::LogTraverseFoundWidget(const int32 Depth, const TSharedRef<SWidget> CurrWidget, const FString& TargetType)
+{
+	Logger.Print(FString::Printf(
+		TEXT("%s[Depth: %d] Found %s | Origin Target: %s"),
+		*FString::ChrN(Depth * 2, ' '), Depth, *CurrWidget->ToString(),
+		*TargetType));
+}
+
 bool FUMSlateHelpers::IsNomadWindow(const TSharedRef<SWindow> InWindow)
 {
 	static const FString TitleBarType = "SWindowTitleBar";
@@ -752,4 +847,24 @@ bool FUMSlateHelpers::IsNomadWindow(const TSharedRef<SWindow> InWindow)
 	TSharedPtr<SWidget> MultiBox;
 	return !(TraverseWidgetTree(InWindow, TitleBar, TitleBarType)
 		&& TraverseWidgetTree(TitleBar.ToSharedRef(), MultiBox, MultiBoxType));
+}
+
+bool FUMSlateHelpers::CheckReplaceIfWindowChanged(
+	const TSharedPtr<SWindow> CurrWin,
+	TSharedPtr<SWindow>&	  OutNewWinIfChanged)
+{
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+
+	TSharedPtr<SWindow> SysActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!SysActiveWin.IsValid())
+		return false;
+
+	// Window hasn't changed
+	// if (SysActiveWin->GetTitle().EqualTo(InTrackedWindow->GetTitle()))
+	if (CurrWin.IsValid()
+		&& CurrWin->GetId() == SysActiveWin->GetId())
+		return false;
+
+	OutNewWinIfChanged = SysActiveWin;
+	return true;
 }
