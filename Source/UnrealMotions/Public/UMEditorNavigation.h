@@ -12,5 +12,8 @@ public:
 	static void NavigatePanelTabs(
 		FSlateApplication& SlateApp, const FKeyEvent& InKey);
 
+	static void NavigateNomadSplitterChildrens(
+		FSlateApplication& SlateApp, const FKeyEvent& InKey);
+
 	static FUMLogger Logger;
 };

@@ -130,11 +130,20 @@ public:
 		const TSharedRef<SDockTab> InMinorTab);
 
 	bool TryRegisterWidgetWithTab(
-		const TWeakPtr<SWidget> InWidget, const TSharedRef<SDockTab> InTab);
+		const TSharedRef<SWidget> InWidget, const TSharedRef<SDockTab> InTab);
 
 	bool TryRegisterWidgetWithTab(const TSharedRef<SDockTab> InTab);
 
+	void TryRegisterWidgetWithTab(const TSharedRef<SDockTab> InTab, float Delay);
+
+	void Log_TryRegisterWidgetWithTab(const TSharedRef<SDockTab> InTab, const TSharedPtr<SWidget> InRegisteredWidget);
+
 	bool TryActivateLastWidgetInTab(const TSharedRef<SDockTab> InTab);
+	void Log_TryActivateLastWidgetInTab(const TSharedRef<SDockTab> InTab, const TSharedPtr<SWidget> FoundWidget, const bool bTabHadFocus = false);
+
+	void UpdateWidgetForActiveTab();
+
+	bool DrawFocusForNomadTab(const TSharedRef<SWidget> AssociatedWidget);
 
 	void ActivateTab(const TSharedRef<SDockTab> InTab);
 
@@ -157,6 +166,23 @@ public:
 
 	void CheckWindowChanged();
 
+	bool IsFirstEncounter(const TSharedRef<SDockTab> InTab);
+	bool IsFirstEncounter(const TSharedRef<SWindow> InWindow);
+
+	bool FirstEncounterDefaultInit(const TSharedRef<SDockTab> InTab);
+	bool FirstEncounterDefaultInit(const TSharedRef<SWindow> InWIndow);
+
+	void Log_FirstEncounterDefaultInit(const TSharedRef<SDockTab> InTab, const TSharedPtr<SWidget> FoundWidget);
+
+	bool TryBringFocusToActiveTab();
+
+	// For Nomad Tabs:
+	// Fetch splitters
+	// get the splitter childrens and filter out "SDockTabStack" (I think)
+	// check which of the childrens has focus decendents
+	// send it to the visualizer
+	// We should also be able to navigate these childrens as if they we're panels
+
 	// TODO: protected + friend classes?
 	TWeakPtr<SWindow>  TrackedActiveWindow;
 	TWeakPtr<SDockTab> TrackedActiveMajorTab;
@@ -176,6 +202,8 @@ public:
 	FTimerHandle TimerHandle_OnWindowChanged;
 	FTimerHandle TimerHandle_OnWindowBeingDestroyed;
 	FTimerHandle TimerHandle_TryActivateLastWidgetInTab;
+	FTimerHandle TimerHandle_GenericSetWidgetFocusWithDelay;
+	FTimerHandle TimerHandle_TryRegisterWidgetWithTab;
 
 	FTimerHandle TimerHandle_FocusTabContentFallback;
 

@@ -4,13 +4,14 @@
 #include "Types/SlateEnums.h"
 #include "ISceneOutlinerTreeItem.h"
 #include "Input/Events.h"
+#include "UMFocuserEditorSubsystem.h"
 #include "UMSlateHelpers.h"
 #include "UMInputHelpers.h"
 #include "UMEditorNavigation.h"
 #include "UMEditorCommands.h"
 #include "UMConfig.h"
 #include "LevelEditorActions.h"
-#include "VimInputProcessor.h"
+#include "UMFocuserEditorSubsystem.h"
 #include "LevelEditor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All);
@@ -269,6 +270,15 @@ void UVimEditorSubsystem::HandleTreeViewVisualModeFirstOrLastItemNavigation(
 void UVimEditorSubsystem::ProcessVimNavigationInput(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid())
+	{
+		if (UUMFocuserEditorSubsystem* Focuser =
+				GEditor->GetEditorSubsystem<UUMFocuserEditorSubsystem>())
+			Focuser->TryBringFocusToActiveTab();
+		return;
+	}
+
 	if (HandleListViewNavigation(SlateApp, InKeyEvent))
 		return; // User is in a valid navigatable list view.
 
@@ -314,8 +324,9 @@ bool UVimEditorSubsystem::HandleListViewNavigation(
 				FocusedWidget->GetCachedGeometry(), NavEvent);
 
 		// DEPRECATED: keeping for reference how we can use BoundaryRule
-		// if (NavReply.GetBoundaryRule() != EUINavigationRule::Escape)
-		// 	TrackVisualOffsetNavigation(InKeyEvent); // Only track if moving
+		if (NavReply.GetBoundaryRule() == EUINavigationRule::Escape)
+			// Regular arrow navigation
+			HandleArrowKeysNavigation(SlateApp, InKeyEvent);
 	}
 	return true;
 }
@@ -509,7 +520,7 @@ void UVimEditorSubsystem::BindCommands()
 		&FUMInputHelpers::SimulateRightClick);
 
 	Input->AddKeyBinding_KeyEvent(
-		{ EKeys::SpaceBar, FInputChord(EModifierKey::Shift, EKeys::R) },
+		{ EKeys::SpaceBar, FInputChord(EModifierKey::Alt, EKeys::R) },
 		&FUMInputHelpers::ToggleRightClickPress);
 
 	/////////////////////////////////////////////////////////////////////////
@@ -530,6 +541,27 @@ void UVimEditorSubsystem::BindCommands()
 	Input->AddKeyBinding_KeyEvent(
 		{ FInputChord(EModifierKey::Control, EKeys::L) },
 		&FUMEditorNavigation::NavigatePanelTabs);
+
+	// WIP
+	// Input->AddKeyBinding_KeyEvent(
+	// 	{ FInputChord(EModifierKey::FromBools(true, false, true, false),
+	// 		EKeys::H) },
+	// 	&FUMEditorNavigation::NavigateNomadSplitterChildrens);
+
+	// Input->AddKeyBinding_KeyEvent(
+	// 	{ FInputChord(EModifierKey::FromBools(true, false, true, false),
+	// 		EKeys::J) },
+	// 	&FUMEditorNavigation::NavigateNomadSplitterChildrens);
+
+	// Input->AddKeyBinding_KeyEvent(
+	// 	{ FInputChord(EModifierKey::FromBools(true, false, true, false),
+	// 		EKeys::K) },
+	// 	&FUMEditorNavigation::NavigateNomadSplitterChildrens);
+
+	// Input->AddKeyBinding_KeyEvent(
+	// 	{ FInputChord(EModifierKey::FromBools(true, false, true, false),
+	// 		EKeys::L) },
+	// 	&FUMEditorNavigation::NavigateNomadSplitterChildrens);
 
 	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::D, EKeys::C },

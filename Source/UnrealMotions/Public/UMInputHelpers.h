@@ -6,6 +6,8 @@
 #include "InputCoreTypes.h"
 #include "UMLogger.h"
 
+DECLARE_MULTICAST_DELEGATE(FUMOnSimulateRightClick);
+
 class FUMInputHelpers
 {
 public:
@@ -118,5 +120,6 @@ public:
 
 	static void TriggerDragInPlace();
 
-	static FUMLogger Logger;
+	static FUMLogger			   Logger;
+	static FUMOnSimulateRightClick OnSimulateRightClick;
 };

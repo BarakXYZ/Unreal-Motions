@@ -190,5 +190,20 @@ public:
 
 	static void LogWidgetResidesInTab(const TSharedRef<SDockTab> ParentTab, const TSharedRef<SWidget> ChildWidget, bool bDoesWidgetResidesInTab);
 
+	/** Will clear the old timer handle before starting a new one to mitigate
+	 * potential loops */
+	static void SetWidgetFocusWithDelay(const TSharedRef<SWidget> InWidget, FTimerHandle& TimerHandle, const float Delay, const bool bClearUserFocus);
+
+	static bool IsCurrentlyActiveTabNomad();
+
+	static TSharedPtr<SWidget> GetAssociatedParentSplitterChild(const TSharedRef<SWidget> InWidget);
+
+	/** Clean Tab Label from digits and trailing whitespaces for generic lookups
+	 *  For example Content Browser 3 == Content Browser
+	 *  @param InTab The tab to clean the label for.
+	 *  @return Clean Tab Label
+	 */
+	static FString GetCleanTabLabel(const TSharedRef<SDockTab> InTab);
+
 	static FUMLogger Logger;
 };

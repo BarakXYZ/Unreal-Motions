@@ -6,6 +6,7 @@
 #include "Widgets/Input/SEditableText.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/SWindow.h"
+#include "UMFocusVisualizer.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
@@ -452,7 +453,7 @@ TSharedPtr<SDockTab> FUMSlateHelpers::GetDefactoMajorTab()
 	// Possibly we can fallback to this more expensive method after checking if
 	// our fetched Major Tab doesn't reside in our actual Active Window (which
 	// is a strong sign we haven't picked up the correct Major Tab) but not
-	// sure if it is that more efficient as this isn't too expensive anyway.
+	// sure if it is that more efficient as this isn't too expensive anyway?
 
 	static const FString TabWellType = "SDockingTabWell";
 	static const FString TabType = "SDockTab";
@@ -867,4 +868,63 @@ bool FUMSlateHelpers::CheckReplaceIfWindowChanged(
 
 	OutNewWinIfChanged = SysActiveWin;
 	return true;
+}
+
+void FUMSlateHelpers::SetWidgetFocusWithDelay(const TSharedRef<SWidget> InWidget,
+	FTimerHandle& TimerHandle, const float Delay, const bool bClearUserFocus)
+{
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+	TimerManager->ClearTimer(TimerHandle);
+	TWeakPtr<SWidget> WeakWidget = InWidget;
+
+	TimerManager->SetTimer(
+		TimerHandle,
+		[WeakWidget, bClearUserFocus]() {
+			if (const TSharedPtr<SWidget> Widget = WeakWidget.Pin())
+			{
+				FSlateApplication& SlateApp = FSlateApplication::Get();
+				if (bClearUserFocus)
+					SlateApp.ClearAllUserFocus();
+
+				SlateApp.SetAllUserFocus(Widget, EFocusCause::Navigation);
+			}
+		},
+		Delay,
+		false);
+}
+
+bool FUMSlateHelpers::IsCurrentlyActiveTabNomad()
+{
+	if (const TSharedPtr<SDockTab> MajorTab = GetActiveMajorTab())
+		return MajorTab->GetTabRole() == ETabRole::NomadTab;
+	return false;
+}
+
+TSharedPtr<SWidget> FUMSlateHelpers::GetAssociatedParentSplitterChild(
+	const TSharedRef<SWidget> InWidget)
+{
+	static const FString SplitterType = "SSplitter";
+	TSharedPtr<SWidget>	 Parent = InWidget->GetParentWidget();
+	TSharedPtr<SWidget>	 Child = InWidget;
+
+	while (Parent.IsValid())
+	{
+		if (Parent->GetTypeAsString().Equals(SplitterType))
+			return Child;
+
+		Child = Parent;
+		Parent = Parent->GetParentWidget();
+	}
+	return nullptr;
+}
+
+FString FUMSlateHelpers::GetCleanTabLabel(const TSharedRef<SDockTab> InTab)
+{
+	FString TabLabel = InTab->GetTabLabel().ToString().TrimEnd();
+
+	// Clean-up any trailing digits
+	while (!TabLabel.IsEmpty() && FChar::IsDigit(TabLabel[TabLabel.Len() - 1]))
+		TabLabel.RemoveAt(TabLabel.Len() - 1);
+
+	return TabLabel.TrimEnd(); // Clean-up any trailing whitespaces
 }

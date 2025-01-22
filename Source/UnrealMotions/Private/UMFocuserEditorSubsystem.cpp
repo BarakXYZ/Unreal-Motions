@@ -3,6 +3,7 @@
 #include "Framework/Docking/TabManager.h"
 #include "Input/Events.h"
 #include "Logging/LogVerbosity.h"
+#include "UMInputHelpers.h"
 #include "UMLogger.h"
 #include "Editor.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -28,6 +29,9 @@ void UUMFocuserEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	FCoreDelegates::OnPostEngineInit.AddUObject(
 		this, &UUMFocuserEditorSubsystem::RegisterSlateEvents);
+
+	FUMInputHelpers::OnSimulateRightClick.AddUObject(
+		this, &UUMFocuserEditorSubsystem::UpdateWidgetForActiveTab);
 
 	Super::Initialize(Collection);
 }
@@ -100,6 +104,7 @@ void UUMFocuserEditorSubsystem::OnFocusChanged(const FFocusEvent& FocusEvent, co
 	const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
+	Logger.Print("On Focus Changed", ELogVerbosity::Log, true);
 	CheckWindowChanged();
 
 	const FString LogFunc = "OnFocusChanged:\n";
@@ -117,6 +122,9 @@ void UUMFocuserEditorSubsystem::OnFocusChanged(const FFocusEvent& FocusEvent, co
 		TrackedActiveWidget = NewWidget;
 		RecordWidgetUse(NewWidget.ToSharedRef());
 		LogNewWidget = NewWidget->GetTypeAsString();
+
+		// Only draws focus if Nomad Tab
+		DrawFocusForNomadTab(NewWidget.ToSharedRef());
 	}
 
 	Logger.Print(
@@ -144,34 +152,26 @@ void UUMFocuserEditorSubsystem::OnActiveTabChanged(
 		[this, WeakPrevActiveTab, WeakNewActiveTab]() {
 			if (const TSharedPtr<SDockTab> PrevActiveTab = WeakPrevActiveTab.Pin())
 			{
-				// NOTE:
-				// Intuitively we might think we need to register the Prev
-				// Widget with the PrevActiveTab, but the flow of actions
-				// unfolds by firstly making the tab switch focus, then the
-				// widgets. This happens because when we activate a tab, our
-				// OnFocusChanged event won't acatually trigger! That means
-				// our ActiveWidget is still associated and lives inside the
-				// previously active tab, and should be registered with it.
-				// NOTE:
-				// I'm not sure actually (LOL), perhaps it depends on if we
-				// go through the foregrounding or not? Anyway, we can pass both
-				// Prev & Active widgets for safety, I don't think there's any
-				// harm in doing so.
-				// if (!TryRegisterWidgetWithTab(
-				// 		ActiveWidget, PrevActiveTab.ToSharedRef()))
-				// 	TryRegisterWidgetWithTab(
-				// 		PrevWidget, PrevActiveTab.ToSharedRef());
 				TryRegisterWidgetWithTab(PrevActiveTab.ToSharedRef());
 			}
 
 			if (const TSharedPtr<SDockTab> NewActiveTab = WeakNewActiveTab.Pin())
 			{
 				const TSharedRef<SDockTab> NewTabRef = NewActiveTab.ToSharedRef();
-				if (NewActiveTab->GetVisualTabRole() != ETabRole::MajorTab)
-					TryRegisterMinorWithParentMajorTab(NewTabRef);
+				TryRegisterWidgetWithTab(NewTabRef); // Right?? Why not
 
-				TryActivateLastWidgetInTab(NewTabRef);
-				VisualizeParentDockingTabStack(NewTabRef);
+				if (NewTabRef->GetVisualTabRole() != ETabRole::MajorTab)
+				{
+					TryRegisterMinorWithParentMajorTab(NewTabRef);
+					TryActivateLastWidgetInTab(NewTabRef);
+					VisualizeParentDockingTabStack(NewTabRef);
+					return;
+				}
+
+				if (NewTabRef->GetTabRole() == ETabRole::NomadTab)
+					TryActivateLastWidgetInTab(NewTabRef);
+				else
+					TryFocusLastActiveMinorForMajorTab(NewTabRef);
 			}
 		},
 		0.025,
@@ -188,11 +188,10 @@ void UUMFocuserEditorSubsystem::OnTabForegrounded(
 
 	// FUMSlateHelpers::LogTab(NewActiveTab.ToSharedRef());
 
-	if (PrevActiveTab.IsValid() && PrevActiveTab->GetTabRole() == ETabRole::NomadTab)
+	if (PrevActiveTab.IsValid()
+		&& PrevActiveTab->GetTabRole() == ETabRole::NomadTab)
 	{
 		TryRegisterWidgetWithTab(PrevActiveTab.ToSharedRef());
-		// OnActiveTabChanged(PrevActiveTab, NewActiveTab);
-		// return;
 	}
 
 	if (!NewActiveTab.IsValid())
@@ -203,15 +202,15 @@ void UUMFocuserEditorSubsystem::OnTabForegrounded(
 
 	const TSharedRef<SDockTab> TabRef = NewActiveTab.ToSharedRef();
 
-	// ??
+	// if Nomad Tab, we need to manually call the TryActivate as it isn't picked
+	// up by OnActiveTabChanged
 	if (NewActiveTab->GetTabRole() == ETabRole::NomadTab)
 	{
-		// OnActiveTabChanged(PrevActiveTab, NewActiveTab);
-		// TryRegisterWidgetWithTab(NewActiveTab.ToSharedRef());
-		Logger.Print("Nomad Tab Only?", ELogVerbosity::Warning, true);
-		TryActivateLastWidgetInTab(TabRef);
-		VisualizeParentDockingTabStack(TabRef, ETabRole::NomadTab);
+		// Logger.Print("Nomad Tab Only", ELogVerbosity::Warning, true);
 
+		TryActivateLastWidgetInTab(TabRef);
+		TryRegisterWidgetWithTab(TabRef, 0.05); // Right?? Why not
+		// VisualizeParentDockingTabStack(TabRef, ETabRole::NomadTab);
 		return;
 	}
 
@@ -224,25 +223,8 @@ void UUMFocuserEditorSubsystem::OnTabForegrounded(
 	if (TryFocusFirstFoundMinorTab(TabContent))
 		return;
 
-	// I think that if we're here; it's almost certainly a Nomad Tab.
-	Logger.Print("Nomad Tab Only?", ELogVerbosity::Warning, true);
-	return;
-
-	// const TSharedPtr<SDockTab> TrackedMajorTab = TrackedActiveMajorTab.Pin();
-	// if (TrackedMajorTab.IsValid() && TrackedMajorTab->GetId() == TabRef->GetId())
-	// {
-	// 	Logger.Print("Nomad Tab same as previous", ELogVerbosity::Warning, true);
-	// 	return;
-	// }
-	// TrackedActiveMajorTab = NewActiveTab;
-	// OnActiveTabChanged(PrevActiveTab, NewActiveTab);
-	// return;
-
-	// Experimental
-	// if (TabRef->GetTabRole() == ETabRole::NomadTab)
-	// 	if (TryActivateLastWidgetInTab(TabRef))
-	// 		return;
-
+	////////////////
+	// Deprecated?
 	// 3. Try to focus on the first SearchBox (if it exists).
 	if (TryFocusFirstFoundSearchBox(TabContent))
 		return;
@@ -275,7 +257,13 @@ bool UUMFocuserEditorSubsystem::VisualizeParentDockingTabStack(
 	// This is temporary; we will probably want something more fancy in the future
 	if (TabRole == ETabRole::NomadTab)
 	{
-		FUMFocusVisualizer::Get()->DrawDebugOutlineOnWidget(InTab->GetContent());
+		// FUMFocusVisualizer::Get()->DrawDebugOutlineOnWidget(InTab->GetContent());
+
+		// const TSharedPtr<SWidget> Parent = FUMSlateHelpers::GetAssociatedParentSplitterChild(NewWidget.ToSharedRef());
+
+		// if (Parent.IsValid())
+		// 	FUMFocusVisualizer::Get()->DrawDebugOutlineOnWidget(Parent.ToSharedRef());
+
 		return true;
 	}
 
@@ -305,8 +293,8 @@ void UUMFocuserEditorSubsystem::HandleOnWindowChanged(
 	Logger.Print(FString::Printf(TEXT("OnWindowChanged: New Window: %s"),
 		*NewWindow->GetTitle().ToString()));
 
-	// We need to manually activate in order to bring the window to the front
-	// Until this line, Unreal can handle most of the things well natively.
+	// We need to manually activate in order to bring the window to the front.
+	// Until this line, UE can handle focus pretty well natively.
 	FUMSlateHelpers::ActivateWindow(NewWindow.ToSharedRef());
 
 	// This section helps to make sure we'll have focus in case the new window
@@ -322,29 +310,27 @@ void UUMFocuserEditorSubsystem::HandleOnWindowChanged(
 	TimerManager->SetTimer(
 		TimerHandle_OnWindowChanged,
 		[this, NewWindow]() {
+			// ??
 			// if (NewWindow.IsValid()
 			// 	&& NewWindow->GetContent()->HasFocusedDescendants())
 			// 	return;
 
-			const TSharedPtr<SDockTab> ActiveMajorTab =
-				FUMSlateHelpers::GetActiveMajorTab();
+			const auto ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
 			if (!ActiveMajorTab.IsValid())
 				return;
 
-			const TSharedPtr<SDockTab> TrackedMajorTab = TrackedActiveMajorTab.Pin();
-			// OnTabForegrounded(ActiveMajorTab, nullptr);
+			const auto PinTrackedMajorTab = TrackedActiveMajorTab.Pin();
 
-			// Why not OnActiveTabChanged to actually register stuff?
-			if (TrackedMajorTab.IsValid()
-				&& TrackedMajorTab->GetId() != ActiveMajorTab->GetId())
+			if (PinTrackedMajorTab.IsValid()
+				&& PinTrackedMajorTab->GetId() != ActiveMajorTab->GetId())
 			{
 				TrackedActiveMajorTab = ActiveMajorTab;
-				OnActiveTabChanged(TrackedMajorTab, ActiveMajorTab);
+				OnActiveTabChanged(PinTrackedMajorTab, ActiveMajorTab);
 				return;
 			}
 			OnActiveTabChanged(nullptr, ActiveMajorTab);
 		},
-		0.1f,
+		0.01f,
 		false);
 	return;
 }
@@ -430,12 +416,15 @@ bool UUMFocuserEditorSubsystem::TryFocusLastActiveMinorForMajorTab(
 		if (const TSharedPtr<SDockTab> LastActiveMinorTab =
 				LastActiveMinorTabPtr->Pin())
 		{
-			ActivateTab(LastActiveMinorTab.ToSharedRef());
+			const TSharedRef<SDockTab> TabRef = LastActiveMinorTab.ToSharedRef();
+			ActivateTab(TabRef);
 			Logger.Print(FString::Printf(TEXT("Last Active Minor Tab found: %s"),
-							 *LastActiveMinorTab->GetTabLabel().ToString()),
+							 *TabRef->GetTabLabel().ToString()),
 				ELogVerbosity::Verbose, bVisLogTabFocusFlow);
 
-			TryActivateLastWidgetInTab(LastActiveMinorTab.ToSharedRef());
+			TryActivateLastWidgetInTab(TabRef);
+			// if (TabRef->GetTabRole() != ETabRole::NomadTab)
+			VisualizeParentDockingTabStack(TabRef);
 			return true;
 		}
 	}
@@ -536,125 +525,152 @@ bool UUMFocuserEditorSubsystem::TryRegisterMinorWithParentMajorTab(
 }
 
 bool UUMFocuserEditorSubsystem::TryRegisterWidgetWithTab(
-	const TWeakPtr<SWidget> InWidget, const TSharedRef<SDockTab> InTab)
+	const TSharedRef<SWidget> InWidget, const TSharedRef<SDockTab> InTab)
 {
-	if (const TSharedPtr<SWidget> Widget = InWidget.Pin())
+	if (FUMSlateHelpers::DoesWidgetResideInTab(InTab, InWidget))
 	{
-		if (FUMSlateHelpers::DoesWidgetResideInTab(InTab, Widget.ToSharedRef()))
-		{
-			LastActiveWidgetByTabId.Add(InTab->GetId(), InWidget);
-			// TODO: Debug this
-			Logger.Print(FString::Printf(
-				TEXT("Registered Widget: %s with Tab: %s"),
-				*Widget->GetTypeAsString(),
-				*InTab->GetTabLabel().ToString()));
-			return bVisLogTabFocusFlow;
-		}
+		LastActiveWidgetByTabId.Add(InTab->GetId(), InWidget);
+
+		Log_TryRegisterWidgetWithTab(InTab, InWidget);
+		return true;
 	}
+	Log_TryRegisterWidgetWithTab(InTab, nullptr);
 	return false;
 }
 
-bool UUMFocuserEditorSubsystem::TryRegisterWidgetWithTab(const TSharedRef<SDockTab> InTab)
+bool UUMFocuserEditorSubsystem::TryRegisterWidgetWithTab(
+	const TSharedRef<SDockTab> InTab)
 {
 	for (const TWeakPtr<SWidget>& WidgetWeakPtr : RecentlyUsedWidgets)
 	{
 		if (const TSharedPtr<SWidget> WidgetPtr = WidgetWeakPtr.Pin())
 		{
 			// if found the most recent widget that lives in the new tab
-			if (FUMSlateHelpers::DoesWidgetResideInTab(InTab, WidgetPtr.ToSharedRef()))
+			const TSharedRef<SWidget> WidgetRef = WidgetPtr.ToSharedRef();
+			if (FUMSlateHelpers::DoesWidgetResideInTab(InTab, WidgetRef))
 			{
 				LastActiveWidgetByTabId.Add(InTab->GetId(), WidgetWeakPtr);
 
-				Logger.Print(
-					FString::Printf(
-						TEXT("Most recent widget in tab '%s' is '%s'"),
-						*InTab->GetTabLabel().ToString(),
-						*WidgetPtr->GetTypeAsString()),
-					ELogVerbosity::Verbose, bVisLogTabFocusFlow);
+				Log_TryRegisterWidgetWithTab(InTab, WidgetRef);
 				return true;
 			}
 		}
 	}
-	Logger.Print(FString::Printf(
-					 TEXT("Could NOT register any recent Widget with Tab: %s"),
-					 *InTab->GetTabLabel().ToString()),
-		ELogVerbosity::Error, bVisLogTabFocusFlow);
+	Log_TryRegisterWidgetWithTab(InTab, nullptr);
 	return false;
+}
+
+void UUMFocuserEditorSubsystem::TryRegisterWidgetWithTab(
+	const TSharedRef<SDockTab> InTab, float Delay)
+{
+	TWeakPtr<SDockTab>		  WeakTab = InTab;
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+	TimerManager->ClearTimer(TimerHandle_TryRegisterWidgetWithTab);
+
+	TimerManager->SetTimer(
+		TimerHandle_TryRegisterWidgetWithTab,
+		[this, WeakTab]() {
+			if (const TSharedPtr<SDockTab> TabPtr = WeakTab.Pin())
+			{
+				const TSharedRef<SDockTab> InTab = TabPtr.ToSharedRef();
+				TryRegisterWidgetWithTab(InTab);
+			}
+		},
+		Delay, false);
+}
+
+void UUMFocuserEditorSubsystem::Log_TryRegisterWidgetWithTab(const TSharedRef<SDockTab> InTab, const TSharedPtr<SWidget> InRegisteredWidget)
+{
+	const bool bVisLog = false;
+
+	if (InRegisteredWidget.IsValid())
+	{
+		Logger.Print(
+			FString::Printf(
+				TEXT("Most recent widget in tab '%s' is '%s'"),
+				*InTab->GetTabLabel().ToString(),
+				*InRegisteredWidget->GetTypeAsString()),
+			ELogVerbosity::Verbose, bVisLog);
+	}
+	else
+	{
+		Logger.Print(FString::Printf(
+						 TEXT("Could NOT register any Widget with Tab: %s"),
+						 *InTab->GetTabLabel().ToString()),
+			ELogVerbosity::Error, bVisLog);
+	}
 }
 
 bool UUMFocuserEditorSubsystem::TryActivateLastWidgetInTab(
 	const TSharedRef<SDockTab> InTab)
 {
-	// return false; // NOTE: TEST
-
 	// Logger.Print("TryActivateLastWidgetInTab.", ELogVerbosity::Log, true);
+
+	// NOTE:
 	// if this tab has any focus, it means the user had probably clicked on
-	// it manually via the mouse or something. In the case, we don't want to
-	// override the focus with the last registered one.
+	// it manually via the mouse or something. And so, we want to keep the focus
+	// as is, as he had an intention to draw focus to a specific widget.
 	if (InTab->GetContent()->HasFocusedDescendants())
 	{
-		TryRegisterWidgetWithTab(TrackedActiveWidget, InTab);
-		// Logger.Print("TryActivateLastWidgetInTab: Tab had focus.", ELogVerbosity::Warning, true);
+		// TEST
+		if (const auto Widget = TrackedActiveWidget.Pin())
+		{
+			const TSharedRef<SWidget> WidgetRef = Widget.ToSharedRef();
+			DrawFocusForNomadTab(WidgetRef);
+			TryRegisterWidgetWithTab(WidgetRef, InTab);
+		}
+		// Log_TryActivateLastWidgetInTab(InTab, nullptr, true);
 		return true;
 	}
 
-	FSlateApplication& SlateApp = FSlateApplication::Get();
-	// Clearing before drawing focus seems to solidfy the end focus result,
-	// especially for things like SGraphPanel allowing solid focus on Nodes.
-	SlateApp.ClearAllUserFocus();
-	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
-	// We wanna clear previous timer to mitigate a potential loop
-	TimerManager->ClearTimer(TimerHandle_FocusTabContentFallback);
-	TimerManager->ClearTimer(TimerHandle_TryActivateLastWidgetInTab);
+	if (IsFirstEncounter(InTab))
+		return FirstEncounterDefaultInit(InTab);
 
-	// Try find a registered last active widget
-	if (TWeakPtr<SWidget>* FoundWidget =
-			LastActiveWidgetByTabId.Find(InTab->GetId()))
+	// Try find the last active registered widget
+	const uint64 TabId = InTab->GetId();
+	if (TWeakPtr<SWidget>* FoundWidget = LastActiveWidgetByTabId.Find(TabId))
 	{
 		if (const TSharedPtr<SWidget> Widget = FoundWidget->Pin())
 		{
 			// It looks like we won't be able to pull focus properly on some
 			// tabs without this delay. Especially Nomad Tabs.
-			TimerManager->SetTimer(
-				TimerHandle_TryActivateLastWidgetInTab,
-				[&SlateApp, FoundWidget]() {
-					if (const TSharedPtr<SWidget> Widget = FoundWidget->Pin())
-						SlateApp.SetAllUserFocus(Widget, EFocusCause::Navigation);
-				},
-				0.025f, false);
+			FUMSlateHelpers::SetWidgetFocusWithDelay(
+				Widget.ToSharedRef(),
+				TimerHandle_TryActivateLastWidgetInTab, 0.025f, true);
 
-			// SlateApp.SetAllUserFocus(Widget, EFocusCause::Navigation);
-			Logger.Print(FString::Printf(TEXT("Found Widget: %s in Tab: %s"),
-							 *Widget->GetTypeAsString(),
-							 *InTab->GetTabLabel().ToString()),
-				ELogVerbosity::Verbose, true);
-
+			// Log_TryActivateLastWidgetInTab(InTab, Widget);
+			if (InTab->GetTabRole() == ETabRole::NomadTab)
+				FUMFocusVisualizer::Get()->DrawDebugOutlineOnWidget(Widget.ToSharedRef());
 			return true;
 		}
 	}
+	// Log_TryActivateLastWidgetInTab(InTab, nullptr);
 
-	// Registered widget was not found Fallback:
-	// if (TryFocusFirstFoundListView(InTab))
-	// 	return true;
+	return false; // We don't wany any other fallback?
+}
 
-	if (TryFocusFirstFoundSearchBox(InTab->GetContent()))
-		return true;
+void UUMFocuserEditorSubsystem::Log_TryActivateLastWidgetInTab(const TSharedRef<SDockTab> InTab, const TSharedPtr<SWidget> FoundWidget, const bool bTabHadFocus)
+{
+	if (bTabHadFocus)
+	{
+		Logger.Print("TryActivateLastWidgetInTab: Tab had focus.",
+			ELogVerbosity::Log, true);
+		return;
+	}
 
-	TWeakPtr<SDockTab> WeakInTab = InTab; // Store as weak for safety
-
-	TimerManager->SetTimer(
-		TimerHandle_FocusTabContentFallback,
-		[this, WeakInTab]() {
-			if (const auto& InTab = WeakInTab.Pin())
-			{
-				FSlateApplication::Get().SetAllUserFocus(
-					InTab->GetContent(), EFocusCause::Navigation);
-				Logger.Print("Widget not found in Tab. Fallback focus Tab's Content", ELogVerbosity::Warning, bVisLogTabFocusFlow);
-			}
-		},
-		0.2f, false);
-
-	return false; // I guess return false if it's a fallback?
+	if (FoundWidget.IsValid())
+	{
+		Logger.Print(FString::Printf(TEXT("Found Widget: %s in Tab: %s"),
+						 *FoundWidget->GetTypeAsString(),
+						 *InTab->GetTabLabel().ToString()),
+			ELogVerbosity::Verbose, true);
+	}
+	else
+	{
+		Logger.Print(FString::Printf(TEXT("Could NOT Find any Widget in Tab: %s"),
+						 *InTab->GetTabLabel().ToString()),
+			ELogVerbosity::Error, true);
+	}
 }
 
 void UUMFocuserEditorSubsystem::ActivateTab(const TSharedRef<SDockTab> InTab)
@@ -821,4 +837,144 @@ void UUMFocuserEditorSubsystem::DebugPrevAndNewMinorTabsMajorTabs(
 			*LogNewWidget);
 
 	Logger.Print((LogPrevious + '\n' + LogNew), ELogVerbosity::Verbose, true);
+}
+
+bool UUMFocuserEditorSubsystem::IsFirstEncounter(const TSharedRef<SDockTab> InTab)
+{
+	static TSet<uint64> TabEncounterTrackingMap;
+
+	const uint64 TabId = InTab->GetId();
+	if (TabEncounterTrackingMap.Contains(TabId))
+		return false; // Already tracked and seen before
+
+	TabEncounterTrackingMap.Add(TabId);
+	return true; // First time seen; add for tracking and return true
+}
+
+bool UUMFocuserEditorSubsystem::FirstEncounterDefaultInit(
+	const TSharedRef<SDockTab> InTab)
+{
+	static const TMap<FString, FString> DefaultWidgetTypeByTabLabel{
+		// Nomad Tabs
+		{ "Content Browser", "SAssetTileView" },
+		{ "Editor Preferences", "SEditableText" },
+		{ "Project Settings", "SEditableText" },
+		{ "Output Log", "SEditableText" },
+		{ "Widget Reflector", "SToolBarButtonBlock" },
+
+		// Level Editor
+		{ "Outliner", "SSceneOutlinerTreeView" },
+		{ "Viewport", "SViewport" },
+
+		// Blueprint Editor
+		{ "Palette", "SEditableText" },
+		// { "Hierarchy", "STreeView< TSharedPtr<FHierarchyModel> >" },
+		// { "Hierarchy", "STreeView" },
+		{ "Hierarchy", "SEditableText" },
+		{ "Details", "SEditableText" },
+		{ "My Blueprint", "SEditableText" },
+		{ "Event Graph", "SGraphPanel" },
+		{ "Construction Script", "SGraphPanel" },
+		{ "Components", "SSubobjectEditorDragDropTree" },
+		{ "Compiler Results", "SDockingTabStack" },
+	};
+
+	const FString TabLabel = FUMSlateHelpers::GetCleanTabLabel(InTab);
+	if (const FString* DefaultType = DefaultWidgetTypeByTabLabel.Find(TabLabel))
+	{
+		TSharedPtr<SWidget> FoundDefaultWidget;
+		if (!FUMSlateHelpers::TraverseWidgetTree(
+				InTab->GetContent(), FoundDefaultWidget, *DefaultType))
+			return false;
+
+		const TSharedRef<SWidget> WidgetRef = FoundDefaultWidget.ToSharedRef();
+		TryRegisterWidgetWithTab(WidgetRef, InTab);
+		FUMSlateHelpers::SetWidgetFocusWithDelay(WidgetRef,
+			TimerHandle_GenericSetWidgetFocusWithDelay, 0.025f, true);
+
+		Log_FirstEncounterDefaultInit(InTab, FoundDefaultWidget);
+		return true;
+	}
+
+	Log_FirstEncounterDefaultInit(InTab, nullptr);
+	TryFocusFirstFoundSearchBox(InTab->GetContent()); // Default temp
+	return false;
+}
+
+void UUMFocuserEditorSubsystem::Log_FirstEncounterDefaultInit(const TSharedRef<SDockTab> InTab, const TSharedPtr<SWidget> FoundWidget)
+{
+	const bool bVisLog = true;
+
+	if (FoundWidget.IsValid())
+	{
+		Logger.Print(FString::Printf(
+						 TEXT("Initialized first encountered Tab{%s} Widget{%s}"),
+						 *InTab->GetTabLabel().ToString(),
+						 *FoundWidget->GetTypeAsString()),
+			ELogVerbosity::Verbose, bVisLog);
+	}
+	else
+	{
+		Logger.Print(FString::Printf(
+						 TEXT("Could NOT initialize first encountered Tab{%s}"),
+						 *InTab->GetTabLabel().ToString()),
+			ELogVerbosity::Error, bVisLog);
+	}
+}
+
+bool UUMFocuserEditorSubsystem::DrawFocusForNomadTab(
+	const TSharedRef<SWidget> AssociatedWidget)
+{
+	if (FUMSlateHelpers::IsCurrentlyActiveTabNomad())
+	{
+		const TSharedPtr<SWidget> Parent =
+			FUMSlateHelpers::GetAssociatedParentSplitterChild(AssociatedWidget);
+
+		if (Parent.IsValid())
+		{
+			FUMFocusVisualizer::Get()->DrawDebugOutlineOnWidget(Parent.ToSharedRef());
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UUMFocuserEditorSubsystem::TryBringFocusToActiveTab()
+{
+	const TSharedPtr<SDockTab> MajorTab = FUMSlateHelpers::GetActiveMajorTab();
+	if (!MajorTab.IsValid())
+		return false;
+
+	const TSharedRef<SDockTab> TabRef = MajorTab.ToSharedRef();
+	if (TabRef->GetTabRole() == ETabRole::NomadTab)
+		TryActivateLastWidgetInTab(TabRef);
+	else
+		TryFocusLastActiveMinorForMajorTab(TabRef);
+
+	Logger.Print("TryBringFocusToActiveTab: Success!",
+		ELogVerbosity::Verbose, true);
+	return true;
+}
+
+void UUMFocuserEditorSubsystem::UpdateWidgetForActiveTab()
+{
+	const TSharedPtr<SDockTab> ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
+
+	if (!ActiveMajorTab.IsValid())
+		return;
+
+	const TSharedRef<SDockTab> MajorTabRef = ActiveMajorTab.ToSharedRef();
+	if (ActiveMajorTab->GetTabRole() == ETabRole::NomadTab)
+	{
+		TryRegisterWidgetWithTab(MajorTabRef);
+	}
+	else
+	{
+		if (const auto ActiveMinorTab = FUMSlateHelpers::GetActiveMinorTab())
+		{
+			const TSharedRef<SDockTab> MinorTabRef = ActiveMinorTab.ToSharedRef();
+			TryRegisterMinorWithParentMajorTab(MinorTabRef);
+			TryRegisterWidgetWithTab(MinorTabRef);
+		}
+	}
 }

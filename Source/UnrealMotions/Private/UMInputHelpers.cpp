@@ -10,6 +10,8 @@
 DEFINE_LOG_CATEGORY_STATIC(LogUMInputHelpers, Log, All); // Dev
 FUMLogger FUMInputHelpers::Logger(&LogUMInputHelpers, true);
 
+FUMOnSimulateRightClick FUMInputHelpers::OnSimulateRightClick;
+
 void FUMInputHelpers::SimulateClickOnWidget(
 	FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
 	const FKey& EffectingButton, bool bIsDoubleClick)
@@ -84,6 +86,9 @@ void FUMInputHelpers::SimulateRightClick(
 	if (!FocusedWidget.IsValid())
 		return;
 
+	Logger.Print("Simulate Right-Click", ELogVerbosity::Verbose, true);
+	OnSimulateRightClick.Broadcast();
+
 	// Will fetch and assign the item to Focused Widget (or not if not list view)
 	FUMSlateHelpers::GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
 		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>());
@@ -113,7 +118,7 @@ void FUMInputHelpers::ToggleRightClickPress(
 	if (GetActiveEditorViewportClient())
 	{
 		InputKey(GetActiveEditorViewportClient(), EKeys::K, EInputEvent::IE_Repeat);
-		Logger.Print("Test", ELogVerbosity::Verbose, true);
+		Logger.Print("ToggleRightClickPress", ELogVerbosity::Verbose, true);
 	}
 }
 
@@ -293,7 +298,14 @@ bool FUMInputHelpers::MapVimToArrowNavigation(
 {
 	const FModifierKeysState ModKeysState(
 		bIsShiftDown, bIsShiftDown,
-		false, false, false, false, false, false, false);
+		false, false, /* Control */
+		// NOTE:
+		// Simulate alt down for seems to help with escaping some widgets
+		// that persist on keeping attention (e.g. Content Browser file tree)
+		// So until I'll notice any harm in constant alt down; I'm keeping this.
+		true, true,	  /* Alt */
+		false, false, /* Commands */
+		false /* Caps Locks */);
 
 	FKey MappedKey;
 	if (GetArrowKeyFromVimKey(InKeyEvent.GetKey(), MappedKey))
@@ -316,9 +328,7 @@ void FUMInputHelpers::Enter(
 {
 	static const FName ButtonType{ "SButton" };
 
-	TSharedPtr<SWidget> FocusedWidget =
-		SlateApp.GetUserFocusedWidget(0);
-	// SlateApp.GetKeyboardFocusedWidget();
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
 	if (!FocusedWidget)
 		return;
 
@@ -334,11 +344,18 @@ void FUMInputHelpers::Enter(
 		return;
 	}
 	// Will fetch and assign the item to Focused Widget (or not if not list view)
-	FUMSlateHelpers::GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
-		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>());
-
+	if (FUMSlateHelpers::GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
+			TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>()))
+	{
+		// Lists requires Double-Click to actually open
+		FUMInputHelpers::SimulateClickOnWidget(
+			SlateApp, FocusedWidget.ToSharedRef(),
+			EKeys::LeftMouseButton, true /* Double-Click */);
+		return;
+	}
+	// All other widgets can be a normal Single-Click
 	FUMInputHelpers::SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef(),
-		EKeys::LeftMouseButton, true /* Double-Click */);
+		EKeys::LeftMouseButton, false /* Single-Click */);
 }
 
 bool FUMInputHelpers::GetDigitFromKey(const FKey& InKey, int32& OutDigit,
