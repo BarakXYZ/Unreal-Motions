@@ -89,5 +89,16 @@ public:
 
 	static void ResetEditorToDefaultLayout();
 
+	static void RunUtilityWidget();
+
+	static void Search(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	// Collect all focusable widgets (buttons, hyperlinks, lists, etc.)
+	// Create a small widget for each of them with a unique 2 characters id.
+	// This widget (or in collaboration with the VimProcessor) should listen to
+	// the user input and detect when a unique 2 character combination is pressed.
+	// Once executed, the widget that is bound to the 2 char id should be focused.
+	// All widget dissapear.
+
 	static FUMLogger Logger;
 };

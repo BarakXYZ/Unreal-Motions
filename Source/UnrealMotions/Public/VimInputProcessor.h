@@ -101,6 +101,11 @@ public:
 	void SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode);
 
 	/**
+	 * Delayed override edition
+	 */
+	void SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, const float Delay);
+
+	/**
 	 * Determines if the current key event should trigger a Vim mode switch
 	 * @param SlateApp - Reference to the Slate application instance
 	 * @param InKeyEvent - The key event to evaluate

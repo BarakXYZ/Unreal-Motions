@@ -395,6 +395,17 @@ void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode 
 	OnVimModeChanged.Broadcast(NewMode);
 }
 
+void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, const float Delay)
+{
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[this, &SlateApp, NewMode]() {
+			SetVimMode(SlateApp, NewMode);
+		},
+		Delay, false);
+}
+
 FOnVimModeChanged& FVimInputProcessor::GetOnVimModeChanged()
 {
 	return OnVimModeChanged;

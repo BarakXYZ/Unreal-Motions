@@ -12,6 +12,7 @@
 #include "Editor.h"
 #include "UMInputHelpers.h"
 #include "Framework/Docking/TabManager.h"
+#include "SUMSearch.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogUMEditorCommands, Log, All);
@@ -125,7 +126,6 @@ void FUMEditorCommands::OpenWidgetReflector(
 	else
 		return;
 
-	// FGlobalTabmanager::Get()->GetTabManagerForMajorTab(RefTab)->GetPrivateApi().GetLiveDockAreas();
 	TSharedPtr<SWindow> RefWin = RefTab->GetParentWindow();
 	if (!RefWin)
 		return;
@@ -175,13 +175,11 @@ void FUMEditorCommands::OpenWidgetReflector(
 				SlateApp.ClearAllUserFocus();
 				if (bIsImmediatelyTriggered)
 					EntryButton->SimulateClick();
-				// TODO: This is fragile - let's add a manual focus visualizer
 				SlateApp.SetAllUserFocus(EntryButton, EFocusCause::Navigation);
 			},
 			0.01f, // 10ms delay seems to be enough (need to check on mac)
 			false  // Do not loop
 		);
-		Logger.Print(FString::FromInt(FoundButtons.Num()));
 	}
 }
 
@@ -263,6 +261,7 @@ void FUMEditorCommands::FindNearestSearchBox(
 				FUMSlateHelpers::FindNearstWidgetType(FocusedWidget.ToSharedRef(), EditableType))
 		{
 			SlateApp.SetAllUserFocus(FoundWidget.ToSharedRef(), EFocusCause::Navigation);
+			Logger.Print("Editable Text Found!", ELogVerbosity::Verbose, true);
 		}
 	}
 }
@@ -339,4 +338,67 @@ void FUMEditorCommands::ResetEditorToDefaultLayout()
 
 	if (WinBar.IsValid())
 		FUMSlateHelpers::SimulateMenuClicks(WinBar.ToSharedRef(), EntriesView);
+}
+
+void FUMEditorCommands::RunUtilityWidget()
+{
+	const TSharedPtr<SDockTab> MajorTab = FUMSlateHelpers::GetActiveMajorTab();
+	if (!MajorTab.IsValid())
+		return;
+
+	TArray<TSharedPtr<SWidget>> FoundTexts;
+	if (!FUMSlateHelpers::TraverseWidgetTree(
+			MajorTab->GetContent(), FoundTexts, "STextBlock"))
+		return;
+
+	for (const TSharedPtr<SWidget>& Text : FoundTexts)
+	{
+		const TSharedPtr<STextBlock> TB = StaticCastSharedPtr<STextBlock>(Text);
+		if (TB->GetText().ToString().Equals("Run Utility Widget"))
+		{
+			const TSharedPtr<SWidget> ButtonAsWidget =
+				FUMSlateHelpers::FindNearstWidgetType(TB.ToSharedRef(), "SButton");
+
+			if (!ButtonAsWidget.IsValid())
+				return;
+
+			const TSharedPtr<SButton> AsButton = StaticCastSharedPtr<SButton>(ButtonAsWidget);
+
+			AsButton->SimulateClick();
+		}
+	}
+}
+
+void FUMEditorCommands::Search(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// Pop an SEditable text to enter the search
+	FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
+	SUMSearch::Open();
+	return;
+
+	const TSharedPtr<SDockTab> MajorTab = FUMSlateHelpers::GetActiveMajorTab();
+	if (!MajorTab.IsValid())
+		return;
+
+	TArray<TSharedPtr<SWidget>> FoundTexts;
+	if (!FUMSlateHelpers::TraverseWidgetTree(
+			MajorTab->GetContent(), FoundTexts, "STextBlock"))
+		return;
+
+	for (const TSharedPtr<SWidget>& Text : FoundTexts)
+	{
+		const TSharedPtr<STextBlock> TB = StaticCastSharedPtr<STextBlock>(Text);
+		if (TB->GetText().ToString().Equals("Run Utility Widget"))
+		{
+			const TSharedPtr<SWidget> ButtonAsWidget =
+				FUMSlateHelpers::FindNearstWidgetType(TB.ToSharedRef(), "SButton");
+
+			if (!ButtonAsWidget.IsValid())
+				return;
+
+			const TSharedPtr<SButton> AsButton = StaticCastSharedPtr<SButton>(ButtonAsWidget);
+
+			AsButton->SimulateClick();
+		}
+	}
 }

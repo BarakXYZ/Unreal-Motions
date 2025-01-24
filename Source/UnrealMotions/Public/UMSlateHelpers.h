@@ -32,6 +32,18 @@ public:
 		int32						 Depth = 0);
 
 	/**
+	 * Warning: This is only good if we need generic SWidget operations on the
+	 * found widgets as we can't cast necessarily to the same type without
+	 * crashing
+	 */
+	static bool TraverseWidgetTree(
+		const TSharedRef<SWidget>	 ParentWidget,
+		TArray<TSharedPtr<SWidget>>& OutWidgets,
+		const TSet<FString>&		 TargetTypes,
+		int32						 SearchCount = -1,
+		int32						 Depth = 0);
+
+	/**
 	 * Recursively searches a widget tree for a single widget of the specified type.
 	 * @param ParentWidget The root widget to start traversing from
 	 * @param OutWidget Output parameter that will store the found widget
@@ -53,9 +65,19 @@ public:
 		const uint64			  IgnoreWidgetId = INDEX_NONE,
 		int32					  Depth = 0);
 
+	static bool TraverseWidgetTree(
+		const TSharedRef<SWidget> ParentWidget,
+		TSharedPtr<SWidget>&	  OutWidget,
+		const TSet<FString>&	  TargetWidgetTypes,
+		const uint64			  IgnoreWidgetId = INDEX_NONE,
+		int32					  Depth = 0);
+
 	static TSharedPtr<SWidget> FindNearstWidgetType(
 		const TSharedRef<SWidget> StartWidget,
 		const FString&			  TargetType);
+
+	static bool FocusNearestInteractableWidget(
+		const TSharedRef<SWidget> StartWidget);
 
 	static void LogTraversalSearch(const int32 Depth,
 		const TSharedRef<SWidget>			   CurrWidget);
@@ -204,6 +226,8 @@ public:
 	 *  @return Clean Tab Label
 	 */
 	static FString GetCleanTabLabel(const TSharedRef<SDockTab> InTab);
+
+	static void DebugClimbUpFromWidget(const TSharedRef<SWidget> InWidget);
 
 	static FUMLogger Logger;
 };

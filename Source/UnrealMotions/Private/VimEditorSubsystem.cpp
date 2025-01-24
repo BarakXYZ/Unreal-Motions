@@ -62,11 +62,13 @@ void UVimEditorSubsystem::WrapAndSetCustomMessageHandler()
 	PlatformApp->SetMessageHandler(UMGenericAppMessageHandler.ToSharedRef());
 }
 
+// TODO: move this to the VimInputProcessor
 void UVimEditorSubsystem::OnResetSequence()
 {
 	CountBuffer.Empty();
 }
 
+// TODO: move this to the VimInputProcessor
 void UVimEditorSubsystem::OnCountPrefix(FString AddedCount)
 {
 	// Building the buffer -> "1" + "7" + "3" == "173"
@@ -428,6 +430,14 @@ void UVimEditorSubsystem::BindCommands()
 	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, EKeys::O, EKeys::P },
 		&FUMEditorCommands::OpenPreferences);
+
+	Input->AddKeyBinding_NoParam(
+		{ EKeys::SpaceBar, EKeys::R, EKeys::U, EKeys::W },
+		&FUMEditorCommands::RunUtilityWidget);
+
+	Input->AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Shift, EKeys::Slash) },
+		&FUMEditorCommands::Search);
 
 	//** Open Content Browsers 1-4 */
 	Input->AddKeyBinding_KeyEvent(
