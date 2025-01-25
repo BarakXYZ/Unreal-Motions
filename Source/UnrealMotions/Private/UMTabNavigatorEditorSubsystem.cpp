@@ -297,7 +297,7 @@ void UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow(
 
 		// Get the first TabWell in the Target Window (Major Tab's TabWell)
 		TSharedPtr<SWidget> FoundTargetTabWell;
-		if (!FUMSlateHelpers::TraverseWidgetTree(
+		if (!FUMSlateHelpers::TraverseFindWidget(
 				TargetWindow, FoundTargetTabWell, "SDockingTabWell"))
 			return;
 

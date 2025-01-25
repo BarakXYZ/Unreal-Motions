@@ -11,6 +11,7 @@
 #include "UMWindowNavigatorEditorSubsystem.h"
 #include "UMFocusVisualizer.h"
 #include "UMConfig.h"
+#include "UMFocusHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(UMFocuserEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(UMFocuserEditorSubsystem, Log, All); // Dev
@@ -434,7 +435,7 @@ bool UUMFocuserEditorSubsystem::TryFocusLastActiveMinorForMajorTab(
 bool UUMFocuserEditorSubsystem::TryFocusFirstFoundMinorTab(TSharedRef<SWidget> InContent)
 {
 	TSharedPtr<SWidget> FirstMinorTabAsWidget;
-	if (FUMSlateHelpers::TraverseWidgetTree(
+	if (FUMSlateHelpers::TraverseFindWidget(
 			InContent, FirstMinorTabAsWidget, "SDockTab"))
 	{
 		const TSharedPtr<SDockTab> FirstMinorTab =
@@ -455,7 +456,7 @@ bool UUMFocuserEditorSubsystem::TryFocusFirstFoundSearchBox(
 {
 	// FSlateApplication& SlateApp = FSlateApplication::Get();
 	TSharedPtr<SWidget> EditableTextAsWidget;
-	if (FUMSlateHelpers::TraverseWidgetTree(
+	if (FUMSlateHelpers::TraverseFindWidget(
 			// NewActiveTab->GetContent(), SearchBoxAsWidget, "SSearchBox"))
 			InContent, EditableTextAsWidget, "SEditableText"))
 	{
@@ -634,7 +635,7 @@ bool UUMFocuserEditorSubsystem::TryActivateLastWidgetInTab(
 		{
 			// It looks like we won't be able to pull focus properly on some
 			// tabs without this delay. Especially Nomad Tabs.
-			FUMSlateHelpers::SetWidgetFocusWithDelay(
+			FUMFocusHelpers::SetWidgetFocusWithDelay(
 				Widget.ToSharedRef(),
 				TimerHandle_TryActivateLastWidgetInTab, 0.025f, true);
 
@@ -883,13 +884,13 @@ bool UUMFocuserEditorSubsystem::FirstEncounterDefaultInit(
 	if (const FString* DefaultType = DefaultWidgetTypeByTabLabel.Find(TabLabel))
 	{
 		TSharedPtr<SWidget> FoundDefaultWidget;
-		if (!FUMSlateHelpers::TraverseWidgetTree(
+		if (!FUMSlateHelpers::TraverseFindWidget(
 				InTab->GetContent(), FoundDefaultWidget, *DefaultType))
 			return false;
 
 		const TSharedRef<SWidget> WidgetRef = FoundDefaultWidget.ToSharedRef();
 		TryRegisterWidgetWithTab(WidgetRef, InTab);
-		FUMSlateHelpers::SetWidgetFocusWithDelay(WidgetRef,
+		FUMFocusHelpers::SetWidgetFocusWithDelay(WidgetRef,
 			TimerHandle_GenericSetWidgetFocusWithDelay, 0.025f, true);
 
 		Log_FirstEncounterDefaultInit(InTab, FoundDefaultWidget);

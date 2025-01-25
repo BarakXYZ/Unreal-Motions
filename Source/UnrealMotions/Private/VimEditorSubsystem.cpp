@@ -7,7 +7,7 @@
 #include "UMFocuserEditorSubsystem.h"
 #include "UMSlateHelpers.h"
 #include "UMInputHelpers.h"
-#include "UMEditorNavigation.h"
+#include "VimNavigationEditorSubsystem.h"
 #include "UMEditorCommands.h"
 #include "UMConfig.h"
 #include "LevelEditorActions.h"
@@ -532,46 +532,6 @@ void UVimEditorSubsystem::BindCommands()
 	Input->AddKeyBinding_KeyEvent(
 		{ EKeys::SpaceBar, FInputChord(EModifierKey::Alt, EKeys::R) },
 		&FUMInputHelpers::ToggleRightClickPress);
-
-	/////////////////////////////////////////////////////////////////////////
-	//						~ Panel Navigation ~
-	//
-	Input->AddKeyBinding_KeyEvent(
-		{ FInputChord(EModifierKey::Control, EKeys::H) },
-		&FUMEditorNavigation::NavigatePanelTabs);
-
-	Input->AddKeyBinding_KeyEvent(
-		{ FInputChord(EModifierKey::Control, EKeys::J) },
-		&FUMEditorNavigation::NavigatePanelTabs);
-
-	Input->AddKeyBinding_KeyEvent(
-		{ FInputChord(EModifierKey::Control, EKeys::K) },
-		&FUMEditorNavigation::NavigatePanelTabs);
-
-	Input->AddKeyBinding_KeyEvent(
-		{ FInputChord(EModifierKey::Control, EKeys::L) },
-		&FUMEditorNavigation::NavigatePanelTabs);
-
-	// WIP
-	// Input->AddKeyBinding_KeyEvent(
-	// 	{ FInputChord(EModifierKey::FromBools(true, false, true, false),
-	// 		EKeys::H) },
-	// 	&FUMEditorNavigation::NavigateNomadSplitterChildrens);
-
-	// Input->AddKeyBinding_KeyEvent(
-	// 	{ FInputChord(EModifierKey::FromBools(true, false, true, false),
-	// 		EKeys::J) },
-	// 	&FUMEditorNavigation::NavigateNomadSplitterChildrens);
-
-	// Input->AddKeyBinding_KeyEvent(
-	// 	{ FInputChord(EModifierKey::FromBools(true, false, true, false),
-	// 		EKeys::K) },
-	// 	&FUMEditorNavigation::NavigateNomadSplitterChildrens);
-
-	// Input->AddKeyBinding_KeyEvent(
-	// 	{ FInputChord(EModifierKey::FromBools(true, false, true, false),
-	// 		EKeys::L) },
-	// 	&FUMEditorNavigation::NavigateNomadSplitterChildrens);
 
 	Input->AddKeyBinding_NoParam(
 		{ EKeys::SpaceBar, EKeys::D, EKeys::C },

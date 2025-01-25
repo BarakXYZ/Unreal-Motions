@@ -6,6 +6,7 @@
 #include "UMSlateHelpers.h"
 // #include "Widgets/Input/SButton.h"
 #include "VimInputProcessor.h"
+#include "UMFocusHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMSearch, Log, All); // Dev
 
@@ -61,7 +62,7 @@ void SUMSearch::Open()
 	// Simply trying to focus on the SearchBox doesn't seem to be enough.
 	// So have to go with the traverse and delay approach
 	TSharedPtr<SWidget> FoundEditable;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
+	if (!FUMSlateHelpers::TraverseFindWidget(
 			Search, FoundEditable, "SEditableText"))
 		return;
 
@@ -73,7 +74,7 @@ void SUMSearch::Open()
 	// Window->BringToFront(true);
 
 	FTimerHandle TimerHandle;
-	FUMSlateHelpers::SetWidgetFocusWithDelay(FoundEditable.ToSharedRef(), TimerHandle, 0.025f, false);
+	FUMFocusHelpers::SetWidgetFocusWithDelay(FoundEditable.ToSharedRef(), TimerHandle, 0.025f, false);
 }
 
 void SUMSearch::Close()
@@ -103,7 +104,7 @@ bool SUMSearch::GetAllTextBlocksInActiveTab()
 	const FString TextBlockType = "STextBlock";
 
 	TArray<TSharedPtr<SWidget>> FoundTextBlocks;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
+	if (!FUMSlateHelpers::TraverseFindWidget(
 			ActiveTab->GetContent(), FoundTextBlocks, TextBlockType))
 		return false;
 
@@ -127,7 +128,7 @@ bool SUMSearch::GetAllEditableTextsInActiveTab()
 	const FString EditableType = "SEditableText";
 
 	TArray<TSharedPtr<SWidget>> FoundEditableTexts;
-	if (FUMSlateHelpers::TraverseWidgetTree(
+	if (FUMSlateHelpers::TraverseFindWidget(
 			ActiveTab->GetContent(), FoundEditableTexts, EditableType))
 	{
 		for (const auto& Editable : FoundEditableTexts)
@@ -366,7 +367,7 @@ bool SUMSearch::FocusFirstFoundTextBlock(const FRegexPattern& Pattern)
 			// invoked, etc.
 
 			TextBlock->SetHighlightText(FText::FromString(SearchText));
-			if (FUMSlateHelpers::FocusNearestInteractableWidget(TextBlock.ToSharedRef()))
+			if (FUMFocusHelpers::FocusNearestInteractableWidget(TextBlock.ToSharedRef()))
 			{
 				return true;
 			}
@@ -395,7 +396,7 @@ bool SUMSearch::FocusFirstFoundEditableText(const FRegexPattern& Pattern)
 			Logger.Print(FString::Printf(TEXT("Match found in: %s"), *Candidate), ELogVerbosity::Verbose, true);
 
 			FTimerHandle TimerHandle;
-			FUMSlateHelpers::SetWidgetFocusWithDelay(EditableText.ToSharedRef(),
+			FUMFocusHelpers::SetWidgetFocusWithDelay(EditableText.ToSharedRef(),
 				TimerHandle, 0.025f, true);
 			return true;
 		}

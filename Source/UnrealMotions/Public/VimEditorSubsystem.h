@@ -35,7 +35,7 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	 *
 	 * @param Collection The subsystem collection being initialized
 	 */
-	virtual void Initialize(FSubsystemCollectionBase& Collction) override;
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	virtual void Deinitialize() override;
 

@@ -132,12 +132,12 @@ void FUMEditorCommands::OpenWidgetReflector(
 
 	// Fetching the first (maybe only) instance of this (parent of our target)
 	TSharedPtr<SWidget> FoundWidget;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
+	if (!FUMSlateHelpers::TraverseFindWidget(
 			RefWin.ToSharedRef(), FoundWidget, "SToolBarButtonBlock"))
 		return;
 
 	// Locate the button within it
-	if (FUMSlateHelpers::TraverseWidgetTree(
+	if (FUMSlateHelpers::TraverseFindWidget(
 			FoundWidget.ToSharedRef(), FoundWidget, "SButton"))
 	{
 		TSharedPtr<SButton> Button =
@@ -153,7 +153,7 @@ void FUMEditorCommands::OpenWidgetReflector(
 
 		// Find all menu entry buttons in the found window
 		TArray<TSharedPtr<SWidget>> FoundButtons;
-		if (!FUMSlateHelpers::TraverseWidgetTree(
+		if (!FUMSlateHelpers::TraverseFindWidget(
 				ChildRefWins[0], FoundButtons, "SMenuEntryButton"))
 			return;
 
@@ -212,7 +212,7 @@ void FUMEditorCommands::FocusSearchBox(FSlateApplication& SlateApp, const FKeyEv
 		return;
 
 	TArray<TSharedPtr<SWidget>> EditableTexts;
-	if (FUMSlateHelpers::TraverseWidgetTree(
+	if (FUMSlateHelpers::TraverseFindWidget(
 			// SearchInWidget, SearchBox, SearchBoxType))
 			SearchContent.ToSharedRef(), EditableTexts, EditableTextType))
 	{
@@ -257,8 +257,9 @@ void FUMEditorCommands::FindNearestSearchBox(
 	if (const TSharedPtr<SWidget> FocusedWidget =
 			SlateApp.GetUserFocusedWidget(0))
 	{
-		if (const TSharedPtr<SWidget> FoundWidget =
-				FUMSlateHelpers::FindNearstWidgetType(FocusedWidget.ToSharedRef(), EditableType))
+		TSharedPtr<SWidget> FoundWidget;
+		if (FUMSlateHelpers::TraverseFindWidgetUpwards(
+				FocusedWidget.ToSharedRef(), FoundWidget, EditableType))
 		{
 			SlateApp.SetAllUserFocus(FoundWidget.ToSharedRef(), EFocusCause::Navigation);
 			Logger.Print("Editable Text Found!", ELogVerbosity::Verbose, true);
@@ -333,7 +334,7 @@ void FUMEditorCommands::ResetEditorToDefaultLayout()
 
 	// Get SWindowTitleBar; this is where we want to perform our searching
 	TSharedPtr<SWidget> WinBar;
-	if (!FUMSlateHelpers::TraverseWidgetTree(RootWin.ToSharedRef(), WinBar, TitleBarType))
+	if (!FUMSlateHelpers::TraverseFindWidget(RootWin.ToSharedRef(), WinBar, TitleBarType))
 		return;
 
 	if (WinBar.IsValid())
@@ -347,7 +348,7 @@ void FUMEditorCommands::RunUtilityWidget()
 		return;
 
 	TArray<TSharedPtr<SWidget>> FoundTexts;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
+	if (!FUMSlateHelpers::TraverseFindWidget(
 			MajorTab->GetContent(), FoundTexts, "STextBlock"))
 		return;
 
@@ -356,10 +357,9 @@ void FUMEditorCommands::RunUtilityWidget()
 		const TSharedPtr<STextBlock> TB = StaticCastSharedPtr<STextBlock>(Text);
 		if (TB->GetText().ToString().Equals("Run Utility Widget"))
 		{
-			const TSharedPtr<SWidget> ButtonAsWidget =
-				FUMSlateHelpers::FindNearstWidgetType(TB.ToSharedRef(), "SButton");
-
-			if (!ButtonAsWidget.IsValid())
+			TSharedPtr<SWidget> ButtonAsWidget;
+			if (!FUMSlateHelpers::TraverseFindWidgetUpwards(
+					TB.ToSharedRef(), ButtonAsWidget, "SButton"))
 				return;
 
 			const TSharedPtr<SButton> AsButton = StaticCastSharedPtr<SButton>(ButtonAsWidget);
@@ -381,7 +381,7 @@ void FUMEditorCommands::Search(FSlateApplication& SlateApp, const FKeyEvent& InK
 		return;
 
 	TArray<TSharedPtr<SWidget>> FoundTexts;
-	if (!FUMSlateHelpers::TraverseWidgetTree(
+	if (!FUMSlateHelpers::TraverseFindWidget(
 			MajorTab->GetContent(), FoundTexts, "STextBlock"))
 		return;
 
@@ -390,8 +390,10 @@ void FUMEditorCommands::Search(FSlateApplication& SlateApp, const FKeyEvent& InK
 		const TSharedPtr<STextBlock> TB = StaticCastSharedPtr<STextBlock>(Text);
 		if (TB->GetText().ToString().Equals("Run Utility Widget"))
 		{
-			const TSharedPtr<SWidget> ButtonAsWidget =
-				FUMSlateHelpers::FindNearstWidgetType(TB.ToSharedRef(), "SButton");
+			TSharedPtr<SWidget> ButtonAsWidget;
+			if (!FUMSlateHelpers::TraverseFindWidgetUpwards(
+					TB.ToSharedRef(), ButtonAsWidget, "SButton"))
+				return;
 
 			if (!ButtonAsWidget.IsValid())
 				return;

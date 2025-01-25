@@ -96,7 +96,7 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 	// {
 	// 	TSharedPtr<SWidget> ContentWidget = Win->GetContent().ToSharedPtr();
 	// 	TWeakPtr<SWidget>	FoundButton = nullptr;
-	// 	if (FUMWidgetHelpers::TraverseWidgetTree(
+	// 	if (FUMWidgetHelpers::TraverseFindWidget(
 	// 			ContentWidget,
 	// 			FoundButton,
 	// 			"SButton"))
@@ -136,7 +136,7 @@ void FUMAssetManager::Call_RestorePreviouslyOpenAssets()
 	ToggleNotificationVisualSelection(NItem.ToSharedRef(), true);
 
 	TSharedPtr<SWidget> Button;
-	if (FUMSlateHelpers::TraverseWidgetTree(
+	if (FUMSlateHelpers::TraverseFindWidget(
 			VerBoxNotes->GetSlot(0).GetWidget(),
 			Button,
 			"SButton"))

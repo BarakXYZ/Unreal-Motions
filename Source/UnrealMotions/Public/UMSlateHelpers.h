@@ -15,17 +15,33 @@ public:
 	FUMSlateHelpers(FUMSlateHelpers&&) = default;
 	FUMSlateHelpers& operator=(const FUMSlateHelpers&) = default;
 	FUMSlateHelpers& operator=(FUMSlateHelpers&&) = default;
+
+	/**
+	 * Recursively searches a widget tree for a single widget of the specified type.
+	 * @param BaseWidget The root widget to start traversing from
+	 * @param OutWidget Output parameter that will store the found widget
+	 * @param TargetType Type of widget we're looking for
+	 * @param Depth Current depth in the widget tree (used for logging)
+	 * @return true if a widget was found, false otherwise
+	 */
+	static bool TraverseFindWidget(
+		const TSharedRef<SWidget> BaseWidget,
+		TSharedPtr<SWidget>&	  OutWidget,
+		const FString&			  TargetType,
+		const uint64			  IgnoreWidgetId = INDEX_NONE,
+		int32					  Depth = 0);
+
 	/**
 	 * Recursively searches a widget tree for a SDockingTabWell widget.
-	 * @param ParentWidget The root widget to start traversing from
+	 * @param BaseWidget The root widget to start traversing from
 	 * @param OutWidget Output parameter that will store the found widgets
 	 * @param TargetType Type of widget we're looking for (e.g. "SDockingTabWell")
 	 * @param SearchCount How many instances of this widget type we will try to look for. -1 will result in trying to find all widgets of this type in the widget's tree. 0 will be ignored, 1 will find the first instance, then return.
 	 * @param Depth Current depth in the widget tree (used for logging)
 	 * @return true if OutWidgets >= SearchCount, or OutWidget > 0 if SearchCount is set to -1, false otherwise
 	 */
-	static bool TraverseWidgetTree(
-		const TSharedRef<SWidget>	 ParentWidget,
+	static bool TraverseFindWidget(
+		const TSharedRef<SWidget>	 BaseWidget,
 		TArray<TSharedPtr<SWidget>>& OutWidgets,
 		const FString&				 TargetType,
 		int32						 SearchCount = -1,
@@ -36,48 +52,38 @@ public:
 	 * found widgets as we can't cast necessarily to the same type without
 	 * crashing
 	 */
-	static bool TraverseWidgetTree(
-		const TSharedRef<SWidget>	 ParentWidget,
+	static bool TraverseFindWidget(
+		const TSharedRef<SWidget>	 BaseWidget,
 		TArray<TSharedPtr<SWidget>>& OutWidgets,
 		const TSet<FString>&		 TargetTypes,
 		int32						 SearchCount = -1,
 		int32						 Depth = 0);
 
-	/**
-	 * Recursively searches a widget tree for a single widget of the specified type.
-	 * @param ParentWidget The root widget to start traversing from
-	 * @param OutWidget Output parameter that will store the found widget
-	 * @param TargetType Type of widget we're looking for
-	 * @param Depth Current depth in the widget tree (used for logging)
-	 * @return true if a widget was found, false otherwise
-	 */
-	static bool TraverseWidgetTree(
-		const TSharedRef<SWidget> ParentWidget,
-		TSharedPtr<SWidget>&	  OutWidget,
-		const FString&			  TargetType,
-		const uint64			  IgnoreWidgetId = INDEX_NONE,
-		int32					  Depth = 0);
-
-	static bool TraverseWidgetTree(
-		const TSharedRef<SWidget> ParentWidget,
+	static bool TraverseFindWidget(
+		const TSharedRef<SWidget> BaseWidget,
 		TSharedPtr<SWidget>&	  OutWidget,
 		const uint64			  LookupWidgetId,
 		const uint64			  IgnoreWidgetId = INDEX_NONE,
 		int32					  Depth = 0);
 
-	static bool TraverseWidgetTree(
-		const TSharedRef<SWidget> ParentWidget,
+	static bool TraverseFindWidget(
+		const TSharedRef<SWidget> BaseWidget,
 		TSharedPtr<SWidget>&	  OutWidget,
 		const TSet<FString>&	  TargetWidgetTypes,
 		const uint64			  IgnoreWidgetId = INDEX_NONE,
 		int32					  Depth = 0);
 
-	static TSharedPtr<SWidget> FindNearstWidgetType(
-		const TSharedRef<SWidget> StartWidget,
-		const FString&			  TargetType);
+	static bool TraverseFindWidgetUpwards(
+		const TSharedRef<SWidget> BaseWidget,
+		TSharedPtr<SWidget>&	  OutWidget,
+		const FString&			  TargetType,
+		const bool				  bTraverseDownOnceBeforeUp = false);
 
-	static bool FocusNearestInteractableWidget(
-		const TSharedRef<SWidget> StartWidget);
+	static bool TraverseFindWidgetUpwards(
+		const TSharedRef<SWidget>	 BaseWidget,
+		TArray<TSharedPtr<SWidget>>& OutWidgets,
+		const TSet<FString>&		 TargetTypes,
+		const bool					 bTraverseDownOnceBeforeUp = false);
 
 	static void LogTraversalSearch(const int32 Depth,
 		const TSharedRef<SWidget>			   CurrWidget);
@@ -166,6 +172,14 @@ public:
 		const TSharedRef<SWidget> InWidget,
 		const FVector2f			  Offset = FVector2f(0.0f, 0.0f));
 
+	static FVector2f GetWidgetTopLeftScreenSpacePosition(
+		const TSharedRef<SWidget> InWidget,
+		const FVector2f			  Offset = FVector2f(0.0f, 0.0f));
+
+	static FVector2D GetWidgetLocalPositionInWindow(
+		const TSharedRef<SWidget>& InWidget,
+		const TSharedRef<SWindow>& InWindow);
+
 	static TSharedPtr<FTabManager> GetLevelEditorTabManager();
 
 	static TSharedPtr<SWidget> GetTabWellForTabManager(
@@ -212,10 +226,6 @@ public:
 
 	static void LogWidgetResidesInTab(const TSharedRef<SDockTab> ParentTab, const TSharedRef<SWidget> ChildWidget, bool bDoesWidgetResidesInTab);
 
-	/** Will clear the old timer handle before starting a new one to mitigate
-	 * potential loops */
-	static void SetWidgetFocusWithDelay(const TSharedRef<SWidget> InWidget, FTimerHandle& TimerHandle, const float Delay, const bool bClearUserFocus);
-
 	static bool IsCurrentlyActiveTabNomad();
 
 	static TSharedPtr<SWidget> GetAssociatedParentSplitterChild(const TSharedRef<SWidget> InWidget);
@@ -228,6 +238,11 @@ public:
 	static FString GetCleanTabLabel(const TSharedRef<SDockTab> InTab);
 
 	static void DebugClimbUpFromWidget(const TSharedRef<SWidget> InWidget);
+
+	static const TSet<FString>& GetInteractableWidgetTypes();
+
+	static bool CollectAllViewableInteractableWidgets(
+		TArray<TSharedPtr<SWidget>>& OutInteractableWidgets);
 
 	static FUMLogger Logger;
 };
