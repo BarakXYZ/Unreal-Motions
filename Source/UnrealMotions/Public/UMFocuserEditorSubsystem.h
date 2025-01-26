@@ -176,6 +176,8 @@ public:
 
 	bool TryBringFocusToActiveTab();
 
+	void ValidateFocusedWidget();
+
 	// For Nomad Tabs:
 	// Fetch splitters
 	// get the splitter childrens and filter out "SDockTabStack" (I think)
@@ -204,6 +206,7 @@ public:
 	FTimerHandle TimerHandle_TryActivateLastWidgetInTab;
 	FTimerHandle TimerHandle_GenericSetWidgetFocusWithDelay;
 	FTimerHandle TimerHandle_TryRegisterWidgetWithTab;
+	FTimerHandle TimerHandle_ValidateFocusedWidget;
 
 	FTimerHandle TimerHandle_FocusTabContentFallback;
 

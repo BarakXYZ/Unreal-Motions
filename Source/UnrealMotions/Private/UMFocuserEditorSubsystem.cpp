@@ -128,6 +128,8 @@ void UUMFocuserEditorSubsystem::OnFocusChanged(const FFocusEvent& FocusEvent, co
 		DrawFocusForNomadTab(NewWidget.ToSharedRef());
 	}
 
+	ValidateFocusedWidget(); // Make sure our currently focused widget is valid
+
 	Logger.Print(
 		LogFunc + FString::Printf(TEXT("Old Widget: %s\nNew Widget: %s"), *LogOldWidget, *LogNewWidget),
 		ELogVerbosity::Verbose, bVisLogTabFocusFlow);
@@ -944,7 +946,10 @@ bool UUMFocuserEditorSubsystem::TryBringFocusToActiveTab()
 {
 	const TSharedPtr<SDockTab> MajorTab = FUMSlateHelpers::GetActiveMajorTab();
 	if (!MajorTab.IsValid())
+	{
+		Logger.Print("Invalid Major Tab!", ELogVerbosity::Error, true);
 		return false;
+	}
 
 	const TSharedRef<SDockTab> TabRef = MajorTab.ToSharedRef();
 	if (TabRef->GetTabRole() == ETabRole::NomadTab)
@@ -955,6 +960,24 @@ bool UUMFocuserEditorSubsystem::TryBringFocusToActiveTab()
 	Logger.Print("TryBringFocusToActiveTab: Success!",
 		ELogVerbosity::Verbose, true);
 	return true;
+}
+
+void UUMFocuserEditorSubsystem::ValidateFocusedWidget()
+{
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+	TimerManager->ClearTimer(TimerHandle_ValidateFocusedWidget);
+
+	TimerManager->SetTimer(
+		TimerHandle_ValidateFocusedWidget,
+		[this]() {
+			FSlateApplication&		  SlateApp = FSlateApplication::Get();
+			const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+
+			if (!FocusedWidget.IsValid())
+				TryBringFocusToActiveTab();
+		},
+		0.2f,
+		false);
 }
 
 void UUMFocuserEditorSubsystem::UpdateWidgetForActiveTab()

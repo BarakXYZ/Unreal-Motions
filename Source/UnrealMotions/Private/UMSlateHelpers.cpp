@@ -555,8 +555,12 @@ void FUMSlateHelpers::LogWidgetResidesInTab(const TSharedRef<SDockTab> ParentTab
 
 TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 {
-	return GetDefactoMajorTab();
+	// Going for the defacto first, as this will be more solid most of the times.
+	if (const TSharedPtr<SDockTab> DefactoMajorTab = GetDefactoMajorTab())
+		return DefactoMajorTab;
 
+	// In some cases, this method will still be a good fallback (for example
+	// when currently focusing an invalid widget) so it's good to have.
 	// Sadly this method just isn't picking up all types of Major Tabs (AFAIK)
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
