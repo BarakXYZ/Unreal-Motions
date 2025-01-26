@@ -13,5 +13,11 @@ public:
 	static void SetWidgetFocusWithDelay(const TSharedRef<SWidget> InWidget,
 		FTimerHandle& TimerHandle, const float Delay, const bool bClearUserFocus);
 
+	static bool HandleWidgetExecution(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
+
+	static void TryFocusFuturePopupMenu(FSlateApplication& SlateApp, FTimerHandle& TimerHandle, const float Delay = 0.025f);
+
+	static void LogWidgetType(const TSharedRef<SWidget> InWidget);
+
 	static FUMLogger Logger;
 };

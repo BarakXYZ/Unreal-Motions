@@ -1,5 +1,6 @@
 #include "VimNavigationEditorSubsystem.h"
 #include "Framework/Docking/TabManager.h"
+#include "Input/Events.h"
 #include "Misc/StringFormatArg.h"
 #include "Types/SlateEnums.h"
 #include "UMInputHelpers.h"
@@ -10,6 +11,7 @@
 #include "UMConfig.h"
 #include "SUMHintMarker.h"
 #include "SUMHintOverlay.h"
+#include "UMFocusHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimNavigationEditorSubsystem, Log, All); // Dev
 
@@ -114,27 +116,27 @@ void UVimNavigationEditorSubsystem::NavigatePanelTabs(
 void UVimNavigationEditorSubsystem::FlashHintMarkers(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	if (HintOverlayData.IsDisplayed())
+		ResetHintMarkers(); // Reset existing Hint Markers (if any)
+
 	const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
 	if (!ActiveWindow.IsValid())
 		return;
 
 	TArray<TSharedPtr<SWidget>> InteractableWidgets;
 	if (!CollectInteractableWidgets(InteractableWidgets))
-		return;
+		return; // Will return false if no widgets were found.
 
-	const int32 WidgetsNum = InteractableWidgets.Num();
+	const int32 NumWidgets = InteractableWidgets.Num();
 
 	// Create Hint Marker Labels
-	// FString AllowedCharacters = TEXT("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-	// More Options to try: "fghjklrueidcvm" or "asdfgqwertzxcvb"
-	// TODO: There are duplicate markers (i.e. A, AA) need to be fixed.
-	const FString	DefaultChars = TEXT("AFGHJKLRUEIDC");
-	TArray<FString> Labels;
-	GenerateLabels(WidgetsNum, DefaultChars, Labels);
+	const TArray<FString> Labels = GenerateLabels(NumWidgets);
 
 	// Create the Hint Marker Widgets
 	TArray<TSharedRef<SUMHintMarker>> HintMarkers;
-	for (int32 i = 0; i < WidgetsNum; ++i)
+	HintMarkers.Reserve(NumWidgets);
+
+	for (int32 i = 0; i < NumWidgets; ++i)
 	{
 		const TSharedRef<SWidget> WidgetRef = InteractableWidgets[i].ToSharedRef();
 		TSharedRef<SUMHintMarker> HintMarker =
@@ -146,18 +148,23 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 				.TextColor(FSlateColor(FLinearColor::Black));
 
 		HintMarkers.Add(HintMarker);
-		// Logger.Print(Labels[i]);
 	}
+
+	if (!BuildHintTrie(Labels, HintMarkers)) // Build the Trie from these markers
+		return;
 
 	// Add all Hint Markers to the screen
 	TSharedRef<SUMHintOverlay> HintOverlay = SNew(SUMHintOverlay, MoveTemp(HintMarkers));
-	// TSharedRef<SUMHintOverlay> HintOverlay = SNew(SUMHintOverlay, HintMarkers);
 
 	ActiveWindow->AddOverlaySlot(999)[HintOverlay];
 
-	HintOverlayData = FHintOverlayData(HintOverlay, ActiveWindow);
+	HintOverlayData = FHintOverlayData(HintOverlay, ActiveWindow, true);
 
-	Logger.Print(FString::Printf(TEXT("Created %d Hint Markers!"), WidgetsNum), ELogVerbosity::Verbose, true);
+	// We want to possess our processor to temporarily handle any input manually.
+	FVimInputProcessor::Get()->Possess(this,
+		&UVimNavigationEditorSubsystem::ProcessHintInput);
+
+	Logger.Print(FString::Printf(TEXT("Created %d Hint Markers!"), NumWidgets), ELogVerbosity::Verbose, true);
 }
 
 bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
@@ -182,142 +189,226 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 		OutWidgets, FUMSlateHelpers::GetInteractableWidgetTypes());
 }
 
-void UVimNavigationEditorSubsystem::GenerateLabels(
-	int32			 NumLabels,
-	const FString&	 AllowedCharacters,
-	TArray<FString>& OutLabels)
+TArray<FString> UVimNavigationEditorSubsystem::GenerateLabels(int32 NumLabels)
 {
-	const FString DefaultVimiumCharacters = TEXT("fghjklrueidc");
-	OutLabels.Reset();
-	OutLabels.Reserve(NumLabels);
+	if (NumLabels <= 0)
+		return TArray<FString>(); // No labels
 
-	// Decide which set of characters to use -- default if none provided.
-	FString Alphabet = AllowedCharacters;
-	if (Alphabet.IsEmpty())
+	// Default characters. May want to play with different combos.
+	// More Options to try: "fghjklrueidcvm" or "asdfgqwertzxcvb"
+	const FString Alphabet = TEXT("FGHJKLRUEIDC");
+	// const FString Alphabet = TEXT("AFGHJKLRUEIDC");
+	// const FString Alphabet = TEXT("ASDFGQWERTZXCVB");
+
+	// -----------------------------
+	// The BFS-like expansion:
+	// -----------------------------
+	// Start with an array = [""].
+	// We'll pop from the front (via `offset`) and expand into N new labels
+	// by prepending each character in Alphabet.  Then we continue until
+	// we have at least NumLabels beyond the current offset (or else
+	// the array has only 1 element).
+	//
+	// After BFS finishes, we extract exactly NumLabels from that array,
+	// sort them, then reverse each string. (Mimicing Vimium's approach)
+
+	TArray<FString> BFS;
+	BFS.Reserve(NumLabels * 2); // Just an optimization
+	BFS.Add(TEXT(""));			// Start from an empty string
+
+	int32 Offset = 0;
+	while (((BFS.Num() - Offset) < NumLabels) || (BFS.Num() == 1))
 	{
-		Alphabet = DefaultVimiumCharacters;
+		// "Pop" one string from the BFS queue.
+		FString Current = BFS[Offset++];
+		// Expand by prepending each allowed character.
+		for (int32 i = 0; i < Alphabet.Len(); ++i)
+		{
+			// In Vimium's code, they do `ch + oldString` (string concatenation).
+			// That “builds” the Label in reverse. We’ll also do that so we can
+			// replicate the final sort+reverse step exactly.
+			const TCHAR C = Alphabet[i];
+			BFS.Add(FString(1, &C) + Current);
+		}
 	}
 
-	const int32 Base = Alphabet.Len();
-	if (Base == 0)
-	{
-		// You could log an error or just return.
-		UE_LOG(LogTemp, Warning, TEXT("AllowedCharacters is empty. Cannot generate labels."));
-		return;
-	}
-
-	// Generate each label
+	// Now slice out exactly NumLabels from [offset.. offset+NumLabels).
+	TArray<FString> Sliced;
+	Sliced.Reserve(NumLabels);
 	for (int32 i = 0; i < NumLabels; ++i)
 	{
-		// We’ll do "Excel columns" style using 1-based index.
-		int32	CurrentIndex = i + 1;
-		FString Label;
-
-		do
-		{
-			// Subtract 1 so that:
-			//    1 -> remainder 0
-			//    2 -> remainder 1
-			//    ...
-			//    Base -> remainder (Base - 1)
-			CurrentIndex -= 1;
-			const int32 Remainder = CurrentIndex % Base;
-			const TCHAR Char = Alphabet[Remainder];
-
-			// Prepend this character to our label
-			Label.InsertAt(0, Char);
-
-			// Move to the next "digit"
-			CurrentIndex /= Base;
-		}
-		while (CurrentIndex > 0);
-
-		OutLabels.Add(Label);
+		Sliced.Add(BFS[Offset + i]);
 	}
+
+	// Sort them lexicographically (still reversed).
+	// Vimium does `hints.sort()` in JavaScript, which is a plain
+	// lexicographical sort.
+	Sliced.Sort([](const FString& A, const FString& B) {
+		return A < B; // Standard ascending lex-order compare
+	});
+
+	// Finally, reverse each string (since BFS built them backwards).
+	// Vimium does: `hints.map(str => str.reverse())`.
+	// In C++, we can do:
+	for (FString& Label : Sliced)
+	{
+		// std::reverse style approach:
+		int32 i = 0;
+		int32 j = Label.Len() - 1;
+		while (i < j)
+		{
+			TCHAR Temp = Label[i];
+			Label[i] = Label[j];
+			Label[j] = Temp;
+			i++;
+			j--;
+		}
+	}
+	return Sliced;
 }
 
-void UVimNavigationEditorSubsystem::BuildHintTrie(
+bool UVimNavigationEditorSubsystem::BuildHintTrie(
 	const TArray<FString>&					 HintLabels,
-	const TArray<TSharedPtr<SUMHintMarker>>& HintMarkers)
+	const TArray<TSharedRef<SUMHintMarker>>& HintMarkers)
 {
-	RootHintNode = new FUMHintWidgetTrieNode();
+	// Reset the entire Trie first (if it already existed).
+	RootHintNode.Reset();
 
+	// Create a fresh root node:
+	RootHintNode = MakeShared<FUMHintWidgetTrieNode>();
+
+	// We'll reuse this pointer for traversal:
+	TSharedPtr<FUMHintWidgetTrieNode> TraversalNode;
+
+	// For each Label (i.e. 'A', 'JK', 'HH', 'HF', etc.)
 	for (int32 i = 0; i < HintLabels.Num(); ++i)
 	{
-		CurrentHintNode = RootHintNode;
+		const FString&					 Label = HintLabels[i];
+		const TSharedRef<SUMHintMarker>& Marker = HintMarkers[i];
 
-		for (const TCHAR& Char : HintLabels[i])
+		TSharedPtr<FUMHintWidgetTrieNode> CurrentNode = RootHintNode;
+
+		// The root node also accumulates *all* markers (so it includes
+		// every label's marker for partial matches at the very start).
+		CurrentNode->HintMarkers.Add(Marker);
+
+		// For each character in the hint string (i.e. 'JK' -> 'J', 'K')
+		for (TCHAR Char : HintLabels[i])
 		{
-			// Convert the TCHAR to uint32 for KeyCode
-			uint32 KeyCode = static_cast<uint32>(Char);
+			// Map this TCHAR to an FKey
+			const uint32 KeyCode = static_cast<uint32>(Char);
+			const FKey	 MappedKey = FInputKeyManager::Get().GetKeyFromCodes(KeyCode, KeyCode);
 
-			// Get the FKey from the KeyCode and CharCode
-			FKey MappedKey = FInputKeyManager::Get().GetKeyFromCodes(KeyCode, KeyCode);
+			if (!CheckCharToKeyConversion(Char, MappedKey))
+				return false;
 
-			if (MappedKey.IsValid())
+			const FInputChord InputChord(MappedKey);
+
+			// If the child node doesn't exist, create it:
+			if (!CurrentNode->Children.Contains(InputChord))
 			{
-				// Create the input chord
-				FInputChord InputChord;
-				InputChord.Key = MappedKey;
+				TSharedPtr<FUMHintWidgetTrieNode> NewNode = MakeShared<FUMHintWidgetTrieNode>();
+				CurrentNode->Children.Add(InputChord, NewNode);
+			}
 
-				// Traverse or create nodes in the trie
-				if (!CurrentHintNode->Children.Contains(InputChord))
-				{
-					CurrentHintNode->Children.Add(InputChord, new FUMHintWidgetTrieNode());
-				}
-				CurrentHintNode = CurrentHintNode->Children[InputChord];
-			}
-			else
-			{
-				Logger.Print(FString::Printf(TEXT("Failed to map TCHAR '%c' to a valid FKey"), Char),
-					ELogVerbosity::Error, true);
-			}
+			// Move into the child node
+			TSharedPtr<FUMHintWidgetTrieNode> ChildNode = CurrentNode->Children[InputChord];
+
+			// This ChildNode also accumulates the same marker for partial
+			// matching (visualization)
+			ChildNode->HintMarkers.Add(Marker);
+
+			// Advance
+			CurrentNode = ChildNode;
 		}
 
-		// Mark as terminal and add the hint marker
-		CurrentHintNode->bIsTerminal = true;
-		CurrentHintNode->HintMarkers.Add(HintMarkers[i]);
+		// When we've consumed all characters in a Label, mark the final node as
+		// terminal (e.g. 'JK' -> 'J' -> [non-terminal] ... 'K' -> [terminal])
+		CurrentNode->bIsTerminal = true;
+		// By definition, that node now has exactly one unique marker for
+		// that label, but it may also have an array with size 1.
 	}
+	return true;
 }
 
-void UVimNavigationEditorSubsystem::ProcessHintInput(const FInputChord& InputChord)
+bool UVimNavigationEditorSubsystem::CheckCharToKeyConversion(
+	const TCHAR InChar, const FKey& InKey)
 {
-	if (!CurrentHintNode)
-		CurrentHintNode = RootHintNode; // Start at root if no active node
-
-	if (CurrentHintNode->Children.Contains(InputChord))
+	if (InKey.IsValid())
 	{
-		CurrentHintNode = CurrentHintNode->Children[InputChord];
-
-		if (CurrentHintNode->bIsTerminal)
-		{
-			// Trigger the actions for all hints in this node
-			for (const TWeakPtr<SUMHintMarker>& Marker : CurrentHintNode->HintMarkers)
-			{
-				if (const TSharedPtr<SUMHintMarker> HM = Marker.Pin())
-				{
-					// ExecuteWidgetAction(Marker.Pin());
-				}
-			}
-
-			ResetHintState(); // Reset the trie traversal
-		}
-		else
-		{
-			// Update visualization for all potential matches
-			VisualizeHints(CurrentHintNode);
-		}
+		Logger.Print(FString::Printf(TEXT("Mapped TCHAR '%c' to an FKey: %s"),
+						 InChar, *InKey.GetFName().ToString()),
+			ELogVerbosity::Verbose);
+		return true;
 	}
 	else
 	{
-		// Invalid input, reset or handle gracefully
-		ResetHintState();
+		Logger.Print(FString::Printf(TEXT("Failed to map TCHAR '%c' to an FKey"),
+						 InChar),
+			ELogVerbosity::Error, true);
+		return false;
 	}
 }
 
-void UVimNavigationEditorSubsystem::VisualizeHints(FUMHintWidgetTrieNode* Node)
+void UVimNavigationEditorSubsystem::ProcessHintInput(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	if (!Node)
+	const FInputChord InputChord = FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent);
+	// If there's no current node, assume we start at the root
+	if (!CurrentHintNode.IsValid())
+		CurrentHintNode = RootHintNode;
+
+	if (!CurrentHintNode.IsValid())
+	{
+		ResetHintMarkers();
+		return; // Reset if no valid Trie.
+	}
+
+	// Check if there's a child for this chord
+	TSharedPtr<FUMHintWidgetTrieNode>* ChildPtr = CurrentHintNode->Children.Find(InputChord);
+	if (!ChildPtr || !ChildPtr->IsValid())
+	{
+		ResetHintMarkers(); // No match for this chord -> reset
+		return;
+	}
+
+	CurrentHintNode = *ChildPtr; // Move to child
+
+	// If this node is terminal, we've spelled out an entire label
+	if (CurrentHintNode->bIsTerminal)
+	{
+		// Because each label is unique, there should be exactly 1 marker
+		// in the array that is truly the final label's marker.
+		const TArray<TWeakPtr<SUMHintMarker>>& HintMarkers = CurrentHintNode->HintMarkers;
+		if (HintMarkers.Num() != 1) // Check if we really have only 1
+		{
+			Logger.Print("Node marked as terminal, yet doesn't contain exactly 1 Node!", ELogVerbosity::Error, true);
+		}
+		else
+		{
+			if (const TSharedPtr<SUMHintMarker> HM = HintMarkers[0].Pin())
+			{
+				Logger.Print("Node marked as terminal, contains exactly 1 Node!", ELogVerbosity::Verbose, true);
+
+				// Focus internal widget
+				if (const TSharedPtr<SWidget> Widget = HM->TargetWidgetWeak.Pin())
+				{
+					// SlateApp.SetAllUserFocus(Widget, EFocusCause::Navigation);
+					// FUMInputHelpers::SimulateClickOnWidget(SlateApp, Widget.ToSharedRef(), FKey(EKeys::LeftMouseButton));
+					FUMFocusHelpers::HandleWidgetExecution(SlateApp, Widget.ToSharedRef());
+				}
+			}
+		}
+		ResetHintMarkers(); // Done - reset all Hint Markers (Overlay) && Trie
+	}
+	else
+		// Visualize partial matches by showing all the markers in this node
+		VisualizeHints(CurrentHintNode);
+}
+
+void UVimNavigationEditorSubsystem::VisualizeHints(TSharedPtr<FUMHintWidgetTrieNode> Node)
+{
+	if (!Node.IsValid())
 		return;
 
 	// Visualize all hint markers in the current node
@@ -329,19 +420,14 @@ void UVimNavigationEditorSubsystem::VisualizeHints(FUMHintWidgetTrieNode* Node)
 			// HM.VisualizeHint();
 		}
 	}
-
-	// Optionally, visualize markers in child nodes (recursive or iterative)
-	// for (auto& Pair : Node->Children)
-	// {
-	//     VisualizeHints(Pair.Value);
-	// }
 }
 
-void UVimNavigationEditorSubsystem::ResetHintState()
+void UVimNavigationEditorSubsystem::ResetHintMarkers()
 {
-	CurrentHintNode = nullptr;
-	// RootHintNode = nullptr; // Right?
+	CurrentHintNode.Reset(); // Remove all references
+	RootHintNode.Reset();	 // Destroy Trie
 
+	// Remove the overlay from the window (if it was added)
 	if (const TSharedPtr<SWindow> Win = HintOverlayData.AssociatedWindow.Pin())
 	{
 		if (const TSharedPtr<SUMHintOverlay> HintOverlay = HintOverlayData.HintOverlay.Pin())
@@ -350,12 +436,13 @@ void UVimNavigationEditorSubsystem::ResetHintState()
 		}
 	}
 	HintOverlayData.Reset();
+	FVimInputProcessor::Get()->Unpossess(this);
 }
 
 void UVimNavigationEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
 	if (HintOverlayData.IsDisplayed() && NewVimMode == EVimMode::Normal)
-		ResetHintState();
+		ResetHintMarkers();
 }
 
 void UVimNavigationEditorSubsystem::BindVimCommands()

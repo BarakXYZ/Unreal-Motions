@@ -24,34 +24,13 @@ bool FUMSlateHelpers::TraverseFindWidget(
 		return false;
 
 	// LogTraversalSearch(Depth, BaseWidget);
-	if (BaseWidget->GetTypeAsString() == TargetType)
+	if (BaseWidget->GetTypeAsString() == TargetType
+		|| BaseWidget->GetWidgetClass().GetWidgetType().ToString() == TargetType)
 	{
 		// LogTraverseFoundWidget(Depth, BaseWidget, TargetType);
 		OutWidget = BaseWidget;
 		return true;
 	}
-
-	// TEST
-	// bool bTraverseUpwards = true;
-	// if (bTraverseUpwards)
-	// {
-	// 	uint64				IgnoreWidgetId = BaseWidget->GetId();
-	// 	TSharedPtr<SWidget> FoundWidget;
-	// 	TSharedPtr<SWidget> Parent = BaseWidget->GetParentWidget();
-
-	// 	while (Parent.IsValid())
-	// 	{
-	// 		if (TraverseFindWidget(Parent.ToSharedRef(), FoundWidget,
-	// 				TargetType, IgnoreWidgetId))
-	// 			return true;
-
-	// 		// Update the ignore parent ID, as we've just traversed all its children.
-	// 		IgnoreWidgetId = Parent->GetId();
-	// 		Parent = Parent->GetParentWidget(); // Climb up to the next parent
-	// 	}
-	// 	return false;
-	// }
-	// TEST
 
 	// Recursively traverse the children of the current widget
 	FChildren* Children = BaseWidget->GetChildren();
@@ -135,7 +114,8 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	if (!BaseWidget->GetVisibility().IsVisible())
 		return false;
 
-	if (TargetTypes.Contains(BaseWidget->GetTypeAsString()))
+	if (TargetTypes.Contains(BaseWidget->GetTypeAsString())
+		|| TargetTypes.Contains(BaseWidget->GetWidgetClass().GetWidgetType().ToString()))
 	{
 		// LogTraverseFoundWidget(Depth, BaseWidget, TargetType);
 		OutWidgets.Add(BaseWidget);
@@ -848,6 +828,7 @@ void FUMSlateHelpers::SimulateMenuClicks(
 		const TSharedPtr<STextBlock> AsTextBlock =
 			StaticCastSharedPtr<STextBlock>(Text);
 
+		// Check if it matches the target entry provided
 		if (!AsTextBlock->GetText().ToString().Equals(TargetEntries[ArrayIndex]))
 			continue;
 

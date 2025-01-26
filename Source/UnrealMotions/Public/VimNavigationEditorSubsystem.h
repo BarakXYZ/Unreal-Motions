@@ -92,30 +92,32 @@ public:
 	 */
 	bool CollectInteractableWidgets(TArray<TSharedPtr<SWidget>>& OutWidgets);
 
-	void GenerateLabels(
-		int32			 NumLabels,
-		const FString&	 AllowedCharacters,
-		TArray<FString>& OutLabels);
+	TArray<FString> GenerateLabels(int32 NumLabels);
 
 	////////////////////////////////////////////////////////////////////////////
 	//							Trie Handling
 	//
-	/** */
-	void BuildHintTrie(
+	bool BuildHintTrie(
 		const TArray<FString>&					 HintLabels,
-		const TArray<TSharedPtr<SUMHintMarker>>& HintMarkers);
+		const TArray<TSharedRef<SUMHintMarker>>& HintMarkers);
 
-	void ProcessHintInput(const FInputChord& InputChord);
+	bool CheckCharToKeyConversion(const TCHAR InChar, const FKey& InKey);
 
-	void VisualizeHints(FUMHintWidgetTrieNode* Node);
+	void ProcessHintInput(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	void ResetHintState();
+	void VisualizeHints(TSharedPtr<FUMHintWidgetTrieNode> Node);
+
+	void ResetHintMarkers();
 	//
 	//							Trie Handling
 	////////////////////////////////////////////////////////////////////////////
 
-	FUMLogger			   Logger;
-	FHintOverlayData	   HintOverlayData;
-	FUMHintWidgetTrieNode* RootHintNode = nullptr; // Root node (unique)
-	FUMHintWidgetTrieNode* CurrentHintNode = nullptr;
+	FUMLogger		 Logger;
+	FHintOverlayData HintOverlayData;
+
+	/** The root of our hint-marker Trie. */
+	TSharedPtr<FUMHintWidgetTrieNode> RootHintNode;
+
+	/** Which node we are currently traversing after partial input. */
+	TSharedPtr<FUMHintWidgetTrieNode> CurrentHintNode;
 };

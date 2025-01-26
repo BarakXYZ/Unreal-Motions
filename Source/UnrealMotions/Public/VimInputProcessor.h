@@ -43,6 +43,8 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnVimModeChanged, const EVimMode);
  */
 DECLARE_MULTICAST_DELEGATE(FUMOnMouseButtonUp);
 
+DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnKeyDown, FSlateApplication&, const FKeyEvent&);
+
 class FVimInputProcessor : public IInputProcessor
 {
 public:
@@ -470,6 +472,12 @@ public:
 
 	void UpdateBufferAndVisualizer(const FKey& InKey);
 
+	// Possess: Bind the object's member function to the delegate
+	template <typename UserClass>
+	void Possess(UserClass* InObject, void (UserClass::*InMethod)(FSlateApplication&, const FKeyEvent&));
+
+	void Unpossess(UObject* InObject);
+
 	//
 	/////////////////////////////////////////////////////////////////////////
 
@@ -516,6 +524,10 @@ public:
 	FUMOnCountPrefix   OnCountPrefix;
 	FUMOnResetSequence OnResetSequence;
 	FUMOnMouseButtonUp OnMouseButtonUpAlertTabForeground;
+	FUMOnKeyDown	   Delegate_OnKeyDown;
+
+	// Map to track objects and their binding handles
+	TMap<UObject*, FDelegateHandle> PossessedObjects;
 
 	/** Logging configuration */
 	EUMLogMethod UMHelpersLogMethod{ EUMLogMethod::PrintToScreen };

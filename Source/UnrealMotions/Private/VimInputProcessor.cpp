@@ -216,6 +216,14 @@ bool FVimInputProcessor::HandleKeyDownEvent(
 	if (IsSimulateEscapeKey(SlateApp, InKeyEvent))
 		return true;
 
+	// Should handle here if possessed as we want to handle generic inputs
+	// that may collide with other bindings (i.e. I for Insert, etc.);
+	if (Delegate_OnKeyDown.IsBound())
+	{
+		Delegate_OnKeyDown.Broadcast(SlateApp, InKeyEvent);
+		return true;
+	}
+
 	if (ShouldSwitchVimMode(SlateApp, InKeyEvent)) // Return true and reset
 		return true;
 
@@ -508,6 +516,31 @@ void FVimInputProcessor::UpdateBufferAndVisualizer(const FKey& InKey)
 	if (const TSharedPtr<SUMBufferVisualizer> PinBufVis = BufferVisualizer.Pin())
 	{
 		PinBufVis->UpdateBuffer(CurrentBuffer);
+	}
+}
+
+template <typename UserClass>
+void FVimInputProcessor::Possess(UserClass* InObject, void (UserClass::*InMethod)(FSlateApplication&, const FKeyEvent&))
+{
+	if (!PossessedObjects.Contains(InObject))
+	{
+		// Store the binding so it can be unbound later
+		auto Binding = Delegate_OnKeyDown.AddUObject(InObject, InMethod);
+
+		// Save the binding handle for later unbinding
+		PossessedObjects.Add(InObject, Binding);
+	}
+}
+
+void FVimInputProcessor::Unpossess(UObject* InObject)
+{
+	if (PossessedObjects.Contains(InObject))
+	{
+		// Retrieve the binding handle and remove it from the delegate
+		Delegate_OnKeyDown.Remove(PossessedObjects[InObject]);
+
+		// Remove the object from the map
+		PossessedObjects.Remove(InObject);
 	}
 }
 
