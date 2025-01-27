@@ -167,6 +167,100 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 	Logger.Print(FString::Printf(TEXT("Created %d Hint Markers!"), NumWidgets), ELogVerbosity::Verbose, true);
 }
 
+void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// If already displayed, reset them first
+	if (HintOverlayData.IsDisplayed())
+		ResetHintMarkersMultiWindow();
+
+	// Collect interactable widgets from *all* visible windows:
+	TArray<TArray<TSharedPtr<SWidget>>> InteractableWidgetsPerWindow;
+	TArray<TSharedRef<SWindow>>			ParentWindows;
+	if (!CollectInteractableWidgets(InteractableWidgetsPerWindow, ParentWindows))
+		return; // No widgets found anywhere
+
+	// Count total # of widgets across *all* windows
+	int32 TotalNumWidgets = 0;
+	for (const auto& WindowWidgets : InteractableWidgetsPerWindow)
+		TotalNumWidgets += WindowWidgets.Num();
+
+	if (TotalNumWidgets == 0)
+		return;
+
+	// Generate labels for all of those widgets
+	const TArray<FString> AllLabels = GenerateLabels(TotalNumWidgets);
+
+	// We'll create one big array of hint markers so we can build a single trie.
+	TArray<TSharedRef<SUMHintMarker>> AllMarkers;
+	AllMarkers.Reserve(TotalNumWidgets);
+
+	// The label array is a single pool; we hand out slices to each window.
+	int32 LabelIndex = 0;
+
+	// For each window, create an overlay, fill it with markers
+	for (int32 WindowIdx = 0; WindowIdx < ParentWindows.Num(); ++WindowIdx)
+	{
+		TSharedRef<SWindow> CurrentWindow = ParentWindows[WindowIdx];
+		const auto&			CurrentWidgets = InteractableWidgetsPerWindow[WindowIdx];
+
+		// Build the markers for *this* window
+		TArray<TSharedRef<SUMHintMarker>> WindowMarkers;
+		WindowMarkers.Reserve(CurrentWidgets.Num());
+
+		for (int32 i = 0; i < CurrentWidgets.Num(); ++i)
+		{
+			const TSharedPtr<SWidget>& WidgetPtr = CurrentWidgets[i];
+			if (!WidgetPtr.IsValid())
+				continue;
+
+			// Make a new hint marker
+			TSharedRef<SUMHintMarker> HintMarker =
+				SNew(SUMHintMarker)
+					.TargetWidget(WidgetPtr.ToSharedRef())
+					.InWidgetLocalPosition(
+						FUMSlateHelpers::GetWidgetLocalPositionInWindow(
+							WidgetPtr.ToSharedRef(),
+							CurrentWindow // the parent window
+							))
+					.MarkerText(FText::FromString(AllLabels[LabelIndex]))
+					.BackgroundColor(FSlateColor(FLinearColor::Yellow))
+					.TextColor(FSlateColor(FLinearColor::Black));
+
+			WindowMarkers.Add(HintMarker);
+			AllMarkers.Add(HintMarker);
+			++LabelIndex;
+		}
+
+		// Create an overlay for this window
+		TSharedRef<SUMHintOverlay> HintOverlay =
+			SNew(SUMHintOverlay, MoveTemp(WindowMarkers));
+
+		// Add the overlay to the window at Z-order 999 (or any layer you like).
+		CurrentWindow->AddOverlaySlot(999)
+			[HintOverlay];
+
+		// Track this overlay in our array
+		FHintOverlayData OverlayData(HintOverlay, CurrentWindow, true);
+		PerWindowHintOverlayData.Add(OverlayData);
+	}
+
+	// Now build one trie from all the (label, marker) pairs
+	if (!BuildHintTrie(AllLabels, AllMarkers))
+		return; // If building fails, bail
+
+	// Possess the input processor so we can handle the typed input
+	FVimInputProcessor::Get()->Possess(
+		this,
+		&UVimNavigationEditorSubsystem::ProcessHintInputMultiWindow);
+
+	Logger.Print(
+		FString::Printf(TEXT("Created %d Hint Markers across %d windows!"),
+			TotalNumWidgets, ParentWindows.Num()),
+		ELogVerbosity::Verbose,
+		true);
+}
+
 bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	TArray<TSharedPtr<SWidget>>& OutWidgets)
 {
@@ -176,17 +270,39 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	if (!FocusedWidget.IsValid())
 		return false;
 
-	// return FUMSlateHelpers::TraverseFindWidgetUpwards(FocusedWidget.ToSharedRef(),
-	// 	OutWidgets, FUMSlateHelpers::GetInteractableWidgetTypes(),
-	// 	true /* Traverse down once before up */);
-
-	// TEST
 	const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
 	if (!ActiveWindow.IsValid())
 		return false;
 
 	return FUMSlateHelpers::TraverseFindWidget(ActiveWindow.ToSharedRef(),
 		OutWidgets, FUMSlateHelpers::GetInteractableWidgetTypes());
+}
+
+bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
+	TArray<TArray<TSharedPtr<SWidget>>>& OutWidgets,
+	TArray<TSharedRef<SWindow>>&		 ParentWindows)
+{
+	// Get & validate the currently focused widget (from which we will traverse)
+	FSlateApplication&		  SlateApp = FSlateApplication::Get();
+	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid())
+		return false;
+
+	TArray<TSharedRef<SWindow>> VisibleWindows;
+	SlateApp.GetAllVisibleWindowsOrdered(VisibleWindows);
+
+	for (const auto& Win : VisibleWindows)
+	{
+		TArray<TSharedPtr<SWidget>> InteractableWidgets;
+		if (FUMSlateHelpers::TraverseFindWidget(Win,
+				InteractableWidgets, FUMSlateHelpers::GetInteractableWidgetTypes()))
+		{
+			OutWidgets.Add(InteractableWidgets);
+			ParentWindows.Add(Win);
+		}
+	}
+
+	return !OutWidgets.IsEmpty();
 }
 
 TArray<FString> UVimNavigationEditorSubsystem::GenerateLabels(int32 NumLabels)
@@ -393,13 +509,70 @@ void UVimNavigationEditorSubsystem::ProcessHintInput(
 				// Focus internal widget
 				if (const TSharedPtr<SWidget> Widget = HM->TargetWidgetWeak.Pin())
 				{
-					// SlateApp.SetAllUserFocus(Widget, EFocusCause::Navigation);
-					// FUMInputHelpers::SimulateClickOnWidget(SlateApp, Widget.ToSharedRef(), FKey(EKeys::LeftMouseButton));
 					FUMFocusHelpers::HandleWidgetExecution(SlateApp, Widget.ToSharedRef());
 				}
 			}
 		}
 		ResetHintMarkers(); // Done - reset all Hint Markers (Overlay) && Trie
+	}
+	else
+		// Visualize partial matches by showing all the markers in this node
+		VisualizeHints(CurrentHintNode);
+}
+
+void UVimNavigationEditorSubsystem::ProcessHintInputMultiWindow(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const FInputChord InputChord = FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent);
+	// If there's no current node, assume we start at the root
+	if (!CurrentHintNode.IsValid())
+		CurrentHintNode = RootHintNode;
+
+	if (!CurrentHintNode.IsValid())
+	{
+		ResetHintMarkersMultiWindow();
+		return; // Reset if no valid Trie.
+	}
+
+	// Check if there's a child for this chord
+	TSharedPtr<FUMHintWidgetTrieNode>* ChildPtr = CurrentHintNode->Children.Find(InputChord);
+	if (!ChildPtr || !ChildPtr->IsValid())
+	{
+		ResetHintMarkersMultiWindow();
+		return;
+	}
+
+	CurrentHintNode = *ChildPtr; // Move to child
+
+	// If this node is terminal, we've spelled out an entire label
+	if (CurrentHintNode->bIsTerminal)
+	{
+		// Because each label is unique, there should be exactly 1 marker
+		// in the array that is truly the final label's marker.
+		const TArray<TWeakPtr<SUMHintMarker>>& HintMarkers = CurrentHintNode->HintMarkers;
+		if (HintMarkers.Num() != 1) // Check if we really have only 1
+		{
+			Logger.Print("Node marked as terminal, yet doesn't contain exactly 1 Node!", ELogVerbosity::Error, true);
+		}
+		else
+		{
+			if (const TSharedPtr<SUMHintMarker> HM = HintMarkers[0].Pin())
+			{
+				Logger.Print("Node marked as terminal, contains exactly 1 Node!", ELogVerbosity::Verbose, true);
+
+				// Focus internal widget
+				if (const TSharedPtr<SWidget> Widget = HM->TargetWidgetWeak.Pin())
+				{
+					const TSharedPtr<SWindow> WidgetWin =
+						SlateApp.FindWidgetWindow(Widget.ToSharedRef());
+					if (WidgetWin.IsValid())
+						FUMSlateHelpers::ActivateWindow(WidgetWin.ToSharedRef());
+
+					FUMFocusHelpers::HandleWidgetExecutionWithDelay(SlateApp, Widget.ToSharedRef());
+				}
+			}
+		}
+		ResetHintMarkersMultiWindow();
 	}
 	else
 		// Visualize partial matches by showing all the markers in this node
@@ -439,10 +612,38 @@ void UVimNavigationEditorSubsystem::ResetHintMarkers()
 	FVimInputProcessor::Get()->Unpossess(this);
 }
 
+void UVimNavigationEditorSubsystem::ResetHintMarkersMultiWindow()
+{
+	// Reset the Trie
+	CurrentHintNode.Reset();
+	RootHintNode.Reset();
+
+	// Remove each overlay from its window
+	for (const FHintOverlayData& OverlayData : PerWindowHintOverlayData)
+	{
+		if (const TSharedPtr<SWindow> Win = OverlayData.AssociatedWindow.Pin())
+		{
+			if (const TSharedPtr<SUMHintOverlay> HintOverlay = OverlayData.HintOverlay.Pin())
+			{
+				Win->RemoveOverlaySlot(HintOverlay.ToSharedRef());
+			}
+		}
+	}
+
+	// Clear out our array
+	PerWindowHintOverlayData.Empty();
+
+	// Unpossess the input processor
+	FVimInputProcessor::Get()->Unpossess(this);
+}
+
 void UVimNavigationEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
 	if (HintOverlayData.IsDisplayed() && NewVimMode == EVimMode::Normal)
+	{
 		ResetHintMarkers();
+		ResetHintMarkersMultiWindow();
+	}
 }
 
 void UVimNavigationEditorSubsystem::BindVimCommands()
@@ -486,4 +687,9 @@ void UVimNavigationEditorSubsystem::BindVimCommands()
 		{ EKeys::F },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::FlashHintMarkers);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		{ FInputChord(EModifierKey::Shift, EKeys::F) },
+		WeakNavigationSubsystem,
+		&UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow);
 }

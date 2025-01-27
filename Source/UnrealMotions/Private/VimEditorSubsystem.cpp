@@ -288,6 +288,9 @@ void UVimEditorSubsystem::ProcessVimNavigationInput(
 	HandleArrowKeysNavigation(SlateApp, InKeyEvent);
 }
 
+// TODO: Sometimes we get an invesible block (e.g. when moving in a details panel)
+// ideally we can detect that and maybe trigger a 'tab' motion (which seems to
+// be able to escape that "block")
 void UVimEditorSubsystem::HandleArrowKeysNavigation(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
@@ -325,7 +328,7 @@ bool UVimEditorSubsystem::HandleListViewNavigation(
 			FocusedWidget->OnNavigation( // Navigate to the next or previous item
 				FocusedWidget->GetCachedGeometry(), NavEvent);
 
-		// DEPRECATED: keeping for reference how we can use BoundaryRule
+		// Useful fallback for escaping lists, etc.
 		if (NavReply.GetBoundaryRule() == EUINavigationRule::Escape)
 			// Regular arrow navigation
 			HandleArrowKeysNavigation(SlateApp, InKeyEvent);

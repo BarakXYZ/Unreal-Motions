@@ -20,12 +20,12 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	const uint64			  IgnoreWidgetId,
 	int32					  Depth)
 {
-	if (!BaseWidget->GetVisibility().IsVisible())
+	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
 		return false;
 
 	// LogTraversalSearch(Depth, BaseWidget);
-	if (BaseWidget->GetTypeAsString() == TargetType
-		|| BaseWidget->GetWidgetClass().GetWidgetType().ToString() == TargetType)
+	if (BaseWidget->GetTypeAsString().StartsWith(TargetType)
+		|| BaseWidget->GetWidgetClass().GetWidgetType().ToString().StartsWith(TargetType))
 	{
 		// LogTraverseFoundWidget(Depth, BaseWidget, TargetType);
 		OutWidget = BaseWidget;
@@ -60,10 +60,11 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	// LogTraversalSearch(Depth, BaseWidget);
 	bool bFoundAllRequested = false;
 
-	if (!BaseWidget->GetVisibility().IsVisible())
+	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
 		return false;
 
-	if (BaseWidget->GetTypeAsString() == TargetType)
+	if (BaseWidget->GetTypeAsString().StartsWith(TargetType)
+		|| BaseWidget->GetWidgetClass().GetWidgetType().ToString().StartsWith(TargetType))
 	{
 		// LogTraverseFoundWidget(Depth, BaseWidget, TargetType);
 		OutWidgets.Add(BaseWidget);
@@ -108,16 +109,18 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	const TSet<FString>&		 TargetTypes,
 	int32 SearchCount, int32 Depth)
 {
-	// LogTraversalSearch(Depth, BaseWidget);
+	LogTraversalSearch(Depth, BaseWidget);
 	bool bFoundAllRequested = false;
 
-	if (!BaseWidget->GetVisibility().IsVisible())
+	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
+		// if (!BaseWidget->GetVisibility().IsVisible())
 		return false;
 
-	if (TargetTypes.Contains(BaseWidget->GetTypeAsString())
-		|| TargetTypes.Contains(BaseWidget->GetWidgetClass().GetWidgetType().ToString()))
+	if (TargetTypes.Contains(GetCleanWidgetType(BaseWidget->GetTypeAsString()))
+		|| TargetTypes.Contains(GetCleanWidgetType(
+			BaseWidget->GetWidgetClass().GetWidgetType().ToString())))
 	{
-		// LogTraverseFoundWidget(Depth, BaseWidget, TargetType);
+		// LogTraverseFoundWidget(Depth, BaseWidget, TargetTypes);
 		OutWidgets.Add(BaseWidget);
 
 		// If SearchCount is -1, continue searching but mark that we found at least one
@@ -160,7 +163,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	const uint64			  IgnoreWidgetId,
 	int32					  Depth)
 {
-	if (!BaseWidget->GetVisibility().IsVisible())
+	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
 		return false;
 
 	LogTraversalSearch(Depth, BaseWidget);
@@ -194,18 +197,18 @@ bool FUMSlateHelpers::TraverseFindWidget(
 bool FUMSlateHelpers::TraverseFindWidget(
 	const TSharedRef<SWidget> BaseWidget,
 	TSharedPtr<SWidget>&	  OutWidget,
-	const TSet<FString>&	  TargetWidgetTypes,
+	const TSet<FString>&	  TargetTypes,
 	const uint64			  IgnoreWidgetId,
 	int32					  Depth)
 {
 	LogTraversalSearch(Depth, BaseWidget);
 
-	if (!BaseWidget->GetVisibility().IsVisible())
+	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
 		return false;
 
-	if (TargetWidgetTypes.Contains(BaseWidget->GetTypeAsString())
-		|| TargetWidgetTypes.Contains(
-			BaseWidget->GetWidgetClass().GetWidgetType().ToString()))
+	if (TargetTypes.Contains(GetCleanWidgetType(BaseWidget->GetTypeAsString()))
+		|| TargetTypes.Contains(GetCleanWidgetType(
+			BaseWidget->GetWidgetClass().GetWidgetType().ToString())))
 	{
 		// LogTraverseFoundWidget(Depth, BaseWidget, BaseWidget->GetTypeAsString());
 		OutWidget = BaseWidget;
@@ -223,7 +226,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 			if (IgnoreWidgetId != INDEX_NONE && Child->GetId() == IgnoreWidgetId)
 				continue;
 
-			if (TraverseFindWidget(Child, OutWidget, TargetWidgetTypes,
+			if (TraverseFindWidget(Child, OutWidget, TargetTypes,
 					IgnoreWidgetId, Depth + 1))
 				return true;
 		}
@@ -231,6 +234,8 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	return false;
 }
 
+// TODO: Not sure if this is completely solid. I got some weird results
+// using this function
 bool FUMSlateHelpers::TraverseFindWidgetUpwards(
 	const TSharedRef<SWidget> BaseWidget,
 	TSharedPtr<SWidget>&	  OutWidget,
@@ -560,32 +565,40 @@ TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMajorTab()
 		return DefactoMajorTab;
 
 	// In some cases, this method will still be a good fallback (for example
-	// when currently focusing an invalid widget) so it's good to have.
+	// when there's currently an invalid widget focused) so it's good to have.
 	// Sadly this method just isn't picking up all types of Major Tabs (AFAIK)
+	// so we start with the more expensive GetDefactoMajorTab() method
+	return GetOfficialMajorTab();
+
+	// Potentially a cheaper method? (I think not though :/)
+	// const TSharedPtr<SDockTab> OfficialMajorTab = GetOfficialMajorTab();
+	// if (!OfficialMajorTab->IsForeground()
+	// 	|| !OfficialMajorTab->IsActive()
+	// 	|| !OfficialMajorTab->GetContent()->HasAnyUserFocusOrFocusedDescendants())
+	// {
+	// 	Logger.Print("Try Get Defacto Major Tab.", ELogVerbosity::Log, true);
+	// 	if (const TSharedPtr<SDockTab> DefactoMajorTab = GetDefactoMajorTab())
+	// 		return DefactoMajorTab;
+	// }
+	// Logger.Print("Got Official Major Tab.", ELogVerbosity::Log, true);
+	// return OfficialMajorTab;
+}
+
+TSharedPtr<SDockTab> FUMSlateHelpers::GetOfficialMajorTab()
+{
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 	if (const TSharedPtr<SDockTab> ActiveMinorTab = GTM->GetActiveTab())
 	{
-		LogTab(ActiveMinorTab.ToSharedRef());
+		// LogTab(ActiveMinorTab.ToSharedRef());
 		if (const TSharedPtr<FTabManager> TabManager =
 				ActiveMinorTab->GetTabManagerPtr())
 		{
 			if (const TSharedPtr<SDockTab> ActiveMajorTab =
 					GTM->GetMajorTabForTabManager(TabManager.ToSharedRef()))
 			{
-				// Potentially we can check here if this Major Tab resides in
-				// our actual Active Window to check if we're even fetching the
-				// correct Major Tab (and then fallback to the more expensive way)
-				// maybe GetDefactoActiveMajorTab()?
-				// This maybe make sense because in most cases this cheaper
-				// method will suffice. It is really only in edge cases of tabs
-				// like Preferences and such where we will want the more extensive
-				// method.
-				LogTab(ActiveMajorTab.ToSharedRef());
+				// LogTab(ActiveMajorTab.ToSharedRef());
 				return ActiveMajorTab;
 			}
-			// Is it any good?
-			// else if (ActiveMinorTab->GetVisualTabRole() == ETabRole::MajorTab)
-			// 	return ActiveMinorTab;
 		}
 	}
 	return nullptr;
@@ -649,41 +662,25 @@ bool FUMSlateHelpers::IsVisualTextSelected(FSlateApplication& SlateApp)
 // NOTE: Kept here some commented methods for future reference.
 void FUMSlateHelpers::ActivateWindow(const TSharedRef<SWindow> InWindow)
 {
-	FSlateApplication& SlateApp = FSlateApplication::Get();
-	InWindow->BringToFront(true);
 	TSharedRef<SWidget>			   WinContent = InWindow->GetContent();
 	FWindowDrawAttentionParameters DrawParams(
 		EWindowDrawAttentionRequestType::UntilActivated);
-	// Window->DrawAttention(DrawParams);
 	// Window->ShowWindow();
 	// Window->FlashWindow(); // Cool way to visually indicate windows.
 
-	// I was a bit worried about this, but actually it seems that without this
-	// we will have a weird focusing bug. So this actually seems to work pretty
-	// well.
-	// SlateApp.ClearAllUserFocus();
-
-	// NOTE:
-	// This is really interesting. It may help to soildfy focus and what we
-	// actually want! Like pass in the MajorTab->MinorTab->*Widget*
-	// I'm thinking maybe something like find major tab in window function ->
-	// Then we have the major, we can do the check, get the minor, get the widget
-	// and pass it in **before drawing attention**!
-	// Window->SetWidgetToFocusOnActivate();
-
-	// NOTE:
-	// This will focus the window content, which isn't really useful. And it
-	// looks like ->DrawAttention() Seems to do a better job!
-	// SlateApp.SetAllUserFocus(
-	// 	WinContent, EFocusCause::Navigation);
-
-	InWindow->DrawAttention(DrawParams); // Seems to work well!
-
-	if (InWindow->GetContent()->HasAnyUserFocusOrFocusedDescendants())
+	if (InWindow->IsActive() || InWindow->HasAnyUserFocusOrFocusedDescendants() || WinContent->HasAnyUserFocusOrFocusedDescendants())
+	{
 		Logger.Print("Window has focus", ELogVerbosity::Verbose, true);
-
-	Logger.Print(FString::Printf(
-		TEXT("Activated Window: %s"), *InWindow->GetTitle().ToString()));
+	}
+	else
+	{
+		InWindow->BringToFront(true);
+		InWindow->DrawAttention(DrawParams); // Seems to work well!
+		Logger.Print(
+			FString::Printf(TEXT("Activated Window: %s"),
+				*InWindow->GetTitle().ToString()),
+			ELogVerbosity::Log, true);
+	}
 }
 
 FVector2f FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(
@@ -1076,23 +1073,42 @@ FString FUMSlateHelpers::GetCleanTabLabel(const TSharedRef<SDockTab> InTab)
 	return TabLabel.TrimEnd(); // Clean-up any trailing whitespaces
 }
 
-void FUMSlateHelpers::DebugClimbUpFromWidget(const TSharedRef<SWidget> InWidget)
+FString FUMSlateHelpers::GetCleanWidgetType(const FString& InWidgetType)
+{
+	const int32 TemplatePos = InWidgetType.Find("<");
+	return TemplatePos != INDEX_NONE ? InWidgetType.Left(TemplatePos) : InWidgetType;
+}
+
+void FUMSlateHelpers::DebugClimbUpFromWidget(
+	const TSharedRef<SWidget> InWidget, int32 TimesToClimb)
 {
 	TSharedPtr<SWidget> Parent = InWidget->GetParentWidget();
-	while (Parent.IsValid())
+	int32				ClimbCount = 0;
+
+	while (Parent.IsValid()
+		&& (TimesToClimb == INDEX_NONE || ClimbCount < TimesToClimb))
 	{
-		Logger.Print(Parent->GetTypeAsString());
+		const FString ClassType = Parent->GetWidgetClass().GetWidgetType().ToString();
+		const FString SpecificType = Parent->GetTypeAsString();
+
+		Logger.Print(FString::Printf(TEXT("Class Type: %s | Specific Type: %s"),
+			*ClassType, *SpecificType));
+
 		Parent = Parent->GetParentWidget();
+		++ClimbCount;
 	}
 }
 
 const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 {
 	static const TSet<FString> InteractableWidgetTypes = {
-		"SButton", "SHyperlink",
+		"SButton",
+		"SHyperlink",
 		"SCheckBox",
+		"SFilterCheckBox",
 		"SDockTab",
-		"SEditableText", "SMultiLineEditableText",
+		"SEditableText",
+		"SMultiLineEditableText",
 		"SChordEditor",
 		// "SGraphNode",
 		// "SNode",  // Need to check the base class for this
@@ -1101,8 +1117,27 @@ const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 		"SAssetTileView",
 		"SSceneOutlinerTreeView",
 		"STreeView",
-		"SSubobjectEditorDragDropTree"
+		"SSubobjectEditorDragDropTree",
+		// "SSingleProperty",
+		// "DetailPropertyRow",
+		// "SDetailSingleItemRow",
+		"SPropertyValueWidget",
+
+		// "SNumericEntryBox<NumericType>",
+		"SNumericEntryBox",
+
+		// "SPropertyNameWidget",
+		// "SPropertyEditorTitle",
+		// "SEditConditionWidget",
+		// "SPropertyEditorNumeric<float>",
+		// "SNumericEntryBox<NumericType>",
 	};
 
 	return InteractableWidgetTypes;
+}
+
+bool FUMSlateHelpers::DoesWidgetResidesInRegularWindow(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	const TSharedPtr<SWindow> ParentWindow = SlateApp.FindWidgetWindow(InWidget);
+	return (ParentWindow.IsValid() && ParentWindow->IsRegularWindow());
 }

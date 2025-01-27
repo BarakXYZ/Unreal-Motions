@@ -2,10 +2,12 @@
 #include "Editor.h"
 #include "Input/Events.h"
 #include "Logging/LogVerbosity.h"
+#include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Docking/SDockTab.h"
+#include "VimInputProcessor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMFocusHelpers, Log, All); // Dev
 FUMLogger FUMFocusHelpers::Logger(&LogUMFocusHelpers);
@@ -62,32 +64,11 @@ void FUMFocusHelpers::SetWidgetFocusWithDelay(const TSharedRef<SWidget> InWidget
 
 bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
-	TMap<FString, TFunction<void(FSlateApplication&, TSharedRef<SWidget>)>> WidgetExecMap = {
-
-		{ "SButton", [](FSlateApplication& SlateApp, TSharedRef<SWidget> InWidget) {
-			 TSharedRef<SButton> AsButton = StaticCastSharedRef<SButton>(InWidget);
-			 AsButton->SimulateClick();
-
-			 // TODO: Check if it popped a menu that we can focus?
-			 FTimerHandle TimerHandle;
-			 TryFocusFuturePopupMenu(SlateApp, TimerHandle, 0.025f);
-		 } },
-
-		{ "SCheckBox", [](FSlateApplication& SlateApp, TSharedRef<SWidget> InWidget) {
-			 SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
-			 TSharedRef<SCheckBox> AsCheckBox = StaticCastSharedRef<SCheckBox>(InWidget);
-			 AsCheckBox->ToggleCheckedState();
-
-			 // TODO: Check if it popped a menu that we can focus?
-			 FTimerHandle TimerHandle;
-			 TryFocusFuturePopupMenu(SlateApp, TimerHandle, 0.025f);
-		 } },
-
-		{ "SDockTab", [](FSlateApplication& SlateApp, TSharedRef<SWidget> InWidget) {
-			 TSharedRef<SDockTab> AsDockTab = StaticCastSharedRef<SDockTab>(InWidget);
-			 AsDockTab->ActivateInParent(ETabActivationCause::SetDirectly);
-		 } },
-
+	const TMap<FString, TFunction<void(FSlateApplication&, TSharedRef<SWidget>)>> WidgetExecMap = {
+		{ "SButton", &FUMFocusHelpers::ClickSButton },
+		{ "SCheckBox", &FUMFocusHelpers::ClickSCheckBox },
+		{ "SPropertyValueWidget", &FUMFocusHelpers::ClickSPropertyValueWidget },
+		{ "SDockTab", &FUMFocusHelpers::ClickSDockTab }
 	};
 
 	// SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
@@ -107,60 +88,203 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		return true;
 	}
 
-	// Generic set focus
+	// Generic set focus & press
 	SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
+	FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, FKey(EKeys::Enter));
+	return false;
+}
+
+void FUMFocusHelpers::HandleWidgetExecutionWithDelay(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget, FTimerHandle* TimerHandle, const float Delay)
+{
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+	FTimerHandle			  LocalTimerHandle;
+	FTimerHandle&			  TimerHandleRef =
+		TimerHandle ? *TimerHandle : LocalTimerHandle;
+
+	if (TimerHandle)
+		TimerManager->ClearTimer(TimerHandleRef);
+
+	TWeakPtr<SWidget> WeakWidget = InWidget;
+
+	TimerManager->SetTimer(
+		TimerHandleRef,
+		[&SlateApp, WeakWidget]() {
+			if (const TSharedPtr<SWidget> Widget = WeakWidget.Pin())
+				HandleWidgetExecution(SlateApp, Widget.ToSharedRef());
+		},
+		Delay, false);
+}
+
+void FUMFocusHelpers::ClickSButton(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	// Pulling focus first to trigger widget registration
+	SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
+	TSharedRef<SButton> AsButton = StaticCastSharedRef<SButton>(InWidget);
+	AsButton->SimulateClick();
+
+	// TODO: Check if it popped a menu that we can focus?
+	if (const TSharedPtr<SWindow> ActiveWin = SlateApp.FindWidgetWindow(InWidget))
+	{
+		if (ActiveWin->IsRegularWindow())
+			TryFocusFuturePopupMenu(SlateApp);
+		else
+		{
+			TryFocusFutureSubMenu(SlateApp, ActiveWin.ToSharedRef());
+		}
+	}
+}
+
+void FUMFocusHelpers::ClickSCheckBox(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
+	TSharedRef<SCheckBox> AsCheckBox = StaticCastSharedRef<SCheckBox>(InWidget);
+	AsCheckBox->ToggleCheckedState();
+
+	TryFocusFuturePopupMenu(SlateApp);
+}
+
+void FUMFocusHelpers::ClickSDockTab(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	TSharedRef<SDockTab> AsDockTab = StaticCastSharedRef<SDockTab>(InWidget);
+	AsDockTab->ActivateInParent(ETabActivationCause::SetDirectly);
+}
+
+void FUMFocusHelpers::ClickSPropertyValueWidget(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	TSharedPtr<SWidget> FoundButton;
+	// Sometimes they might have an SButton inside that we should operate on
+	if (FUMSlateHelpers::TraverseFindWidget(InWidget, FoundButton, "SButton"))
+	{
+		ClickSButton(SlateApp, FoundButton.ToSharedRef());
+		return;
+	}
+	FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, FKey(EKeys::LeftMouseButton));
+}
+
+bool FUMFocusHelpers::TryFocusPopupMenu(FSlateApplication& SlateApp)
+{
+	// const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
+	const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
+
+	if (!ActiveWindow.IsValid())
+		return false;
+
+	const TArray<TSharedRef<SWindow>> Wins = ActiveWindow->GetChildWindows();
+
+	if (Wins.IsEmpty())
+		return false;
+
+	for (const auto& Win : Wins)
+	{
+		FChildren* Children = Win->GetChildren();
+		if (!Children || Children->Num() == 0)
+		{
+			continue;
+		}
+
+		const TSharedRef<SWidget> FirstChild = Children->GetChildAt(0);
+		if (!FirstChild->GetTypeAsString().Equals(
+				"MenuStackInternal::SMenuContentWrapper"))
+		{
+			continue;
+		}
+
+		// const TArray<TSharedRef<SWindow>> DeeperChildWins = Win->GetChildWindows();
+		// if (!DeeperChildWins.IsEmpty())
+		// {
+		// 	Logger.Print("Menu Window also has Childrens!", ELogVerbosity::Log, true);
+		// }
+
+		BringFocusToPopupMenu(SlateApp, Win->GetContent());
+
+		Logger.Print("Menu Window found!",
+			ELogVerbosity::Verbose, true);
+		return true;
+	}
+
+	Logger.Print("Menu Window was NOT found!",
+		ELogVerbosity::Warning, true);
 	return false;
 }
 
 void FUMFocusHelpers::TryFocusFuturePopupMenu(FSlateApplication& SlateApp,
-	FTimerHandle& TimerHandle, const float Delay)
+	FTimerHandle* TimerHandle, const float Delay)
 {
 	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
-	TimerManager->ClearTimer(TimerHandle);
+	FTimerHandle			  LocalTimerHandle;
+	FTimerHandle&			  TimerHandleRef =
+		TimerHandle ? *TimerHandle : LocalTimerHandle;
+
+	if (TimerHandle)
+		TimerManager->ClearTimer(TimerHandleRef);
 
 	TimerManager->SetTimer(
-		TimerHandle,
+		TimerHandleRef,
 		[&SlateApp]() {
-			const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
+			TryFocusPopupMenu(SlateApp);
+		},
+		Delay, false);
+}
 
-			const TArray<TSharedRef<SWindow>> Wins = ActiveWindow->GetChildWindows();
+bool FUMFocusHelpers::BringFocusToPopupMenu(FSlateApplication& SlateApp, TSharedRef<SWidget> WinContent)
+{
+	// Lookup the first focusable widget in that menu (WIP)
+	TSet<FString> LookUpTypes = {
+		"SButton",
 
-			if (Wins.IsEmpty())
-				return;
+		// This seems to work and be more generic I think?
+		"SComboListType",
 
-			for (const auto& Win : Wins)
-			{
-				FChildren* Children = Win->GetChildren();
-				if (!Children || Children->Num() == 0)
-				{
-					continue;
-				}
+		// TODO:
+		// This seems to really just ignore any type of "selection" support.
+		// Can't get it to receive non-mouse navigation in any why shape or form.
+		// Have tried to even focus on the inner border and stuff, nothing works.
+		// So potentially try to send a pull-request to UE to fix this?
+		"SPlacementAssetMenuEntry",
+	};
+	TSharedPtr<SWidget> FoundWidget;
+	if (FUMSlateHelpers::TraverseFindWidget(
+			WinContent, FoundWidget, LookUpTypes))
+	{
+		// Clearing seems to help for when jumping from an EditableT
+		// SlateApp.ClearAllUserFocus();
+		SlateApp.SetAllUserFocus(FoundWidget, EFocusCause::Navigation);
 
-				const TSharedRef<SWidget> FirstChild = Children->GetChildAt(0);
-				if (!FirstChild->GetTypeAsString().Equals(
-						"MenuStackInternal::SMenuContentWrapper"))
-				{
-					// Logger.Print(FString::Printf(TEXT("Child 0 Type is: %s"),
-					// 				 *FirstChild->GetTypeAsString()),
-					// 	ELogVerbosity::Log, true);
-					continue;
-				}
+		Logger.Print(FString::Printf(TEXT("Widget In Menu Window found: %s"), *FoundWidget->GetTypeAsString()),
+			ELogVerbosity::Verbose, true);
 
-				// Logger.Print("Menu Window found!",
-				// 	ELogVerbosity::Verbose, true);
+		return true;
+	}
+	return false;
+}
 
-				// Lookup the first button in that menu and pull focus on it.
-				TSharedPtr<SWidget> FoundButton;
-				if (FUMSlateHelpers::TraverseFindWidget(
-						Win->GetContent(), FoundButton, "SButton"))
-				{
-					// SlateApp.ClearAllUserFocus();
-					SlateApp.SetAllUserFocus(FoundButton, EFocusCause::Navigation);
-				}
-				return;
-			}
-			// Logger.Print("Menu Window was NOT found!",
-			// 	ELogVerbosity::Log);
+bool FUMFocusHelpers::TryFocusSubMenu(FSlateApplication& SlateApp, const TSharedRef<SWindow> ParentMenuWindow)
+{
+	const TArray<TSharedRef<SWindow>> ChildWins = ParentMenuWindow->GetChildWindows();
+	if (ChildWins.IsEmpty())
+		return false;
+
+	// We really just want to first window
+	return BringFocusToPopupMenu(SlateApp, ChildWins[0]->GetContent());
+}
+
+void FUMFocusHelpers::TryFocusFutureSubMenu(FSlateApplication& SlateApp, const TSharedRef<SWindow> ParentMenuWindow, FTimerHandle* TimerHandle, const float Delay)
+{
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+	FTimerHandle			  LocalTimerHandle;
+	FTimerHandle&			  TimerHandleRef =
+		TimerHandle ? *TimerHandle : LocalTimerHandle;
+
+	if (TimerHandle)
+		TimerManager->ClearTimer(TimerHandleRef);
+
+	const TWeakPtr<SWindow> WeakParentMenuWin = ParentMenuWindow;
+
+	TimerManager->SetTimer(
+		TimerHandleRef,
+		[&SlateApp, WeakParentMenuWin]() {
+			if (const TSharedPtr<SWindow> ParentWin = WeakParentMenuWin.Pin())
+				TryFocusSubMenu(SlateApp, ParentWin.ToSharedRef());
 		},
 		Delay, false);
 }

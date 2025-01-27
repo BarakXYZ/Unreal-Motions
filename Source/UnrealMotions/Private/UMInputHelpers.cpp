@@ -5,6 +5,8 @@
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/SViewport.h"
+#include "VimInputProcessor.h"
+#include "UMFocusHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMInputHelpers, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMInputHelpers, Log, All); // Dev
@@ -96,6 +98,8 @@ void FUMInputHelpers::SimulateRightClick(
 	// Will remain the original focused widget if not list
 	FUMInputHelpers::SimulateClickOnWidget(
 		SlateApp, FocusedWidget.ToSharedRef(), EKeys::RightMouseButton);
+
+	FUMFocusHelpers::TryFocusFuturePopupMenu(SlateApp);
 }
 
 void FUMInputHelpers::ToggleRightClickPress(
@@ -338,24 +342,40 @@ void FUMInputHelpers::Enter(
 
 	if (FocusedWidgetType.IsEqual(ButtonType))
 	{
-		TSharedPtr<SButton> FocusedWidgetAsButton =
-			StaticCastSharedPtr<SButton>(FocusedWidget);
-		FocusedWidgetAsButton->SimulateClick();
+		FUMFocusHelpers::ClickSButton(SlateApp, FocusedWidget.ToSharedRef());
 		return;
 	}
+	// ** Not sure this is even needed :0 **
 	// Will fetch and assign the item to Focused Widget (or not if not list view)
-	if (FUMSlateHelpers::GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
-			TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>()))
-	{
-		// Lists requires Double-Click to actually open
-		FUMInputHelpers::SimulateClickOnWidget(
-			SlateApp, FocusedWidget.ToSharedRef(),
-			EKeys::LeftMouseButton, true /* Double-Click */);
-		return;
-	}
+	// if (FUMSlateHelpers::GetSelectedTreeViewItemAsWidget(SlateApp, FocusedWidget,
+	// 		TOptional<TSharedPtr<SListView<TSharedPtr<ISceneOutlinerTreeItem>>>>()))
+	// {
+	// 	// Lists requires Double-Click to actually open
+	// 	FUMInputHelpers::SimulateClickOnWidget(
+	// 		SlateApp, FocusedWidget.ToSharedRef(),
+	// 		EKeys::LeftMouseButton, true /* Double-Click */);
+	// 	return;
+	// }
+
+	// ** Not sure this is even needed :0 **
 	// All other widgets can be a normal Single-Click
-	FUMInputHelpers::SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef(),
-		EKeys::LeftMouseButton, false /* Single-Click */);
+	// FUMInputHelpers::SimulateClickOnWidget(SlateApp, FocusedWidget.ToSharedRef(),
+	// 	EKeys::LeftMouseButton, false /* Single-Click */);
+
+	// I think now we know how to properly simulate the Enter and this is working.
+	// if (FocusedWidgetType.IsEqual("SComboRow<TSharedPtr<FString>>"))
+	// "SComboListType"
+	if (FocusedWidget->GetTypeAsString().Equals("SComboListType"))
+	{
+		// Let focuser know we're about to lose focus to something unuseful and
+		// future schedule focus on something useful
+	}
+	else
+	{
+		Logger.Print(FString::Printf(TEXT("NOPE: %s"), *FocusedWidget->GetTypeAsString()), ELogVerbosity::Warning, true);
+	}
+
+	FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, FKey(EKeys::Enter));
 }
 
 bool FUMInputHelpers::GetDigitFromKey(const FKey& InKey, int32& OutDigit,

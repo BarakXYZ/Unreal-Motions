@@ -83,6 +83,8 @@ public:
 	// All widget dissapear.
 	void FlashHintMarkers(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void FlashHintMarkersMultiWindow(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	/**
 	 * Collect all interactable widgets from closest to farthest
 	 * this will be useful to collect them in that order since we can then
@@ -91,6 +93,8 @@ public:
 	 * Return true if any interactable widgets were found. False otherwise.
 	 */
 	bool CollectInteractableWidgets(TArray<TSharedPtr<SWidget>>& OutWidgets);
+
+	bool CollectInteractableWidgets(TArray<TArray<TSharedPtr<SWidget>>>& OutWidgets, TArray<TSharedRef<SWindow>>& ParentWindows);
 
 	TArray<FString> GenerateLabels(int32 NumLabels);
 
@@ -105,15 +109,19 @@ public:
 
 	void ProcessHintInput(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void ProcessHintInputMultiWindow(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	void VisualizeHints(TSharedPtr<FUMHintWidgetTrieNode> Node);
 
 	void ResetHintMarkers();
+	void ResetHintMarkersMultiWindow();
 	//
 	//							Trie Handling
 	////////////////////////////////////////////////////////////////////////////
 
-	FUMLogger		 Logger;
-	FHintOverlayData HintOverlayData;
+	FUMLogger				 Logger;
+	FHintOverlayData		 HintOverlayData;
+	TArray<FHintOverlayData> PerWindowHintOverlayData;
 
 	/** The root of our hint-marker Trie. */
 	TSharedPtr<FUMHintWidgetTrieNode> RootHintNode;

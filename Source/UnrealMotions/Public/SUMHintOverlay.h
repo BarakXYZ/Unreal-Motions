@@ -23,7 +23,7 @@ public:
 		for (const TSharedRef<SUMHintMarker>& HM : InHintMarkers)
 		{
 			CanvasPanel->AddSlot()
-				.Size(FVector2D(22.0, 18.0))
+				.Size(FVector2D((HM->NumHintChars * 12), 18.0))
 				.Position(HM->LocalPositionInWindow)
 					[HM];
 		}

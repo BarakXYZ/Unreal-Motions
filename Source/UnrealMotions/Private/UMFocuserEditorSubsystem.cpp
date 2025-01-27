@@ -1,4 +1,5 @@
 #include "UMFocuserEditorSubsystem.h"
+#include "Engine/TimerHandle.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
 #include "Input/Events.h"
@@ -87,52 +88,81 @@ void UUMFocuserEditorSubsystem::RegisterSlateEvents()
 	}
 }
 
-void UUMFocuserEditorSubsystem::CheckWindowChanged()
+bool UUMFocuserEditorSubsystem::CheckWindowChanged()
 {
 	TSharedPtr<SWindow>		  OptNewWindow;
 	const TSharedPtr<SWindow> TrackedWindow = TrackedActiveWindow.Pin();
 	if (FUMSlateHelpers::CheckReplaceIfWindowChanged(
 			TrackedWindow, OptNewWindow))
 	{
-		HandleOnWindowChanged(TrackedWindow, OptNewWindow);
+		// This will fix an issue when jumping to a window that doesn't contain
+		// a popmenu. BUT; for popup menus, it won't be able to detect if a pop
+		// up menu has focus (within the window) which is like a problem lol
+		// TODO: FUMSlateHelpers::ActivateWindow should detect if a window has
+		// a popup menu active to not make it poof!
+		TWeakPtr<SWindow> WeakOptNewWindow = OptNewWindow;
+		TWeakPtr<SWindow> WeakTrackedWindow = TrackedWindow;
+		FTimerHandle	  TimerHandle;
+		GEditor->GetTimerManager()->SetTimer(
+			TimerHandle,
+			[this, WeakOptNewWindow, WeakTrackedWindow]() {
+				HandleOnWindowChanged(WeakTrackedWindow.Pin(), WeakOptNewWindow.Pin());
+			},
+			0.025f, false);
+
+		// HandleOnWindowChanged(TrackedWindow, OptNewWindow);
 		TrackedActiveWindow = OptNewWindow;
+		return true;
 
 		// Logger.Print("Window Changed", ELogVerbosity::Log, true);
 	}
+	return false;
 }
 
 void UUMFocuserEditorSubsystem::OnFocusChanged(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldWidgetPath,
 	const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
-	Logger.Print("On Focus Changed", ELogVerbosity::Log, true);
-	CheckWindowChanged();
+	// Logger.Print("On Focus Changed", ELogVerbosity::Log, true);
+	Log_OnFocusChanged(OldWidget, NewWidget);
 
-	const FString LogFunc = "OnFocusChanged:\n";
-	FString		  LogOldWidget = "Invalid";
-	FString		  LogNewWidget = "Invalid";
+	// This seems to throw off the focus when changing window with the new Vimium
+	// method. So commenting this off. Not sure exactly how useful this is to
+	// track this here?
+	if (CheckWindowChanged())
+	{
+		Logger.Print("OnFocusChanged: Window Changed!", ELogVerbosity::Log, true);
+	}
 
 	if (OldWidget.IsValid() && !ShouldFilterNewWidget(OldWidget.ToSharedRef()))
 	{
-		TrackedPrevWidget = OldWidget;
-		LogOldWidget = OldWidget->GetTypeAsString();
+		TrackedPrevWidget = OldWidget; // Deprecated (not used)
 	}
 
 	if (NewWidget.IsValid() && !ShouldFilterNewWidget(NewWidget.ToSharedRef()))
 	{
-		TrackedActiveWidget = NewWidget;
-		RecordWidgetUse(NewWidget.ToSharedRef());
-		LogNewWidget = NewWidget->GetTypeAsString();
+		TrackedActiveWidget = NewWidget; // Deprecated (not used)
 
-		// Only draws focus if Nomad Tab
+		// TODO: Refactor to a proper function. The list of widget can grow.
+		if (NewWidget->GetTypeAsString().Equals("SDetailTree"))
+		{
+			TryBringFocusToActiveTab();
+			return;
+		}
+
+		const TSharedRef<SWidget> RefNewWidget = NewWidget.ToSharedRef();
+		RecordWidgetUse(RefNewWidget);
+
+		// Don't track if in a None-Regular Window (probably Menu Window)
+		if (FUMSlateHelpers::DoesWidgetResidesInRegularWindow(
+				FSlateApplication::Get(), RefNewWidget))
+			TryRegisterWidgetWithTab(); // It's useful to constantly update
+
+		// Won't do anything for None-Nomad. This is needed for visualization.
 		DrawFocusForNomadTab(NewWidget.ToSharedRef());
 	}
 
 	ValidateFocusedWidget(); // Make sure our currently focused widget is valid
-
-	Logger.Print(
-		LogFunc + FString::Printf(TEXT("Old Widget: %s\nNew Widget: %s"), *LogOldWidget, *LogNewWidget),
-		ELogVerbosity::Verbose, bVisLogTabFocusFlow);
 }
 
 void UUMFocuserEditorSubsystem::OnActiveTabChanged(
@@ -161,7 +191,7 @@ void UUMFocuserEditorSubsystem::OnActiveTabChanged(
 			if (const TSharedPtr<SDockTab> NewActiveTab = WeakNewActiveTab.Pin())
 			{
 				const TSharedRef<SDockTab> NewTabRef = NewActiveTab.ToSharedRef();
-				TryRegisterWidgetWithTab(NewTabRef); // Right?? Why not
+				TryRegisterWidgetWithTab(NewTabRef); // Right?
 
 				if (NewTabRef->GetVisualTabRole() != ETabRole::MajorTab)
 				{
@@ -186,8 +216,6 @@ void UUMFocuserEditorSubsystem::OnTabForegrounded(
 {
 	const FString LogFunc = "OnTabForegrounded:\n";
 	Logger.Print(LogFunc, ELogVerbosity::Verbose, true);
-
-	// DebugPrevAndNewMinorTabsMajorTabs(NewActiveTab, PrevActiveTab);
 
 	// FUMSlateHelpers::LogTab(NewActiveTab.ToSharedRef());
 
@@ -541,6 +569,46 @@ bool UUMFocuserEditorSubsystem::TryRegisterWidgetWithTab(
 	return false;
 }
 
+bool UUMFocuserEditorSubsystem::TryRegisterWidgetWithTab()
+{
+	// Maybe we can also go about this by trying to grab the active minor and
+	// checking if it has any focus? Thus knowing if we need to Nomad?
+
+	const TSharedPtr<SDockTab> ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
+	if (!ActiveMajorTab.IsValid())
+		return false;
+
+	TSharedPtr<SDockTab> ActiveTab;
+	if (ActiveMajorTab->GetTabRole() == ETabRole::NomadTab)
+	{
+		ActiveTab = ActiveMajorTab;
+	}
+	else
+	{
+		ActiveTab = FUMSlateHelpers::GetActiveMinorTab();
+		if (!ActiveTab.IsValid())
+			return false;
+	}
+
+	// Doesn't seem to be solid at all
+	// TEST
+	// const TSharedPtr<SDockTab> ActiveMinorTab = FUMSlateHelpers::GetActiveMinorTab();
+	// if (ActiveMinorTab.IsValid()
+	// 	&& ActiveMinorTab->GetContent()->HasAnyUserFocusOrFocusedDescendants()
+	// 	&& ActiveMinorTab->IsForeground()
+	// 	&& ActiveMinorTab->IsActive())
+	// {
+	// 	Logger.Print("We know to fetch the Minor Tab (CHEAPER)", ELogVerbosity::Verbose, true);
+	// }
+	// else
+	// {
+	// 	Logger.Print("We know to fetch the Nomad Tab (CHEAPER)", ELogVerbosity::Verbose, true);
+	// }
+	// TEST
+
+	return TryRegisterWidgetWithTab(ActiveTab.ToSharedRef());
+}
+
 bool UUMFocuserEditorSubsystem::TryRegisterWidgetWithTab(
 	const TSharedRef<SDockTab> InTab)
 {
@@ -615,17 +683,13 @@ bool UUMFocuserEditorSubsystem::TryActivateLastWidgetInTab(
 	// as is, as he had an intention to draw focus to a specific widget.
 	if (InTab->GetContent()->HasFocusedDescendants())
 	{
-		// TEST
-		if (const auto Widget = TrackedActiveWidget.Pin())
-		{
-			const TSharedRef<SWidget> WidgetRef = Widget.ToSharedRef();
-			DrawFocusForNomadTab(WidgetRef);
-			TryRegisterWidgetWithTab(WidgetRef, InTab);
-		}
-		// Log_TryActivateLastWidgetInTab(InTab, nullptr, true);
+		TryRegisterWidgetWithTab(InTab);
 		return true;
 	}
 
+	// TODO:
+	// Issue: When we have no focus we need to first check if there's potentially
+	// a Menu Popup window that is waiting for focus. If so, we want to focus it.
 	if (IsFirstEncounter(InTab))
 		return FirstEncounterDefaultInit(InTab);
 
@@ -635,6 +699,9 @@ bool UUMFocuserEditorSubsystem::TryActivateLastWidgetInTab(
 	{
 		if (const TSharedPtr<SWidget> Widget = FoundWidget->Pin())
 		{
+			if (FUMFocusHelpers::TryFocusPopupMenu(FSlateApplication::Get()))
+				return true;
+
 			// It looks like we won't be able to pull focus properly on some
 			// tabs without this delay. Especially Nomad Tabs.
 			FUMFocusHelpers::SetWidgetFocusWithDelay(
@@ -764,82 +831,6 @@ void UUMFocuserEditorSubsystem::OnWindowBeingDestroyed(const SWindow& Window)
 		0.1f, false);
 
 	// Logger.Print("Window being destroyed is not Regular");
-}
-
-void UUMFocuserEditorSubsystem::DebugPrevAndNewMinorTabsMajorTabs(
-	TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab)
-{
-	TSharedRef<FGlobalTabmanager>
-		GTM = FGlobalTabmanager::Get();
-
-	const FString DefaultLog = "was Destroyed";
-
-	// Handle Previous Tab:
-	FString LogPrevMinorTab = DefaultLog;
-	FString LogPrevMajorTab = DefaultLog;
-	FString LogPrevWidget = DefaultLog;
-
-	if (PrevActiveTab.IsValid())
-	{
-		LogPrevMinorTab = PrevActiveTab->GetTabLabel().ToString();
-
-		if (const TSharedPtr<FTabManager> PrevActiveTabManager =
-				PrevActiveTab->GetTabManagerPtr())
-		{
-			if (const TSharedPtr<SDockTab> PrevMajorActiveTab =
-					GTM->GetMajorTabForTabManager(
-						PrevActiveTabManager.ToSharedRef()))
-			{
-				LogPrevMajorTab = PrevMajorActiveTab->GetTabLabel().ToString();
-			}
-		}
-	}
-	if (const TSharedPtr<SWidget> PrevActiveWidget = TrackedPrevWidget.Pin())
-	{
-		LogPrevWidget = PrevActiveWidget->GetTypeAsString();
-	}
-
-	// Handle New Tab:
-	FString LogNewMinorTab = DefaultLog;
-	FString LogNewMajorTab = DefaultLog;
-	FString LogNewWidget = DefaultLog;
-
-	if (NewActiveTab.IsValid())
-	{
-		LogNewMinorTab = NewActiveTab->GetTabLabel().ToString();
-
-		if (const TSharedPtr<FTabManager> NewActiveTabManager =
-				NewActiveTab->GetTabManagerPtr())
-		{
-			if (const TSharedPtr<SDockTab> NewMajorActiveTab =
-					GTM->GetMajorTabForTabManager(
-						NewActiveTabManager.ToSharedRef()))
-			{
-				LogNewMajorTab = NewMajorActiveTab->GetTabLabel().ToString();
-			}
-		}
-	}
-	FSlateApplication& SlateApp = FSlateApplication::Get();
-	if (const TSharedPtr<SWidget> CurrWidget = SlateApp.GetUserFocusedWidget(0))
-	{
-		LogNewWidget = CurrWidget->GetTypeAsString();
-	}
-
-	const FString LogPrevious =
-		FString::Printf(
-			TEXT("Prev Minor Tab: %s | Prev Major Tab: %s | Prev Widget: %s"),
-			*LogPrevMinorTab,
-			*LogPrevMajorTab,
-			*LogPrevWidget);
-
-	const FString LogNew =
-		FString::Printf(
-			TEXT("New Minor Tab: %s | New Major Tab: %s | New Widget: %s"),
-			*LogNewMinorTab,
-			*LogNewMajorTab,
-			*LogNewWidget);
-
-	Logger.Print((LogPrevious + '\n' + LogNew), ELogVerbosity::Verbose, true);
 }
 
 bool UUMFocuserEditorSubsystem::IsFirstEncounter(const TSharedRef<SDockTab> InTab)
@@ -1001,4 +992,32 @@ void UUMFocuserEditorSubsystem::UpdateWidgetForActiveTab()
 			TryRegisterWidgetWithTab(MinorTabRef);
 		}
 	}
+}
+
+void UUMFocuserEditorSubsystem::Log_OnFocusChanged(
+	const TSharedPtr<SWidget> OldWidget,
+	const TSharedPtr<SWidget> NewWidget)
+{
+	bool bVisLog = false;
+
+	const FString LogFunc = "OnFocusChanged:\n";
+	FString		  LogOldWidget = "Invalid";
+	FString		  LogNewWidget = "Invalid";
+
+	if (OldWidget.IsValid())
+	{
+		LogOldWidget = " Specific Type: " + OldWidget->GetTypeAsString();
+		LogOldWidget = "\nClass Type: " + OldWidget->GetWidgetClass().GetWidgetType().ToString();
+	}
+
+	if (NewWidget.IsValid())
+	{
+		// FUMSlateHelpers::DebugClimbUpFromWidget(NewWidget.ToSharedRef());
+		LogOldWidget = " Specific Type: " + NewWidget->GetTypeAsString();
+		LogOldWidget = "\nClass Type: " + NewWidget->GetWidgetClass().GetWidgetType().ToString();
+	}
+
+	Logger.Print(
+		LogFunc + FString::Printf(TEXT("Old Widget: %s\nNew Widget: %s"), *LogOldWidget, *LogNewWidget),
+		ELogVerbosity::Verbose, true);
 }

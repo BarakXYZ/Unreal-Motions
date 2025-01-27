@@ -69,7 +69,7 @@ public:
 	static bool TraverseFindWidget(
 		const TSharedRef<SWidget> BaseWidget,
 		TSharedPtr<SWidget>&	  OutWidget,
-		const TSet<FString>&	  TargetWidgetTypes,
+		const TSet<FString>&	  TargetTypes,
 		const uint64			  IgnoreWidgetId = INDEX_NONE,
 		int32					  Depth = 0);
 
@@ -149,6 +149,8 @@ public:
 	static TSharedPtr<SDockTab> GetActiveMajorTab();
 
 	static TSharedPtr<SDockTab> GetDefactoMajorTab();
+
+	static TSharedPtr<SDockTab> GetOfficialMajorTab();
 
 	static TSharedPtr<SDockTab> GetActiveMinorTab();
 
@@ -237,12 +239,16 @@ public:
 	 */
 	static FString GetCleanTabLabel(const TSharedRef<SDockTab> InTab);
 
-	static void DebugClimbUpFromWidget(const TSharedRef<SWidget> InWidget);
+	static FString GetCleanWidgetType(const FString& InWidgetType);
+
+	static void DebugClimbUpFromWidget(const TSharedRef<SWidget> InWidget, int32 TimesToClimb = INDEX_NONE);
 
 	static const TSet<FString>& GetInteractableWidgetTypes();
 
 	static bool CollectAllViewableInteractableWidgets(
 		TArray<TSharedPtr<SWidget>>& OutInteractableWidgets);
+
+	static bool DoesWidgetResidesInRegularWindow(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
 
 	static FUMLogger Logger;
 };

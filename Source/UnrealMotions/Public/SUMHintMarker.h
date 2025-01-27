@@ -60,16 +60,19 @@ public:
 								.Text(MarkerText)
 								.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 								.Justification(ETextJustify::Center)
-								.ColorAndOpacity(InArgs._TextColor)]]; // Matches FSlateColor
+								.ColorAndOpacity(InArgs._TextColor)]];
+		NumHintChars = MarkerText.Get().ToString().Len();
 	}
 
-private:
 public:
 	/** Weak reference to avoid extending the lifetime of the target widget. */
 	TWeakPtr<SWidget> TargetWidgetWeak;
 
 	/** The marker text displayed, e.g., "AF". */
 	TAttribute<FText> MarkerText;
+
+	/** */
+	int32 NumHintChars;
 
 	/** Where the widget should be placed on screen */
 	FVector2D LocalPositionInWindow;

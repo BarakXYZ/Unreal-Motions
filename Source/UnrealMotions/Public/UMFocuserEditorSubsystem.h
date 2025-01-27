@@ -53,6 +53,9 @@ public:
 		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 		const TSharedPtr<SWidget>& NewWidget);
 
+	void Log_OnFocusChanged(const TSharedPtr<SWidget> OldWidget,
+		const TSharedPtr<SWidget>					  NewWidget);
+
 	void DetectWidgetType(const TSharedRef<SWidget> InWidget);
 
 	/**
@@ -132,6 +135,8 @@ public:
 	bool TryRegisterWidgetWithTab(
 		const TSharedRef<SWidget> InWidget, const TSharedRef<SDockTab> InTab);
 
+	bool TryRegisterWidgetWithTab();
+
 	bool TryRegisterWidgetWithTab(const TSharedRef<SDockTab> InTab);
 
 	void TryRegisterWidgetWithTab(const TSharedRef<SDockTab> InTab, float Delay);
@@ -161,10 +166,7 @@ public:
 
 	void FocusTabContent(TSharedRef<SDockTab> InTab);
 
-	void DebugPrevAndNewMinorTabsMajorTabs(
-		TSharedPtr<SDockTab> PrevActiveTab, TSharedPtr<SDockTab> NewActiveTab);
-
-	void CheckWindowChanged();
+	bool CheckWindowChanged();
 
 	bool IsFirstEncounter(const TSharedRef<SDockTab> InTab);
 	bool IsFirstEncounter(const TSharedRef<SWindow> InWindow);
