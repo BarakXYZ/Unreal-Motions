@@ -5,6 +5,7 @@
 #include "Types/SlateEnums.h"
 #include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
+#include "UObject/ObjectMacros.h"
 #include "VimInputProcessor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "UMFocusVisualizer.h"
@@ -129,7 +130,7 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 
 	const int32 NumWidgets = InteractableWidgets.Num();
 
-	// Create Hint Marker Labels
+	// Create Hint Marker Labels (e.g. "HH", "HL", "S", etc.)
 	const TArray<FString> Labels = GenerateLabels(NumWidgets);
 
 	// Create the Hint Marker Widgets
@@ -143,9 +144,7 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 			SNew(SUMHintMarker)
 				.TargetWidget(WidgetRef)
 				.InWidgetLocalPosition(FUMSlateHelpers::GetWidgetLocalPositionInWindow(WidgetRef, ActiveWindow.ToSharedRef()))
-				.MarkerText(FText::FromString(Labels[i]))
-				.BackgroundColor(FSlateColor(FLinearColor::Yellow)) // Wrap color
-				.TextColor(FSlateColor(FLinearColor::Black));
+				.MarkerText(Labels[i]);
 
 		HintMarkers.Add(HintMarker);
 	}
@@ -156,7 +155,9 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 	// Add all Hint Markers to the screen
 	TSharedRef<SUMHintOverlay> HintOverlay = SNew(SUMHintOverlay, MoveTemp(HintMarkers));
 
-	ActiveWindow->AddOverlaySlot(999)[HintOverlay];
+	// 99999 seems to be enough to place it above things like the Content
+	// Browser (Drawer) too.
+	ActiveWindow->AddOverlaySlot(99999)[HintOverlay];
 
 	HintOverlayData = FHintOverlayData(HintOverlay, ActiveWindow, true);
 
@@ -170,8 +171,8 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// If already displayed, reset them first
-	if (HintOverlayData.IsDisplayed())
+	// If we already have any overlays displayed, reset them first
+	if (!PerWindowHintOverlayData.IsEmpty())
 		ResetHintMarkersMultiWindow();
 
 	// Collect interactable widgets from *all* visible windows:
@@ -185,10 +186,7 @@ void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
 	for (const auto& WindowWidgets : InteractableWidgetsPerWindow)
 		TotalNumWidgets += WindowWidgets.Num();
 
-	if (TotalNumWidgets == 0)
-		return;
-
-	// Generate labels for all of those widgets
+	// Create Hint Marker Labels (e.g. "HH", "HL", "S", etc.)
 	const TArray<FString> AllLabels = GenerateLabels(TotalNumWidgets);
 
 	// We'll create one big array of hint markers so we can build a single trie.
@@ -199,18 +197,18 @@ void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
 	int32 LabelIndex = 0;
 
 	// For each window, create an overlay, fill it with markers
-	for (int32 WindowIdx = 0; WindowIdx < ParentWindows.Num(); ++WindowIdx)
+	for (int32 WindowIdx{ 0 }; WindowIdx < ParentWindows.Num(); ++WindowIdx)
 	{
-		TSharedRef<SWindow> CurrentWindow = ParentWindows[WindowIdx];
-		const auto&			CurrentWidgets = InteractableWidgetsPerWindow[WindowIdx];
+		const auto	ParentWin = ParentWindows[WindowIdx];
+		const auto& ChildWidgets = InteractableWidgetsPerWindow[WindowIdx];
 
 		// Build the markers for *this* window
 		TArray<TSharedRef<SUMHintMarker>> WindowMarkers;
-		WindowMarkers.Reserve(CurrentWidgets.Num());
+		WindowMarkers.Reserve(ChildWidgets.Num());
 
-		for (int32 i = 0; i < CurrentWidgets.Num(); ++i)
+		for (int32 i = 0; i < ChildWidgets.Num(); ++i)
 		{
-			const TSharedPtr<SWidget>& WidgetPtr = CurrentWidgets[i];
+			const TSharedPtr<SWidget>& WidgetPtr = ChildWidgets[i];
 			if (!WidgetPtr.IsValid())
 				continue;
 
@@ -220,12 +218,8 @@ void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
 					.TargetWidget(WidgetPtr.ToSharedRef())
 					.InWidgetLocalPosition(
 						FUMSlateHelpers::GetWidgetLocalPositionInWindow(
-							WidgetPtr.ToSharedRef(),
-							CurrentWindow // the parent window
-							))
-					.MarkerText(FText::FromString(AllLabels[LabelIndex]))
-					.BackgroundColor(FSlateColor(FLinearColor::Yellow))
-					.TextColor(FSlateColor(FLinearColor::Black));
+							WidgetPtr.ToSharedRef(), ParentWin))
+					.MarkerText(AllLabels[LabelIndex]);
 
 			WindowMarkers.Add(HintMarker);
 			AllMarkers.Add(HintMarker);
@@ -233,32 +227,30 @@ void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
 		}
 
 		// Create an overlay for this window
-		TSharedRef<SUMHintOverlay> HintOverlay =
+		const TSharedRef<SUMHintOverlay> HintOverlay =
 			SNew(SUMHintOverlay, MoveTemp(WindowMarkers));
 
-		// Add the overlay to the window at Z-order 999 (or any layer you like).
-		CurrentWindow->AddOverlaySlot(999)
-			[HintOverlay];
+		// 99999 seems to be enough to place it above things like the Content
+		// Browser (Drawer) too.
+		ParentWin->AddOverlaySlot(99999)[HintOverlay];
 
 		// Track this overlay in our array
-		FHintOverlayData OverlayData(HintOverlay, CurrentWindow, true);
+		FHintOverlayData OverlayData(HintOverlay, ParentWin, true);
 		PerWindowHintOverlayData.Add(OverlayData);
 	}
 
-	// Now build one trie from all the (label, marker) pairs
+	// Build one trie from all the (label, marker) pairs
 	if (!BuildHintTrie(AllLabels, AllMarkers))
-		return; // If building fails, bail
+		return;
 
 	// Possess the input processor so we can handle the typed input
-	FVimInputProcessor::Get()->Possess(
-		this,
+	FVimInputProcessor::Get()->Possess(this,
 		&UVimNavigationEditorSubsystem::ProcessHintInputMultiWindow);
 
 	Logger.Print(
 		FString::Printf(TEXT("Created %d Hint Markers across %d windows!"),
 			TotalNumWidgets, ParentWindows.Num()),
-		ELogVerbosity::Verbose,
-		true);
+		ELogVerbosity::Verbose, true);
 }
 
 bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
@@ -291,18 +283,24 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	TArray<TSharedRef<SWindow>> VisibleWindows;
 	SlateApp.GetAllVisibleWindowsOrdered(VisibleWindows);
 
-	for (const auto& Win : VisibleWindows)
+	// Fetch the Interactive Widgets that each windows has.
+	for (const TSharedRef<SWindow>& Win : VisibleWindows)
 	{
 		TArray<TSharedPtr<SWidget>> InteractableWidgets;
 		if (FUMSlateHelpers::TraverseFindWidget(Win,
 				InteractableWidgets, FUMSlateHelpers::GetInteractableWidgetTypes()))
 		{
-			OutWidgets.Add(InteractableWidgets);
-			ParentWindows.Add(Win);
+			// Need to check Overlay Support to avoid errors!
+			// if (Win->IsRegularWindow() && Win->HasOverlay())
+			if (Win->IsRegularWindow()) // Seems to suffice too.
+			{
+				OutWidgets.Add(MoveTemp(InteractableWidgets));
+				ParentWindows.Add(Win);
+			}
 		}
 	}
-
-	return !OutWidgets.IsEmpty();
+	// Return true if OutWidgets contains at least one non-empty array
+	return (!OutWidgets.IsEmpty() && !OutWidgets[0].IsEmpty());
 }
 
 TArray<FString> UVimNavigationEditorSubsystem::GenerateLabels(int32 NumLabels)
@@ -312,9 +310,9 @@ TArray<FString> UVimNavigationEditorSubsystem::GenerateLabels(int32 NumLabels)
 
 	// Default characters. May want to play with different combos.
 	// More Options to try: "fghjklrueidcvm" or "asdfgqwertzxcvb"
-	const FString Alphabet = TEXT("FGHJKLRUEIDC");
-	// const FString Alphabet = TEXT("AFGHJKLRUEIDC");
-	// const FString Alphabet = TEXT("ASDFGQWERTZXCVB");
+	// const FString Alphabet = TEXT("FGHJKLRUEIDC");
+	const FString Alphabet = TEXT("ASDFGHJKLWECP");
+	// const FString Alphabet = TEXT("MCIEUWLKJHGFDSA");  // Reversed (TEST)
 
 	// -----------------------------
 	// The BFS-like expansion:
@@ -424,6 +422,8 @@ bool UVimNavigationEditorSubsystem::BuildHintTrie(
 			if (!CurrentNode->Children.Contains(InputChord))
 			{
 				TSharedPtr<FUMHintWidgetTrieNode> NewNode = MakeShared<FUMHintWidgetTrieNode>();
+				// Parent reference to support climbing up on BackSpace
+				NewNode->Parent = CurrentNode;
 				CurrentNode->Children.Add(InputChord, NewNode);
 			}
 
@@ -466,25 +466,32 @@ bool UVimNavigationEditorSubsystem::CheckCharToKeyConversion(
 	}
 }
 
-void UVimNavigationEditorSubsystem::ProcessHintInput(
-	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+void UVimNavigationEditorSubsystem::ProcessHintInputBase(
+	FSlateApplication&							SlateApp,
+	const FKeyEvent&							InKeyEvent,
+	TFunction<void()>							ResetHintMarkersFunc,
+	TFunction<void(const TSharedRef<SWidget>&)> HandleWidgetExecutionFunc)
 {
-	const FInputChord InputChord = FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent);
+	const FInputChord Chord = FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent);
+
 	// If there's no current node, assume we start at the root
 	if (!CurrentHintNode.IsValid())
 		CurrentHintNode = RootHintNode;
 
 	if (!CurrentHintNode.IsValid())
 	{
-		ResetHintMarkers();
+		ResetHintMarkersFunc();
 		return; // Reset if no valid Trie.
 	}
 
+	if (OnBackSpaceHintMarkers(InKeyEvent))
+		return;
+
 	// Check if there's a child for this chord
-	TSharedPtr<FUMHintWidgetTrieNode>* ChildPtr = CurrentHintNode->Children.Find(InputChord);
+	TSharedPtr<FUMHintWidgetTrieNode>* ChildPtr = CurrentHintNode->Children.Find(Chord);
 	if (!ChildPtr || !ChildPtr->IsValid())
 	{
-		ResetHintMarkers(); // No match for this chord -> reset
+		ResetHintMarkersFunc(); // No match for this chord -> reset
 		return;
 	}
 
@@ -493,113 +500,110 @@ void UVimNavigationEditorSubsystem::ProcessHintInput(
 	// If this node is terminal, we've spelled out an entire label
 	if (CurrentHintNode->bIsTerminal)
 	{
-		// Because each label is unique, there should be exactly 1 marker
-		// in the array that is truly the final label's marker.
 		const TArray<TWeakPtr<SUMHintMarker>>& HintMarkers = CurrentHintNode->HintMarkers;
-		if (HintMarkers.Num() != 1) // Check if we really have only 1
-		{
-			Logger.Print("Node marked as terminal, yet doesn't contain exactly 1 Node!", ELogVerbosity::Error, true);
-		}
-		else
-		{
-			if (const TSharedPtr<SUMHintMarker> HM = HintMarkers[0].Pin())
-			{
-				Logger.Print("Node marked as terminal, contains exactly 1 Node!", ELogVerbosity::Verbose, true);
+		if (HintMarkers.Num() != 1)
+			Logger.Print("Terminal Node: Doesn't contain exactly 1 Node!",
+				ELogVerbosity::Error, true);
 
-				// Focus internal widget
-				if (const TSharedPtr<SWidget> Widget = HM->TargetWidgetWeak.Pin())
-				{
-					FUMFocusHelpers::HandleWidgetExecution(SlateApp, Widget.ToSharedRef());
-				}
-			}
+		else if (const TSharedPtr<SUMHintMarker> HM = HintMarkers[0].Pin())
+		{
+			Logger.Print("Node marked as terminal, contains exactly 1 Node!", ELogVerbosity::Verbose, true);
+
+			// Handle widget execution
+			if (const TSharedPtr<SWidget> Widget = HM->TargetWidgetWeak.Pin())
+				HandleWidgetExecutionFunc(Widget.ToSharedRef());
 		}
-		ResetHintMarkers(); // Done - reset all Hint Markers (Overlay) && Trie
+		ResetHintMarkersFunc();
 	}
 	else
 		// Visualize partial matches by showing all the markers in this node
-		VisualizeHints(CurrentHintNode);
+		VisualizeHints(CurrentHintNode.ToSharedRef());
+}
+
+void UVimNavigationEditorSubsystem::ProcessHintInput(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	ProcessHintInputBase(
+		SlateApp,
+		InKeyEvent,
+		[this]() { ResetHintMarkers(); },
+		[&SlateApp](const TSharedRef<SWidget>& Widget) {
+			FUMFocusHelpers::HandleWidgetExecution(SlateApp, Widget);
+		});
 }
 
 void UVimNavigationEditorSubsystem::ProcessHintInputMultiWindow(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	const FInputChord InputChord = FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent);
-	// If there's no current node, assume we start at the root
-	if (!CurrentHintNode.IsValid())
-		CurrentHintNode = RootHintNode;
+	ProcessHintInputBase(
+		SlateApp,
+		InKeyEvent,
+		[this]() { ResetHintMarkersMultiWindow(); },
+		[&SlateApp](const TSharedRef<SWidget>& Widget) {
+			const TSharedPtr<SWindow> WidgetWin = SlateApp.FindWidgetWindow(Widget);
+			if (WidgetWin.IsValid())
+				FUMSlateHelpers::ActivateWindow(WidgetWin.ToSharedRef());
 
-	if (!CurrentHintNode.IsValid())
-	{
-		ResetHintMarkersMultiWindow();
-		return; // Reset if no valid Trie.
-	}
-
-	// Check if there's a child for this chord
-	TSharedPtr<FUMHintWidgetTrieNode>* ChildPtr = CurrentHintNode->Children.Find(InputChord);
-	if (!ChildPtr || !ChildPtr->IsValid())
-	{
-		ResetHintMarkersMultiWindow();
-		return;
-	}
-
-	CurrentHintNode = *ChildPtr; // Move to child
-
-	// If this node is terminal, we've spelled out an entire label
-	if (CurrentHintNode->bIsTerminal)
-	{
-		// Because each label is unique, there should be exactly 1 marker
-		// in the array that is truly the final label's marker.
-		const TArray<TWeakPtr<SUMHintMarker>>& HintMarkers = CurrentHintNode->HintMarkers;
-		if (HintMarkers.Num() != 1) // Check if we really have only 1
-		{
-			Logger.Print("Node marked as terminal, yet doesn't contain exactly 1 Node!", ELogVerbosity::Error, true);
-		}
-		else
-		{
-			if (const TSharedPtr<SUMHintMarker> HM = HintMarkers[0].Pin())
-			{
-				Logger.Print("Node marked as terminal, contains exactly 1 Node!", ELogVerbosity::Verbose, true);
-
-				// Focus internal widget
-				if (const TSharedPtr<SWidget> Widget = HM->TargetWidgetWeak.Pin())
-				{
-					const TSharedPtr<SWindow> WidgetWin =
-						SlateApp.FindWidgetWindow(Widget.ToSharedRef());
-					if (WidgetWin.IsValid())
-						FUMSlateHelpers::ActivateWindow(WidgetWin.ToSharedRef());
-
-					FUMFocusHelpers::HandleWidgetExecutionWithDelay(SlateApp, Widget.ToSharedRef());
-				}
-			}
-		}
-		ResetHintMarkersMultiWindow();
-	}
-	else
-		// Visualize partial matches by showing all the markers in this node
-		VisualizeHints(CurrentHintNode);
+			FUMFocusHelpers::HandleWidgetExecutionWithDelay(SlateApp, Widget);
+		});
 }
 
-void UVimNavigationEditorSubsystem::VisualizeHints(TSharedPtr<FUMHintWidgetTrieNode> Node)
+void UVimNavigationEditorSubsystem::VisualizeHints(const TSharedRef<FUMHintWidgetTrieNode> Node)
 {
-	if (!Node.IsValid())
-		return;
-
 	// Visualize all hint markers in the current node
 	for (const TWeakPtr<SUMHintMarker>& Marker : Node->HintMarkers)
 	{
 		if (const TSharedPtr<SUMHintMarker> HM = Marker.Pin())
 		{
-			// TODO:
-			// HM.VisualizeHint();
+			HM->VisualizePressedKey(true);
+			PressedHintMarkers.Add(HM); // Track pressed hints
 		}
 	}
 }
 
-void UVimNavigationEditorSubsystem::ResetHintMarkers()
+bool UVimNavigationEditorSubsystem::OnBackSpaceHintMarkers(const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.GetKey() == FKey(EKeys::BackSpace)
+		&& !PressedHintMarkers.IsEmpty())
+	{
+		TArray<TWeakPtr<SUMHintMarker>> MarkersToRemove;
+
+		for (const auto& WeakHintMarker : PressedHintMarkers)
+		{
+			if (const TSharedPtr<SUMHintMarker> HintMarker = WeakHintMarker.Pin())
+			{
+				HintMarker->VisualizePressedKey(false);
+				if (HintMarker->PressedKeyIndex == 0)
+					MarkersToRemove.Add(WeakHintMarker);
+			}
+			else // Remove invalid reference
+				MarkersToRemove.Add(WeakHintMarker);
+		}
+		for (const auto& WeakHintMarker : MarkersToRemove)
+			PressedHintMarkers.Remove(WeakHintMarker);
+
+		// Walk backwards to the parent node
+		if (const auto Parent = CurrentHintNode->Parent.Pin())
+			CurrentHintNode = Parent;
+		else
+			CurrentHintNode = RootHintNode;
+
+		return true;
+	}
+	return false;
+}
+
+void UVimNavigationEditorSubsystem::ResetHintMarkersCore()
 {
 	CurrentHintNode.Reset(); // Remove all references
 	RootHintNode.Reset();	 // Destroy Trie
+	PressedHintMarkers.Empty();
+	FVimInputProcessor::Get()->Unpossess(this);
+}
 
+void UVimNavigationEditorSubsystem::ResetHintMarkers()
+{
+	ResetHintMarkersCore();
 	// Remove the overlay from the window (if it was added)
 	if (const TSharedPtr<SWindow> Win = HintOverlayData.AssociatedWindow.Pin())
 	{
@@ -609,15 +613,11 @@ void UVimNavigationEditorSubsystem::ResetHintMarkers()
 		}
 	}
 	HintOverlayData.Reset();
-	FVimInputProcessor::Get()->Unpossess(this);
 }
 
 void UVimNavigationEditorSubsystem::ResetHintMarkersMultiWindow()
 {
-	// Reset the Trie
-	CurrentHintNode.Reset();
-	RootHintNode.Reset();
-
+	ResetHintMarkersCore();
 	// Remove each overlay from its window
 	for (const FHintOverlayData& OverlayData : PerWindowHintOverlayData)
 	{
@@ -629,12 +629,7 @@ void UVimNavigationEditorSubsystem::ResetHintMarkersMultiWindow()
 			}
 		}
 	}
-
-	// Clear out our array
 	PerWindowHintOverlayData.Empty();
-
-	// Unpossess the input processor
-	FVimInputProcessor::Get()->Unpossess(this);
 }
 
 void UVimNavigationEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)

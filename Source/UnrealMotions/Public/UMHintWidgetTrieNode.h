@@ -17,6 +17,12 @@ struct FUMHintWidgetTrieNode : public TSharedFromThis<FUMHintWidgetTrieNode>
 	TMap<FInputChord, TSharedPtr<FUMHintWidgetTrieNode>> Children;
 
 	/**
+	 * We need a reference to the Parent Node for when the user is pressing
+	 * "BackSpace", which means we need to climb up 1 node (to the parent )
+	 */
+	TWeakPtr<FUMHintWidgetTrieNode> Parent;
+
+	/**
 	 * All hint markers in this node’s sub-tree. That is:
 	 * - If bIsTerminal == true, then at least one of these markers is the
 	 *   unique marker for the label that ends here.

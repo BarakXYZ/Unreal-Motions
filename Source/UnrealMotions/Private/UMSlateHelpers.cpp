@@ -662,25 +662,31 @@ bool FUMSlateHelpers::IsVisualTextSelected(FSlateApplication& SlateApp)
 // NOTE: Kept here some commented methods for future reference.
 void FUMSlateHelpers::ActivateWindow(const TSharedRef<SWindow> InWindow)
 {
-	TSharedRef<SWidget>			   WinContent = InWindow->GetContent();
+	// Check if InWindow is already the active one. If so, we really don't want
+	// to Draw Attention to it again, is it might distrupt the currently focused
+	// widget within it.
+	const TSharedPtr<SWindow> ActiveWindow =
+		FSlateApplication::Get().GetActiveTopLevelRegularWindow();
+	if (ActiveWindow.IsValid() && ActiveWindow->GetId() == InWindow->GetId())
+		return;
+
+	// This method won't pickup focused inner windows (like menu windows) so it
+	// only partially works.
+	// TSharedRef<SWidget>			   WinContent = InWindow->GetContent();
+	// if (InWindow->IsActive() || InWindow->HasAnyUserFocusOrFocusedDescendants() || WinContent->HasAnyUserFocusOrFocusedDescendants())
+	// {
+	// 	Logger.Print("Window has focus", ELogVerbosity::Verbose, true);
+	// }
+
 	FWindowDrawAttentionParameters DrawParams(
 		EWindowDrawAttentionRequestType::UntilActivated);
-	// Window->ShowWindow();
-	// Window->FlashWindow(); // Cool way to visually indicate windows.
 
-	if (InWindow->IsActive() || InWindow->HasAnyUserFocusOrFocusedDescendants() || WinContent->HasAnyUserFocusOrFocusedDescendants())
-	{
-		Logger.Print("Window has focus", ELogVerbosity::Verbose, true);
-	}
-	else
-	{
-		InWindow->BringToFront(true);
-		InWindow->DrawAttention(DrawParams); // Seems to work well!
-		Logger.Print(
-			FString::Printf(TEXT("Activated Window: %s"),
-				*InWindow->GetTitle().ToString()),
-			ELogVerbosity::Log, true);
-	}
+	InWindow->BringToFront(true);
+	InWindow->DrawAttention(DrawParams); // Seems to work well!
+
+	Logger.Print(FString::Printf(TEXT("Activated Window: %s"),
+					 *InWindow->GetTitle().ToString()),
+		ELogVerbosity::Log, true);
 }
 
 FVector2f FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(

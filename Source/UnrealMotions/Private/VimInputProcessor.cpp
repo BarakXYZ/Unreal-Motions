@@ -485,8 +485,8 @@ void FVimInputProcessor::CheckCreateBufferVisualizer(
 		CurrentBuffer = ""; // Start a new buffer
 		if (!BufferVisualizer.IsValid())
 		{
-			TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelWindow();
-			if (ActiveWindow.IsValid())
+			TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
+			if (ActiveWindow.IsValid() && ActiveWindow->HasOverlay())
 			{
 				TSharedPtr<SUMBufferVisualizer> NewVisualizer =
 					SNew(SUMBufferVisualizer);

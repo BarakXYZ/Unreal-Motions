@@ -86,15 +86,30 @@ public:
 	void FlashHintMarkersMultiWindow(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	/**
-	 * Collect all interactable widgets from closest to farthest
-	 * this will be useful to collect them in that order since we can then
-	 * potentially assign more comfortable bindings to the farthest widgets
-	 * (which are more likely the ones we want to travel too. I think (lol))
-	 * Return true if any interactable widgets were found. False otherwise.
+	 * Single-Window Edition:
+	 * Collects all interactable widgets within the currently active window.
+	 *
+	 * @param OutWidgets  Array to store the collected interactable widgets.
+	 * @return true if any interactable widgets were found, false otherwise.
 	 */
 	bool CollectInteractableWidgets(TArray<TSharedPtr<SWidget>>& OutWidgets);
 
-	bool CollectInteractableWidgets(TArray<TArray<TSharedPtr<SWidget>>>& OutWidgets, TArray<TSharedRef<SWindow>>& ParentWindows);
+	/**
+	 * Multi-Window Edition:
+	 * Collects interactable widgets for all visible windows
+	 * (not just the currently active one). Ignores non-visible windows.
+	 *
+	 * @param OutWidgets     Array of arrays, where each inner array contains
+	 * widgets for a specific window.
+	 * @param ParentWindows  Array of parent windows, synchronized with the index
+	 * of each widgets array. Each entry corresponds to the parent window of the
+	 * widgets in OutWidgets.
+	 * @return true if OutWidgets contains at least one non-empty array, false
+	 * otherwise.
+	 */
+	bool CollectInteractableWidgets(
+		TArray<TArray<TSharedPtr<SWidget>>>& OutWidgets,
+		TArray<TSharedRef<SWindow>>&		 ParentWindows);
 
 	TArray<FString> GenerateLabels(int32 NumLabels);
 
@@ -107,11 +122,20 @@ public:
 
 	bool CheckCharToKeyConversion(const TCHAR InChar, const FKey& InKey);
 
+	void ProcessHintInputBase(
+		FSlateApplication&							SlateApp,
+		const FKeyEvent&							InKeyEvent,
+		TFunction<void()>							ResetHintMarkersFunc,
+		TFunction<void(const TSharedRef<SWidget>&)> HandleWidgetExecutionFunc);
+
 	void ProcessHintInput(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void ProcessHintInputMultiWindow(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	void VisualizeHints(TSharedPtr<FUMHintWidgetTrieNode> Node);
+	void VisualizeHints(const TSharedRef<FUMHintWidgetTrieNode> Node);
+	bool OnBackSpaceHintMarkers(const FKeyEvent& InKeyEvent);
+
+	void ResetHintMarkersCore();
 
 	void ResetHintMarkers();
 	void ResetHintMarkersMultiWindow();
@@ -119,9 +143,10 @@ public:
 	//							Trie Handling
 	////////////////////////////////////////////////////////////////////////////
 
-	FUMLogger				 Logger;
-	FHintOverlayData		 HintOverlayData;
-	TArray<FHintOverlayData> PerWindowHintOverlayData;
+	FUMLogger						Logger;
+	FHintOverlayData				HintOverlayData;
+	TArray<FHintOverlayData>		PerWindowHintOverlayData;
+	TArray<TWeakPtr<SUMHintMarker>> PressedHintMarkers;
 
 	/** The root of our hint-marker Trie. */
 	TSharedPtr<FUMHintWidgetTrieNode> RootHintNode;
