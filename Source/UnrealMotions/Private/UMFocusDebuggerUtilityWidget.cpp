@@ -6,20 +6,20 @@
 
 void UUMFocusDebuggerUtilityWidget::DebugFocus(TMap<FString, FString>& OutMap)
 {
-	static const FString DefaultName = "NotFound / Invalid";
+	static const FString DefaultInvalidStr = "NotFound / Invalid";
 	FSlateApplication&	 SlateApp = FSlateApplication::Get();
 
 	if (const TSharedPtr<SWindow> ActiveWindow =
 			SlateApp.GetActiveTopLevelRegularWindow())
 		OutMap.Add("ActiveWindow", ActiveWindow->GetTitle().ToString());
 	else
-		OutMap.Add("ActiveWindow", DefaultName);
+		OutMap.Add("ActiveWindow", DefaultInvalidStr);
 
 	TSharedPtr<SDockTab> FrontmostMajorTab;
 	if (FUMSlateHelpers::GetFrontmostForegroundedMajorTab(FrontmostMajorTab))
 		OutMap.Add("ActiveMajorTab", FrontmostMajorTab->GetTabLabel().ToString());
 	else
-		OutMap.Add("ActiveMajorTab", DefaultName);
+		OutMap.Add("ActiveMajorTab", DefaultInvalidStr);
 
 	TSharedRef<FGlobalTabmanager>
 		GTM = FGlobalTabmanager::Get();
@@ -37,12 +37,18 @@ void UUMFocusDebuggerUtilityWidget::DebugFocus(TMap<FString, FString>& OutMap)
 	}
 	else
 	{
-		OutMap.Add("ActiveMinorTab", DefaultName);
-		OutMap.Add("ActiveMinorTabMajorTabParent", DefaultName);
+		OutMap.Add("ActiveMinorTab", DefaultInvalidStr);
+		OutMap.Add("ActiveMinorTabMajorTabParent", DefaultInvalidStr);
 	}
 
 	if (const auto ActiveWidget = SlateApp.GetUserFocusedWidget(0))
-		OutMap.Add("ActiveWidget", ActiveWidget->GetTypeAsString());
+	{
+		OutMap.Add("ActiveWidgetSpecificType", ActiveWidget->GetTypeAsString());
+		OutMap.Add("ActiveWidgetClassType", ActiveWidget->GetWidgetClass().GetWidgetType().ToString());
+	}
 	else
-		OutMap.Add("ActiveWidget", DefaultName);
+	{
+		OutMap.Add("ActiveWidgetSpecificType", DefaultInvalidStr);
+		OutMap.Add("ActiveWidgetClassType", DefaultInvalidStr);
+	}
 }

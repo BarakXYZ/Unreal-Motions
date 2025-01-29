@@ -308,11 +308,8 @@ TArray<FString> UVimNavigationEditorSubsystem::GenerateLabels(int32 NumLabels)
 	if (NumLabels <= 0)
 		return TArray<FString>(); // No labels
 
-	// Default characters. May want to play with different combos.
-	// More Options to try: "fghjklrueidcvm" or "asdfgqwertzxcvb"
-	// const FString Alphabet = TEXT("FGHJKLRUEIDC");
+	// Default Chars; These are classics, but we may want to support configuration
 	const FString Alphabet = TEXT("ASDFGHJKLWECP");
-	// const FString Alphabet = TEXT("MCIEUWLKJHGFDSA");  // Reversed (TEST)
 
 	// -----------------------------
 	// The BFS-like expansion:
@@ -397,7 +394,6 @@ bool UVimNavigationEditorSubsystem::BuildHintTrie(
 	// For each Label (i.e. 'A', 'JK', 'HH', 'HF', etc.)
 	for (int32 i = 0; i < HintLabels.Num(); ++i)
 	{
-		const FString&					 Label = HintLabels[i];
 		const TSharedRef<SUMHintMarker>& Marker = HintMarkers[i];
 
 		TSharedPtr<FUMHintWidgetTrieNode> CurrentNode = RootHintNode;

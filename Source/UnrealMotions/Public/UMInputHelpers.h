@@ -13,7 +13,7 @@ class FUMInputHelpers
 public:
 	static void SimulateClickOnWidget(
 		FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
-		const FKey& EffectingButton, bool bIsDoubleClick = false);
+		const FKey& EffectingButton, bool bIsDoubleClick = false, bool bIsShiftDown = false);
 
 	static void SimulateRightClick(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);

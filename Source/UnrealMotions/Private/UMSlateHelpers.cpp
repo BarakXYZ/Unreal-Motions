@@ -1131,6 +1131,11 @@ const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 
 		// "SNumericEntryBox<NumericType>",
 		"SNumericEntryBox",
+		"SSpinBox",
+		"SColorBlock",
+
+		"SGraphNodeK2Event",
+		"SGraphNodeK2Default",
 
 		// "SPropertyNameWidget",
 		// "SPropertyEditorTitle",

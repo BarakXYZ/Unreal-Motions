@@ -1,9 +1,11 @@
 #include "VimGraphEditorSubsystem.h"
 #include "BlueprintEditor.h"
 #include "EdGraphNode_Comment.h"
+#include "Framework/Application/SlateApplication.h"
 #include "UMConfig.h"
 #include "GraphEditorModule.h"
 #include "Kismet2/BlueprintEditorUtils.h"
+#include "UMSlateHelpers.h"
 #include "VimInputProcessor.h"
 #include "UMEditorHelpers.h"
 #include "Subsystems/AssetEditorSubsystem.h"
@@ -14,6 +16,9 @@
 #include "K2Node_CallFunction.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "BlueprintNodeBinder.h"
+#include "SGraphPanel.h"
+#include "UMSlateHelpers.h"
+#include "UMInputHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, Log, All); // Dev
@@ -23,7 +28,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, Log, All); // Dev
 bool UVimGraphEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
 	TSharedRef<FUMConfig> Config = FUMConfig::Get();
-	// if Vim is enabled, TabNavigator must also be enabled.
 	return Config->IsVimEnabled();
 }
 
@@ -63,6 +67,12 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		{ EKeys::SpaceBar, EKeys::G, EKeys::D },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DebugEditor);
+
+	// TODO: Have different nodes for VimProcessor to lookup?
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		{ EKeys::SpaceBar, EKeys::A },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::AppendNode);
 }
 
 void UVimGraphEditorSubsystem::DebugEditor()
@@ -193,6 +203,113 @@ void UVimGraphEditorSubsystem::DebugEditor()
 	{
 		Logger.Print(TEXT("Failed to cast to IBlueprintEditor"), ELogVerbosity::Warning, true);
 	}
+}
+
+void UVimGraphEditorSubsystem::AppendNode(
+	FSlateApplication& SlateApp,
+	const FKeyEvent&   InKeyEvent)
+{
+	TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+		return;
+
+	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+	if (SelNodes.IsEmpty())
+		return;
+
+	const UEdGraphNode* FirstNode = SelNodes[0];
+	if (!FirstNode)
+		return;
+
+	const TSharedPtr<SGraphNode> FirstSNode = GraphPanel->GetNodeWidgetFromGuid(FirstNode->NodeGuid);
+
+	if (!FirstSNode.IsValid())
+		return;
+
+	TArray<TSharedRef<SWidget>> AllPins;
+	FirstSNode->GetPins(AllPins);
+
+	if (AllPins.IsEmpty())
+		return;
+
+	for (const auto& Pin : AllPins)
+	{
+		if (Pin->GetTypeAsString().Equals("SGraphPinExec"))
+		{
+			// GraphPanel->GetGraphObj()->AddOnGraphChangedHandler();
+			// UEdGraph* Graph = GraphPanel->GetGraphObj();
+			// if (!Graph)
+			// 	return;
+
+			const FVector2D OriginCurPos = SlateApp.GetCursorPos();
+
+			// Store the current number of nodes we have so we can compare it
+			// after the menu window has closed to see if a new node was created.
+			NodeCounter = GraphPanel->GetChildren()->Num();
+			TWeakPtr<SGraphNode> WeakGraphNode = FirstSNode;
+
+			FUMInputHelpers::DragAndReleaseWidgetAtPosition(Pin, Pin->GetCachedGeometry().GetAbsolutePosition() + (FVector2f(100.0f, 0.0f)));
+
+			FTimerHandle TimerHandle;
+			GEditor->GetTimerManager()->SetTimer(
+				TimerHandle,
+				[this, &SlateApp, OriginCurPos, WeakGraphNode]() {
+					SlateApp.SetCursorPos(OriginCurPos);
+					const TSharedPtr<SWindow> MenuWin = SlateApp.GetActiveTopLevelWindow(); // Should be the menu
+
+					if (!MenuWin.IsValid())
+						return;
+
+					MenuWin->GetOnWindowClosedEvent().AddLambda([this, WeakGraphNode](const TSharedRef<SWindow>& Window) {
+						FTimerHandle TimerHandle;
+						GEditor->GetTimerManager()->SetTimer(
+							TimerHandle,
+							[this, WeakGraphNode]() {
+								OnNodeCreationMenuClosed(WeakGraphNode);
+								Logger.Print("Menu Closed!", ELogVerbosity::Log, true);
+							},
+							0.05f, false);
+					});
+				},
+				0.05f, false);
+			// SlateApp.SetCursorPos(OriginCurPos);
+			break;
+		}
+	}
+}
+
+void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(TWeakPtr<SGraphNode> AssociatedNode)
+{
+	if (const TSharedPtr<SGraphNode> GraphNode = AssociatedNode.Pin())
+	{
+		const TSharedPtr<SGraphPanel> GraphPanel = GraphNode->GetOwnerPanel();
+		if (!GraphPanel.IsValid())
+			return;
+
+		if (NodeCounter < GraphPanel->GetChildren()->Num())
+		{
+			Logger.Print("New node was created!", ELogVerbosity::Log, true);
+			// GraphPanel->SelectionManager.SetSelectionSet()
+
+			FUMInputHelpers::SimulateClickOnWidget(
+				FSlateApplication::Get(),
+				GraphNode.ToSharedRef(),
+				FKey(EKeys::LeftMouseButton), false, true);
+
+			GraphPanel->StraightenConnections();
+		}
+		else
+			Logger.Print("No new nodes were created...", ELogVerbosity::Log, true);
+	}
+}
+
+const TSharedPtr<SGraphPanel> UVimGraphEditorSubsystem::TryGetActiveGraphPanel(FSlateApplication& SlateApp)
+{
+	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	return (FocusedWidget.IsValid()
+			   && FocusedWidget->GetTypeAsString().Equals("SGraphPanel"))
+		? StaticCastSharedPtr<SGraphPanel>(FocusedWidget)
+		: nullptr;
 }
 
 #undef LOCTEXT_NAMESPACE

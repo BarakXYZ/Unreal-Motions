@@ -1,6 +1,8 @@
 #pragma once
 
+#include "Input/Events.h"
 #include "UMLogger.h"
+#include "SGraphPanel.h"
 #include "EditorSubsystem.h"
 #include "VimGraphEditorSubsystem.generated.h"
 
@@ -30,5 +32,14 @@ public:
 
 	void DebugEditor();
 
+	void AppendNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void OnNodeCreationMenuClosed(TWeakPtr<SGraphNode> AssociatedNode);
+
+	bool IsWasNewNodeCreated();
+
+	const TSharedPtr<SGraphPanel> TryGetActiveGraphPanel(FSlateApplication& SlateApp);
+
 	FUMLogger Logger;
+	int32	  NodeCounter;
 };

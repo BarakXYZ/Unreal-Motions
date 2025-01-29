@@ -68,7 +68,9 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		{ "SButton", &FUMFocusHelpers::ClickSButton },
 		{ "SCheckBox", &FUMFocusHelpers::ClickSCheckBox },
 		{ "SPropertyValueWidget", &FUMFocusHelpers::ClickSPropertyValueWidget },
-		{ "SDockTab", &FUMFocusHelpers::ClickSDockTab }
+		{ "SDockTab", &FUMFocusHelpers::ClickSDockTab },
+		{ "SGraphNodeK2Event", &FUMFocusHelpers::ClickSNode },
+		{ "SGraphNodeK2Default", &FUMFocusHelpers::ClickSNode },
 	};
 
 	// SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
@@ -158,6 +160,13 @@ void FUMFocusHelpers::ClickSPropertyValueWidget(FSlateApplication& SlateApp, con
 		ClickSButton(SlateApp, FoundButton.ToSharedRef());
 		return;
 	}
+	FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, FKey(EKeys::LeftMouseButton));
+}
+
+// UVimGraphEditorSubsystem
+// UVimLevelEditorSubsystem
+void FUMFocusHelpers::ClickSNode(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
 	FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, FKey(EKeys::LeftMouseButton));
 }
 
