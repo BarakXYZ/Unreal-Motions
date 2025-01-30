@@ -99,6 +99,8 @@ public:
 		const TSharedPtr<SWindow> PrevWindow,
 		const TSharedPtr<SWindow> NewWindow);
 
+	void UpdateBindingContext(const TSharedRef<SWidget> NewWidget);
+
 	/**
 	 * Used in the Vim Subsystem. When we remove the current Major Tab, this helps
 	 * to focus and activate the next frontmost window.

@@ -257,10 +257,7 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	TArray<TSharedPtr<SWidget>>& OutWidgets)
 {
 	// Get & validate the currently focused widget (from which we will traverse)
-	FSlateApplication&		  SlateApp = FSlateApplication::Get();
-	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	if (!FocusedWidget.IsValid())
-		return false;
+	FSlateApplication& SlateApp = FSlateApplication::Get();
 
 	const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
 	if (!ActiveWindow.IsValid())
@@ -275,10 +272,7 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	TArray<TSharedRef<SWindow>>&		 ParentWindows)
 {
 	// Get & validate the currently focused widget (from which we will traverse)
-	FSlateApplication&		  SlateApp = FSlateApplication::Get();
-	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	if (!FocusedWidget.IsValid())
-		return false;
+	FSlateApplication& SlateApp = FSlateApplication::Get();
 
 	TArray<TSharedRef<SWindow>> VisibleWindows;
 	SlateApp.GetAllVisibleWindowsOrdered(VisibleWindows);
@@ -655,31 +649,37 @@ void UVimNavigationEditorSubsystem::BindVimCommands()
 		MakeWeakObjectPtr(this);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::H) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::NavigatePanelTabs);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::J) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::NavigatePanelTabs);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::K) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::NavigatePanelTabs);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::L) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::NavigatePanelTabs);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::F },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::FlashHintMarkers);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::F) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow);

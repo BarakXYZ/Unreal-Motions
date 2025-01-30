@@ -16,6 +16,19 @@ enum class EVimMode : uint8
 	Normal UMETA(DisplayName = "Normal"),
 	Insert UMETA(DisplayName = "Insert"),
 	Visual UMETA(DisplayName = "Visual"),
+	// Command UMETA(DisplayName = "Command"),   // ":" Mode (optional)
+	// OperatorPending UMETA(DisplayName = "Operator Pending") // Like 'd', 'y', 'c' in Vim
+};
+
+UENUM(BlueprintType)
+enum class EUMContextBinding : uint8
+{
+	TextEditing	   UMETA(DisplayName = "Text Editing"), // Both Multi & Single
+	GraphEditor	   UMETA(DisplayName = "Graph Editor"),
+	NodeNavigation UMETA(DisplayName = "Node Navigation"),
+	TreeView	   UMETA(DisplayName = "Tree View"), // All type of list views
+	Viewport	   UMETA(DisplayName = "Viewport"),	 // Level Editor
+	Generic		   UMETA(DisplayName = "Generic"),	 // Default fallback
 };
 
 /**
@@ -94,6 +107,14 @@ private:
 	 */
 	bool ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	/**
+	 * Tries to traverse the trie for the given context using the CurrentSequence.
+	 * @param InContext - The context in which to try a match
+	 * @param OutNode - The node matched if partial/full success
+	 * @return True if there's at least a partial match, false otherwise
+	 */
+	bool TraverseTrieForContext(EUMContextBinding InContext, TSharedPtr<FKeyChordTrieNode>& OutNode) const;
+
 public:
 	/**
 	 * Changes the current Vim editing mode and broadcasts the change through the
@@ -140,16 +161,42 @@ public:
 	 */
 	static void ToggleNativeInputHandling(const bool bNativeHandling);
 
+	// ~~~~~~~~~~~~~  Multi-Context Support  ~~~~~~~~~~~~~
+	/**
+	 * Set the current context (e.g. called from OnFocusChanged or wherever you decide).
+	 */
+	void SetCurrentContext(EUMContextBinding NewContext)
+	{
+		CurrentContext = NewContext;
+	}
+
+	EUMContextBinding GetCurrentContext() const
+	{
+		return CurrentContext;
+	}
+
 	/////////////////////////////////////////////////////////////////////////
 	// ~ Add Key Bindings ~
 	//
 
 	/**
+	 * High-level function to get or create the trie root for a given context.
+	 */
+	TSharedPtr<FKeyChordTrieNode> GetOrCreateTrieRoot(EUMContextBinding Context);
+
+	/**
+	 * Low-level helper: finds or creates a trie node (descendant of the given root) for a sequence.
 	 * Finds or creates a trie node for the given input sequence
 	 * @param Sequence - Array of input chords representing the key sequence
 	 * @return Pointer to the found or created trie node
 	 */
-	FKeyChordTrieNode* FindOrCreateTrieNode(const TArray<FInputChord>& Sequence);
+	TSharedPtr<FKeyChordTrieNode> FindOrCreateTrieNode(
+		TSharedPtr<FKeyChordTrieNode> Root,
+		const TArray<FInputChord>&	  Sequence);
+
+	/**
+	 */
+	TSharedPtr<FKeyChordTrieNode> FindOrCreateTrieNode(const TArray<FInputChord>& Sequence);
 
 	//
 	// 1) No-Parameter Bindings
@@ -161,6 +208,7 @@ public:
 	 * @param Callback - Function to execute when the sequence is matched
 	 */
 	void AddKeyBinding_NoParam(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		TFunction<void()>		   Callback);
 
@@ -172,11 +220,13 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)())
 	{
 		AddKeyBinding_NoParam(
+			Context,
 			Sequence,
 			[this, WeakObj, MemberFunc]() {
 				if (TSharedPtr<ObjectType> Shared = WeakObj.Pin())
@@ -194,11 +244,13 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)())
 	{
 		AddKeyBinding_NoParam(
+			Context,
 			Sequence,
 			[this, WeakObj, MemberFunc]() {
 				if (WeakObj.IsValid())
@@ -216,11 +268,13 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		ObjectType*				   Obj,
 		void (ObjectType::*MemberFunc)())
 	{
 		AddKeyBinding_NoParam(
+			Context,
 			Sequence,
 			[this, Obj, MemberFunc]() {
 				if (Obj)
@@ -245,6 +299,7 @@ public:
 	 * @param Callback - Function to execute when the sequence is matched
 	 */
 	void AddKeyBinding_KeyEvent(
+		EUMContextBinding											   Context,
 		const TArray<FInputChord>&									   Sequence,
 		TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback);
 
@@ -258,10 +313,12 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		void (*MemberFunc)(FSlateApplication&, const FKeyEvent&))
 	{
 		AddKeyBinding_KeyEvent(
+			Context,
 			Sequence,
 			[MemberFunc](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 				MemberFunc(SlateApp, InKeyEvent);
@@ -281,12 +338,14 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(
 			FSlateApplication& SlateApp, const FKeyEvent&))
 	{
 		AddKeyBinding_KeyEvent(
+			Context,
 			Sequence,
 			[this, WeakObj, MemberFunc](
 				FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
@@ -305,12 +364,14 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(
 			FSlateApplication& SlateApp, const FKeyEvent&))
 	{
 		AddKeyBinding_KeyEvent(
+			Context,
 			Sequence,
 			[this, WeakObj, MemberFunc](
 				FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
@@ -331,6 +392,7 @@ public:
 	 * @param Callback - Function to execute when the sequence is matched
 	 */
 	void AddKeyBinding_Sequence(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		TFunction<void(
 			FSlateApplication& SlateApp, const TArray<FInputChord>&)>
@@ -344,12 +406,14 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_Sequence(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(
 			FSlateApplication& SlateApp, const TArray<FInputChord>&))
 	{
 		AddKeyBinding_Sequence(
+			Context,
 			Sequence,
 			[this, WeakObj, MemberFunc](
 				FSlateApplication& SlateApp, const TArray<FInputChord>& Arr) {
@@ -368,12 +432,14 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_Sequence(
+		EUMContextBinding		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(
 			FSlateApplication& SlateApp, const TArray<FInputChord>&))
 	{
 		AddKeyBinding_Sequence(
+			Context,
 			Sequence,
 			[this, WeakObj, MemberFunc](
 				FSlateApplication& SlateApp, const TArray<FInputChord>& Arr) {
@@ -504,7 +570,14 @@ private:
 
 	/** Input processing state */
 private:
-	FKeyChordTrieNode* TrieRoot = nullptr; // Root node (unique)
+	/* Deprecated */
+	TSharedPtr<FKeyChordTrieNode> TrieRoot = nullptr; // Root node (unique)
+
+	// Map of roots, one per context
+	TMap<EUMContextBinding, TSharedPtr<FKeyChordTrieNode>> ContextTrieRoots;
+
+	// Which context are we currently in?
+	EUMContextBinding CurrentContext = EUMContextBinding::Generic;
 
 	/** Static instance management */
 	static bool bNativeInputHandling;

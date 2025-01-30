@@ -7,6 +7,7 @@
 #include "UMInputHelpers.h"
 #include "UMLogger.h"
 #include "Editor.h"
+#include "VimInputProcessor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "UMSlateHelpers.h"
 #include "UMWindowNavigatorEditorSubsystem.h"
@@ -139,30 +140,40 @@ void UUMFocuserEditorSubsystem::OnFocusChanged(const FFocusEvent& FocusEvent, co
 		TrackedPrevWidget = OldWidget; // Deprecated (not used)
 	}
 
-	if (NewWidget.IsValid() && !ShouldFilterNewWidget(NewWidget.ToSharedRef()))
+	// Delayed function that helps us verify widget validity.
+	ValidateFocusedWidget();
+
+	if (!NewWidget.IsValid())
+		return;
+
+	const TSharedRef<SWidget> NewWidgetRef = NewWidget.ToSharedRef();
+	// Update context to determine which Trie should be used for hotkeys inputted
+	UpdateBindingContext(NewWidgetRef);
+
+	if (!ShouldFilterNewWidget(NewWidgetRef))
 	{
+
 		TrackedActiveWidget = NewWidget; // Deprecated (not used)
 
-		// TODO: Refactor to a proper function. The list of widget can grow.
+		// TODO: Refactor to a proper function. This list of widget can grow.
+		// These are widgets that aren't useful for navigation and such, thus
+		// we want to fallback to something more useful when they're detected.
 		if (NewWidget->GetTypeAsString().Equals("SDetailTree"))
 		{
 			TryBringFocusToActiveTab();
 			return;
 		}
 
-		const TSharedRef<SWidget> RefNewWidget = NewWidget.ToSharedRef();
-		RecordWidgetUse(RefNewWidget);
+		RecordWidgetUse(NewWidgetRef);
 
 		// Don't track if in a None-Regular Window (probably Menu Window)
 		if (FUMSlateHelpers::DoesWidgetResidesInRegularWindow(
-				FSlateApplication::Get(), RefNewWidget))
+				FSlateApplication::Get(), NewWidgetRef))
 			TryRegisterWidgetWithTab(); // It's useful to constantly update
 
 		// Won't do anything for None-Nomad. This is needed for visualization.
-		DrawFocusForNomadTab(NewWidget.ToSharedRef());
+		DrawFocusForNomadTab(NewWidgetRef);
 	}
-
-	ValidateFocusedWidget(); // Make sure our currently focused widget is valid
 }
 
 void UUMFocuserEditorSubsystem::OnActiveTabChanged(
@@ -364,6 +375,27 @@ void UUMFocuserEditorSubsystem::HandleOnWindowChanged(
 		0.01f,
 		false);
 	return;
+}
+
+void UUMFocuserEditorSubsystem::UpdateBindingContext(const TSharedRef<SWidget> NewWidget)
+{
+	TMap<FString, EUMContextBinding> ContextByWidgetType = {
+		{ "SGraphPanel", EUMContextBinding::GraphEditor },
+		// { "SEditableText", EUMContextBinding::TextEditing },
+	};
+
+	EUMContextBinding* Context;
+	if ((Context = ContextByWidgetType.Find(NewWidget->GetTypeAsString())))
+	{
+		FVimInputProcessor::Get()->SetCurrentContext(*Context);
+	}
+	else if ((Context = ContextByWidgetType.Find(
+				  NewWidget->GetWidgetClass().GetWidgetType().ToString())))
+	{
+		FVimInputProcessor::Get()->SetCurrentContext(*Context);
+	}
+	else
+		FVimInputProcessor::Get()->SetCurrentContext(EUMContextBinding::Generic);
 }
 
 bool UUMFocuserEditorSubsystem::ShouldFilterNewWidget(TSharedRef<SWidget> InWidget)

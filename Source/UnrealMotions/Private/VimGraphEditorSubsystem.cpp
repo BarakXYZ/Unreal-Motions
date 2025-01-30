@@ -19,6 +19,7 @@
 #include "SGraphPanel.h"
 #include "UMSlateHelpers.h"
 #include "UMInputHelpers.h"
+#include "KismetPins/SGraphPinExec.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, Log, All); // Dev
@@ -64,15 +65,22 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		MakeWeakObjectPtr(this);
 
 	VimInputProcessor->AddKeyBinding_NoParam(
+		EUMContextBinding::GraphEditor,
 		{ EKeys::SpaceBar, EKeys::G, EKeys::D },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DebugEditor);
 
-	// TODO: Have different nodes for VimProcessor to lookup?
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		{ EKeys::SpaceBar, EKeys::A },
+		EUMContextBinding::GraphEditor,
+		{ EKeys::A },
 		WeakGraphSubsystem,
-		&UVimGraphEditorSubsystem::AppendNode);
+		&UVimGraphEditorSubsystem::AddNode);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::I },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::AddNode);
 }
 
 void UVimGraphEditorSubsystem::DebugEditor()
@@ -205,10 +213,12 @@ void UVimGraphEditorSubsystem::DebugEditor()
 	}
 }
 
-void UVimGraphEditorSubsystem::AppendNode(
+void UVimGraphEditorSubsystem::AddNode(
 	FSlateApplication& SlateApp,
 	const FKeyEvent&   InKeyEvent)
 {
+	// Logger.Print("From Graph <3", ELogVerbosity::Log, true);
+
 	TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
@@ -234,51 +244,74 @@ void UVimGraphEditorSubsystem::AppendNode(
 
 	for (const auto& Pin : AllPins)
 	{
-		if (Pin->GetTypeAsString().Equals("SGraphPinExec"))
-		{
-			// GraphPanel->GetGraphObj()->AddOnGraphChangedHandler();
-			// UEdGraph* Graph = GraphPanel->GetGraphObj();
-			// if (!Graph)
-			// 	return;
+		if (!Pin->GetTypeAsString().Equals("SGraphPinExec"))
+			continue;
 
-			const FVector2D OriginCurPos = SlateApp.GetCursorPos();
+		const FKey				   InKey = InKeyEvent.GetKey();
+		const EEdGraphPinDirection TargetPinType =
+			InKey == FKey(EKeys::I) ? EGPD_Input : EGPD_Output;
 
-			// Store the current number of nodes we have so we can compare it
-			// after the menu window has closed to see if a new node was created.
-			NodeCounter = GraphPanel->GetChildren()->Num();
-			TWeakPtr<SGraphNode> WeakGraphNode = FirstSNode;
+		const TSharedRef<SGraphPinExec> AsGraphPin =
+			StaticCastSharedRef<SGraphPinExec>(Pin);
 
-			FUMInputHelpers::DragAndReleaseWidgetAtPosition(Pin, Pin->GetCachedGeometry().GetAbsolutePosition() + (FVector2f(100.0f, 0.0f)));
+		// Get the direction of the pin
+		UEdGraphPin* EdGraphPin = AsGraphPin->GetPinObj();
+		if (!EdGraphPin || EdGraphPin->Direction != TargetPinType)
+			continue; // Skip if it's an input pin
 
-			FTimerHandle TimerHandle;
-			GEditor->GetTimerManager()->SetTimer(
-				TimerHandle,
-				[this, &SlateApp, OriginCurPos, WeakGraphNode]() {
-					SlateApp.SetCursorPos(OriginCurPos);
-					const TSharedPtr<SWindow> MenuWin = SlateApp.GetActiveTopLevelWindow(); // Should be the menu
+		// EdGraphPin->LinkedTo;
 
-					if (!MenuWin.IsValid())
-						return;
+		// GraphPanel->GetGraphObj()->AddOnGraphChangedHandler();
+		// UEdGraph* Graph = GraphPanel->GetGraphObj();
+		// if (!Graph)
+		// 	return;
 
-					MenuWin->GetOnWindowClosedEvent().AddLambda([this, WeakGraphNode](const TSharedRef<SWindow>& Window) {
+		const FVector2D OriginCurPos = SlateApp.GetCursorPos();
+
+		// Switch to Insert mode to immediately type in the Node Menu
+		FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Insert);
+
+		// Store the current number of nodes we have so we can compare it
+		// after the menu window has closed to see if a new node was created.
+		NodeCounter = GraphPanel->GetChildren()->Num();
+		TWeakPtr<SGraphNode> WeakGraphNode = FirstSNode;
+
+		const FVector2f NewPinLocationOffset = InKey == FKey(EKeys::I)
+			? FVector2f(-100.0f, 0.0f)
+			: FVector2f(100.0f, 0.0f);
+		FUMInputHelpers::DragAndReleaseWidgetAtPosition(
+			Pin,
+			Pin->GetCachedGeometry().GetAbsolutePosition() + (NewPinLocationOffset));
+
+		FTimerHandle TimerHandle;
+		GEditor->GetTimerManager()->SetTimer(
+			TimerHandle,
+			[this, &SlateApp, OriginCurPos, WeakGraphNode]() {
+				SlateApp.SetCursorPos(OriginCurPos);
+				const TSharedPtr<SWindow> MenuWin = SlateApp.GetActiveTopLevelWindow(); // Should be the menu
+
+				if (!MenuWin.IsValid())
+					return;
+
+				MenuWin->GetOnWindowClosedEvent().AddLambda(
+					[this, &SlateApp, WeakGraphNode](const TSharedRef<SWindow>& Window) {
 						FTimerHandle TimerHandle;
 						GEditor->GetTimerManager()->SetTimer(
 							TimerHandle,
-							[this, WeakGraphNode]() {
-								OnNodeCreationMenuClosed(WeakGraphNode);
+							[this, &SlateApp, WeakGraphNode]() {
+								OnNodeCreationMenuClosed(SlateApp, WeakGraphNode);
 								Logger.Print("Menu Closed!", ELogVerbosity::Log, true);
 							},
 							0.05f, false);
 					});
-				},
-				0.05f, false);
-			// SlateApp.SetCursorPos(OriginCurPos);
-			break;
-		}
+			},
+			0.05f, false);
+		// SlateApp.SetCursorPos(OriginCurPos);
+		break;
 	}
 }
 
-void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(TWeakPtr<SGraphNode> AssociatedNode)
+void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(FSlateApplication& SlateApp, TWeakPtr<SGraphNode> AssociatedNode)
 {
 	if (const TSharedPtr<SGraphNode> GraphNode = AssociatedNode.Pin())
 	{
@@ -294,12 +327,22 @@ void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(TWeakPtr<SGraphNode> Ass
 			FUMInputHelpers::SimulateClickOnWidget(
 				FSlateApplication::Get(),
 				GraphNode.ToSharedRef(),
-				FKey(EKeys::LeftMouseButton), false, true);
+				FKey(EKeys::LeftMouseButton), false,
+				true /* Shift Down (add to selection)*/);
 
 			GraphPanel->StraightenConnections();
+
+			FUMInputHelpers::SimulateClickOnWidget(
+				FSlateApplication::Get(),
+				GraphNode.ToSharedRef(),
+				FKey(EKeys::LeftMouseButton), false, false,
+				true /* Ctrl Down (remove from selection) */);
 		}
 		else
 			Logger.Print("No new nodes were created...", ELogVerbosity::Log, true);
+
+		// Switch to Normal mode to immediately (probably preferred)
+		FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
 	}
 }
 

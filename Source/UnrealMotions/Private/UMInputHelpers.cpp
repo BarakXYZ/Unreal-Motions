@@ -16,7 +16,8 @@ FUMOnSimulateRightClick FUMInputHelpers::OnSimulateRightClick;
 
 void FUMInputHelpers::SimulateClickOnWidget(
 	FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
-	const FKey& EffectingButton, bool bIsDoubleClick, bool bIsShiftDown)
+	const FKey& EffectingButton, bool bIsDoubleClick,
+	bool bIsShiftDown, bool bIsCtrlDown)
 {
 	FWidgetPath WidgetPath;
 	if (!SlateApp.FindPathToWidget(Widget, WidgetPath))
@@ -56,8 +57,10 @@ void FUMInputHelpers::SimulateClickOnWidget(
 	SlateApp.SetCursorPos(WidgetCenter);					// Move to the widget's center
 
 	// Set Modifier Key State
-	FModifierKeysState ModKeys(bIsShiftDown, bIsShiftDown,
-		false, false, false, false, false, false, false);
+	FModifierKeysState ModKeys(
+		bIsShiftDown, bIsShiftDown,
+		bIsCtrlDown, bIsCtrlDown,
+		false, false, false, false, false);
 
 	FPointerEvent MouseDownEvent( // Construct the click Pointer Event
 		0,						  // PointerIndex

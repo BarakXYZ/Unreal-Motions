@@ -32,9 +32,9 @@ public:
 
 	void DebugEditor();
 
-	void AppendNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void AddNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	void OnNodeCreationMenuClosed(TWeakPtr<SGraphNode> AssociatedNode);
+	void OnNodeCreationMenuClosed(FSlateApplication& SlateApp, TWeakPtr<SGraphNode> AssociatedNode);
 
 	bool IsWasNewNodeCreated();
 

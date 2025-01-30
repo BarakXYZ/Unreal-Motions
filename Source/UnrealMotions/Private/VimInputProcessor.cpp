@@ -18,6 +18,7 @@ FVimInputProcessor::FVimInputProcessor()
 }
 FVimInputProcessor::~FVimInputProcessor()
 {
+	ContextTrieRoots.Empty();
 }
 
 TSharedRef<FVimInputProcessor> FVimInputProcessor::Get()
@@ -34,55 +35,133 @@ void FVimInputProcessor::Tick(
 	// 	FUMLogger::AddDebugMessage(FocusedWidget->GetTypeAsString());
 }
 
+TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::GetOrCreateTrieRoot(
+	EUMContextBinding Context)
+{
+	// Try to find an existing root
+	if (TSharedPtr<FKeyChordTrieNode>* FoundRoot = ContextTrieRoots.Find(Context))
+	{
+		return *FoundRoot;
+	}
+
+	// Otherwise, create a new one
+	TSharedPtr<FKeyChordTrieNode> NewRoot = MakeShared<FKeyChordTrieNode>();
+	ContextTrieRoots.Add(Context, NewRoot);
+	return NewRoot;
+}
+
+TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::FindOrCreateTrieNode(
+	TSharedPtr<FKeyChordTrieNode> Root,
+	const TArray<FInputChord>&	  Sequence)
+{
+	TSharedPtr<FKeyChordTrieNode> Current = Root;
+
+	for (const FInputChord& Key : Sequence)
+	{
+		// If a child doesn’t exist for this chord, create one
+		if (!Current->Children.Contains(Key))
+		{
+			Current->Children.Add(Key, MakeShared<FKeyChordTrieNode>());
+		}
+
+		// Move down to the child
+		Current = Current->Children[Key];
+	}
+
+	return Current;
+}
+
+bool FVimInputProcessor::TraverseTrieForContext(EUMContextBinding InContext, TSharedPtr<FKeyChordTrieNode>& OutNode) const
+{
+	OutNode = nullptr;
+
+	// If there's no trie root for this context yet, no match is possible
+	if (!ContextTrieRoots.Contains(InContext))
+	{
+		return false;
+	}
+
+	// Get the root node of this specified context
+	TSharedPtr<FKeyChordTrieNode> Root = ContextTrieRoots[InContext];
+	TSharedPtr<FKeyChordTrieNode> CurrentNode = Root;
+
+	// Walk the sequence
+	for (const FInputChord& SequenceKey : CurrentSequence)
+	{
+		if (!CurrentNode->Children.Contains(SequenceKey))
+			return false; // Cannot find the specific sequence
+
+		CurrentNode = CurrentNode->Children[SequenceKey];
+	}
+
+	// If we got here, we at least have a partial match
+	OutNode = CurrentNode;
+	return true;
+}
+
 // Process the current key sequence
 bool FVimInputProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// 1) Add this key to current sequence
 	CurrentSequence.Add(FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent));
 
-	// 2) Traverse the trie
-	FKeyChordTrieNode* CurrentNode = TrieRoot;
-	for (const FInputChord& SequenceKey : CurrentSequence)
+	// 2) Try to traverse the trie for the current context first
+	TSharedPtr<FKeyChordTrieNode> MatchedNode;
+	bool						  bContextHasPartialOrFull = TraverseTrieForContext(CurrentContext, MatchedNode);
+
+	// 3) If that fails, fallback to Generic
+	bool bUsedGeneric = false;
+	if (!bContextHasPartialOrFull)
 	{
-		if (!CurrentNode->Children.Contains(SequenceKey))
+		if (CurrentContext != EUMContextBinding::Generic)
 		{
-			// No match found
+			bUsedGeneric = TraverseTrieForContext(EUMContextBinding::Generic, MatchedNode);
+		}
+
+		// If neither the current context nor the Generic context recognized it (even as partial), reset
+		if (!bUsedGeneric)
+		{
 			ResetSequence(SlateApp);
 			return false;
 		}
-		CurrentNode = CurrentNode->Children[SequenceKey];
 	}
 
-	// 3) Found a node, check for a callback
-	if (CurrentNode->CallbackType != EUMKeyBindingCallbackType::None)
+	// 4) If we have a matched node, see if it has a callback
+	if (MatchedNode && MatchedNode->CallbackType != EUMKeyBindingCallbackType::None)
 	{
-		switch (CurrentNode->CallbackType)
+		switch (MatchedNode->CallbackType)
 		{
 			case EUMKeyBindingCallbackType::NoParam:
-				if (CurrentNode->NoParamCallback)
-					CurrentNode->NoParamCallback();
+				if (MatchedNode->NoParamCallback)
+				{
+					MatchedNode->NoParamCallback();
+				}
 				break;
 
 			case EUMKeyBindingCallbackType::KeyEventParam:
-				if (CurrentNode->KeyEventCallback)
-					CurrentNode->KeyEventCallback(SlateApp, InKeyEvent);
+				if (MatchedNode->KeyEventCallback)
+				{
+					MatchedNode->KeyEventCallback(SlateApp, InKeyEvent);
+				}
 				break;
 
 			case EUMKeyBindingCallbackType::SequenceParam:
-				if (CurrentNode->SequenceCallback)
-					CurrentNode->SequenceCallback(SlateApp, CurrentSequence);
+				if (MatchedNode->SequenceCallback)
+				{
+					MatchedNode->SequenceCallback(SlateApp, CurrentSequence);
+				}
 				break;
 
 			default:
 				break;
 		}
 
-		// 4) Reset sequence after invoking the callback
+		// If we found a full match, reset sequence after invoking
 		ResetSequence(SlateApp);
 		return true;
 	}
 
-	// Partial match is still valid; do not reset
+	// If no callback yet, but partial match is valid => keep building
 	return true;
 }
 
@@ -107,73 +186,84 @@ void FVimInputProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
 	}
 }
 
-FKeyChordTrieNode* FVimInputProcessor::FindOrCreateTrieNode(
-	const TArray<FInputChord>& Sequence)
-{
-	FKeyChordTrieNode* Current = TrieRoot;
-	for (const FInputChord& Key : Sequence)
-	{
-		if (!Current->Children.Contains(Key))
-		{
-			Current->Children.Add(Key, new FKeyChordTrieNode());
-		}
-		Current = Current->Children[Key];
-	}
-	return Current;
-}
-
 // 1) No-Parameter
 void FVimInputProcessor::AddKeyBinding_NoParam(
+	EUMContextBinding		   Context,
 	const TArray<FInputChord>& Sequence,
 	TFunction<void()>		   Callback)
 {
-	FKeyChordTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context);
+	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
+
 	Node->NoParamCallback = MoveTemp(Callback);
 	Node->CallbackType = EUMKeyBindingCallbackType::NoParam;
 }
 
 // 2) Single FKeyEvent param
 void FVimInputProcessor::AddKeyBinding_KeyEvent(
+	EUMContextBinding											   Context,
 	const TArray<FInputChord>&									   Sequence,
 	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback)
 {
-	FKeyChordTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context);
+	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
+
 	Node->KeyEventCallback = MoveTemp(Callback);
 	Node->CallbackType = EUMKeyBindingCallbackType::KeyEventParam;
 }
 
 // 3) TArray<FInputChord> param
 void FVimInputProcessor::AddKeyBinding_Sequence(
-	const TArray<FInputChord>&												 Sequence,
-	TFunction<void(FSlateApplication& SlateApp, const TArray<FInputChord>&)> Callback)
+	EUMContextBinding		   Context,
+	const TArray<FInputChord>& Sequence,
+	TFunction<void(FSlateApplication& SlateApp,
+		const TArray<FInputChord>&)>
+		Callback)
 {
-	FKeyChordTrieNode* Node = FindOrCreateTrieNode(Sequence);
+	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context);
+	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
+
 	Node->SequenceCallback = MoveTemp(Callback);
 	Node->CallbackType = EUMKeyBindingCallbackType::SequenceParam;
 }
 
 void FVimInputProcessor::RegisterDefaultKeyBindings()
 {
-	// Create the root node
-	TrieRoot = new FKeyChordTrieNode();
-	// WeakInputPreProcessor = InputPreProcessor.ToWeakPtr();
+	// For convenience, ensure the Generic root exists
+	GetOrCreateTrieRoot(EUMContextBinding::Generic);
 
+	// Example default key bindings in Generic:
 	AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::I },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		});
 
 	AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::V) },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		});
+
 	AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::V },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		});
+
+	// If you want some distinct context-based binding, e.g. in TextEditing:
+	/*
+	AddKeyBinding_NoParam(
+		EUMContextBinding::TextEditing,
+		{ EKeys::A },
+		[](){
+			// Behavior: "append after current character" in text.
+		}
+	);
+	*/
 }
 
 void FVimInputProcessor::TestLinearInput(FSlateApplication& SlateApp)

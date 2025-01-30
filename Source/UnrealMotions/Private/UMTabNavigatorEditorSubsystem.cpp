@@ -382,32 +382,38 @@ void UUMTabNavigatorEditorSubsystem::BindVimCommands()
 		MakeWeakObjectPtr(this);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		// { EKeys::SpaceBar, EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::One },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Two },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Three },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Four },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::M, EKeys::T, EKeys::O },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabOut);

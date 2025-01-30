@@ -419,128 +419,161 @@ void UVimEditorSubsystem::BindCommands()
 	//							~ Commands ~ //
 	//
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, EKeys::W },
 		&FUMEditorCommands::OpenWidgetReflector);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, FInputChord(EModifierKey::Shift, EKeys::W) },
 		&FUMEditorCommands::OpenWidgetReflector);
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, EKeys::O },
 		&FUMEditorCommands::OpenOutputLog);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, EKeys::P },
 		&FUMEditorCommands::OpenPreferences);
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::R, EKeys::U, EKeys::W },
 		&FUMEditorCommands::RunUtilityWidget);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::Slash) },
 		&FUMEditorCommands::Search);
 
 	//** Open Content Browsers 1-4 */
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::One },
 		&FUMEditorCommands::OpenContentBrowser);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Two },
 		&FUMEditorCommands::OpenContentBrowser);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Three },
 		&FUMEditorCommands::OpenContentBrowser);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, EKeys::C, EKeys::Four },
 		&FUMEditorCommands::OpenContentBrowser);
 
 	//  Move HJKL
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::H },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::J },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::K },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::L },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 
 	// Selection + Move HJKL
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::H) },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::J) },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::K) },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::L) },
 		VimSubWeak, &VimSub::ProcessVimNavigationInput);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::G) },
 		VimSubWeak, &VimSub::NavigateToFirstOrLastItem);
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::G, EKeys::G },
 		VimSubWeak, &VimSub::NavigateToFirstOrLastItem);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::U) },
 		VimSubWeak, &VimSub::ScrollHalfPage);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::D) },
 		VimSubWeak, &VimSub::ScrollHalfPage);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::U },
 		&FUMEditorCommands::Undo);
 
 	// Delete item - Simulate the Delete key (WIP)
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::X },
 		&FUMEditorCommands::DeleteItem);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::D },
 		&FUMEditorCommands::DeleteItem);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::Enter },
 		&FUMInputHelpers::Enter);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::N) },
 		&FUMEditorCommands::NavigateNextPrevious);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::P) },
 		&FUMEditorCommands::NavigateNextPrevious);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::F) },
 		&FUMEditorCommands::FindNearestSearchBox);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, FInputChord(EModifierKey::Shift, EKeys::R) },
 		&FUMInputHelpers::SimulateRightClick);
 
 	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, FInputChord(EModifierKey::Alt, EKeys::R) },
 		&FUMInputHelpers::ToggleRightClickPress);
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::D, EKeys::C },
 		&FUMEditorCommands::ClearAllDebugMessages);
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::D, EKeys::T, EKeys::N },
 		&FUMEditorCommands::ToggleAllowNotifications);
 
@@ -549,6 +582,7 @@ void UVimEditorSubsystem::BindCommands()
 	// 	&FLevelEditorActionCallbacks::CreateBlankBlueprintClass);
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::N, EKeys::B },
 		[this]() {
 			bSyntheticInsertToggle = true;
@@ -558,18 +592,22 @@ void UVimEditorSubsystem::BindCommands()
 		});
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, EKeys::L, EKeys::B },
 		&FUMEditorCommands::OpenLevelBlueprint);
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::O, FInputChord(EModifierKey::Shift, EKeys::L) },
 		&FLevelEditorActionCallbacks::OpenLevel);
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::T, EKeys::G, EKeys::L },
 		&FUMLogger::ToggleGlobalLogging);
 
 	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
 		{ EKeys::SpaceBar, EKeys::R, EKeys::L, EKeys::D },
 		&FUMEditorCommands::ResetEditorToDefaultLayout);
 

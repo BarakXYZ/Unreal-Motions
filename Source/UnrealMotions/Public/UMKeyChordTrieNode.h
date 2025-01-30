@@ -13,25 +13,19 @@ enum class EUMKeyBindingCallbackType : uint8
 
 struct FKeyChordTrieNode
 {
-	TMap<FInputChord, FKeyChordTrieNode*> Children;
+	// Now use TSharedPtr instead of raw pointers
+	TMap<FInputChord, TSharedPtr<FKeyChordTrieNode>> Children;
 
 	// Which callback type is set for this node?
 	EUMKeyBindingCallbackType CallbackType = EUMKeyBindingCallbackType::None;
 
-	// Up to three callback function pointers
+	// Callback functions
 	TFunction<void()> NoParamCallback;
 
-	TFunction<void(
-		FSlateApplication& SlateApp, const FKeyEvent&)>
-		KeyEventCallback;
+	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> KeyEventCallback;
 
-	TFunction<void(
-		FSlateApplication& SlateApp, const TArray<FInputChord>&)>
-		SequenceCallback;
+	TFunction<void(FSlateApplication& SlateApp, const TArray<FInputChord>&)> SequenceCallback;
 
-	~FKeyChordTrieNode()
-	{
-		for (auto& Pair : Children)
-			delete Pair.Value;
-	}
+	// No manual destructor needed – TSharedPtr handles cleanup automatically
+	// ~FKeyChordTrieNode() = default;
 };
