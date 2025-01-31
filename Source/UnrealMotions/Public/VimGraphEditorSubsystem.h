@@ -38,7 +38,19 @@ public:
 
 	bool IsWasNewNodeCreated();
 
+	bool IsValidZoom(const FString InZoomLevelStr);
+
+	UEdGraphNode* FindEdgeNodeInChain(
+		const TArray<UEdGraphNode*>& SelectedNodes, bool bFindFirstNode);
+
+	UEdGraphNode* FindFarthestNode(
+		const TArray<UEdGraphNode*>&					  Candidates,
+		const TMap<UEdGraphNode*, TArray<UEdGraphNode*>>& OutgoingConnections,
+		bool											  bFindFirstNode);
+
 	const TSharedPtr<SGraphPanel> TryGetActiveGraphPanel(FSlateApplication& SlateApp);
+
+	void MoveConnectedNodesToRight(UEdGraphNode* StartNode, float OffsetX);
 
 	FUMLogger Logger;
 	int32	  NodeCounter;

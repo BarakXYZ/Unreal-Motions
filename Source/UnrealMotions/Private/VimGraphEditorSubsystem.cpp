@@ -6,6 +6,7 @@
 #include "GraphEditorModule.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "UMSlateHelpers.h"
+#include "VimEditorSubsystem.h"
 #include "VimInputProcessor.h"
 #include "UMEditorHelpers.h"
 #include "Subsystems/AssetEditorSubsystem.h"
@@ -219,25 +220,43 @@ void UVimGraphEditorSubsystem::AddNode(
 {
 	// Logger.Print("From Graph <3", ELogVerbosity::Log, true);
 
-	TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
 
-	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+	// In node graph, users cannot drag pins from a zoom level below -5.
+	// it will only allow dragging nodes at this zoom level.
+	// Thus we want to early return here & potentially notify the user.
+	// NOTE: Using GetZoomText() and not GetZoomAmount() (which seems more
+	// straight forward) because GetZoomAmount() seems to always return 0 *~*
+	if (!IsValidZoom(GraphPanel->GetZoomText().ToString()))
+		return;
+	// Optionally we can ZoomToFit if not valid zoom, but idk; it's a diff UX
+	// and will also require a delay, etc.
+	// GraphPanel->ZoomToFit(true);
+
+	const TArray<UEdGraphNode*>
+		SelNodes = GraphPanel->GetSelectedGraphNodes();
 	if (SelNodes.IsEmpty())
 		return;
 
-	const UEdGraphNode* FirstNode = SelNodes[0];
-	if (!FirstNode)
+	const FKey InKey = InKeyEvent.GetKey();
+
+	const UEdGraphNode* NodeObj = InKey == FKey(EKeys::I)
+		? FindEdgeNodeInChain(SelNodes, true)	// first
+		: FindEdgeNodeInChain(SelNodes, false); // last
+
+	if (!NodeObj)
 		return;
 
-	const TSharedPtr<SGraphNode> FirstSNode = GraphPanel->GetNodeWidgetFromGuid(FirstNode->NodeGuid);
+	const TSharedPtr<SGraphNode> NodeWidget =
+		GraphPanel->GetNodeWidgetFromGuid(NodeObj->NodeGuid);
 
-	if (!FirstSNode.IsValid())
+	if (!NodeWidget.IsValid())
 		return;
 
 	TArray<TSharedRef<SWidget>> AllPins;
-	FirstSNode->GetPins(AllPins);
+	NodeWidget->GetPins(AllPins);
 
 	if (AllPins.IsEmpty())
 		return;
@@ -247,7 +266,6 @@ void UVimGraphEditorSubsystem::AddNode(
 		if (!Pin->GetTypeAsString().Equals("SGraphPinExec"))
 			continue;
 
-		const FKey				   InKey = InKeyEvent.GetKey();
 		const EEdGraphPinDirection TargetPinType =
 			InKey == FKey(EKeys::I) ? EGPD_Input : EGPD_Output;
 
@@ -274,14 +292,31 @@ void UVimGraphEditorSubsystem::AddNode(
 		// Store the current number of nodes we have so we can compare it
 		// after the menu window has closed to see if a new node was created.
 		NodeCounter = GraphPanel->GetChildren()->Num();
-		TWeakPtr<SGraphNode> WeakGraphNode = FirstSNode;
+		TWeakPtr<SGraphNode> WeakGraphNode = NodeWidget;
 
-		const FVector2f NewPinLocationOffset = InKey == FKey(EKeys::I)
-			? FVector2f(-100.0f, 0.0f)
-			: FVector2f(100.0f, 0.0f);
+		// TODO:
+		// Check if is connected to any node. If so, we will need to move it
+		// and the entire following chain it is connected to - to the right
+		// before inserting or appending a new node
+
+		// TODO: We only need to do the nodes offseting if we have any connected nodes
+		// to the direction we're append or inserting (etc.)
+		FVector2f CursorOffset;
+		FVector2f NodesOffset;
+		if (InKey == FKey(EKeys::I))
+		{
+			CursorOffset = FVector2f(-150.0f, 0.0f);
+			NodesOffset = FVector2f(150.0f, 0.0f);
+		}
+		else
+		{
+			CursorOffset = FVector2f(150.0f, 0.0f);
+			NodesOffset = FVector2f(-150.0f, 0.0f);
+		}
+		MoveConnectedNodesToRight(NodeWidget->GetNodeObj(), NodesOffset.X);
 		FUMInputHelpers::DragAndReleaseWidgetAtPosition(
 			Pin,
-			Pin->GetCachedGeometry().GetAbsolutePosition() + (NewPinLocationOffset));
+			(Pin->GetCachedGeometry().LocalToAbsolute(CursorOffset)));
 
 		FTimerHandle TimerHandle;
 		GEditor->GetTimerManager()->SetTimer(
@@ -353,6 +388,135 @@ const TSharedPtr<SGraphPanel> UVimGraphEditorSubsystem::TryGetActiveGraphPanel(F
 			   && FocusedWidget->GetTypeAsString().Equals("SGraphPanel"))
 		? StaticCastSharedPtr<SGraphPanel>(FocusedWidget)
 		: nullptr;
+}
+
+UEdGraphNode* UVimGraphEditorSubsystem::FindEdgeNodeInChain(
+	const TArray<UEdGraphNode*>& SelectedNodes, bool bFindFirstNode)
+{
+	if (SelectedNodes.IsEmpty())
+		return nullptr;
+
+	TMap<UEdGraphNode*, TArray<UEdGraphNode*>> OutgoingConnections;
+	TSet<UEdGraphNode*>						   InputNodes;
+
+	// Build the connectivity graph
+	for (UEdGraphNode* Node : SelectedNodes)
+	{
+		for (UEdGraphPin* Pin : Node->Pins)
+		{
+			if (Pin->Direction == EGPD_Output)
+			{
+				for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
+				{
+					if (LinkedPin && SelectedNodes.Contains(LinkedPin->GetOwningNode()))
+					{
+						OutgoingConnections.FindOrAdd(Node).Add(LinkedPin->GetOwningNode());
+						InputNodes.Add(LinkedPin->GetOwningNode());
+					}
+				}
+			}
+		}
+	}
+
+	// Find candidates: Either source nodes (for first) or sink nodes (for last)
+	TArray<UEdGraphNode*> Candidates;
+	for (UEdGraphNode* Node : SelectedNodes)
+	{
+		bool bIsCandidate = bFindFirstNode
+			? !InputNodes.Contains(Node)		   // First: No incoming connections
+			: !OutgoingConnections.Contains(Node); // Last: No outgoing connections
+
+		if (bIsCandidate)
+			Candidates.Add(Node);
+	}
+
+	// If there's only one candidate, return it immediately
+	if (Candidates.Num() == 1)
+		return Candidates[0];
+
+	// Otherwise, traverse to find the deepest node
+	return FindFarthestNode(Candidates, OutgoingConnections, bFindFirstNode);
+}
+
+// Traverses and finds the deepest node from given candidates
+UEdGraphNode* UVimGraphEditorSubsystem::FindFarthestNode(
+	const TArray<UEdGraphNode*>&					  Candidates,
+	const TMap<UEdGraphNode*, TArray<UEdGraphNode*>>& OutgoingConnections,
+	bool											  bFindFirstNode)
+{
+	UEdGraphNode* EdgeNode = nullptr;
+	int			  MaxDepth = -1;
+
+	for (UEdGraphNode* StartNode : Candidates)
+	{
+		TSet<UEdGraphNode*> Visited;
+		int					Depth = 0;
+		UEdGraphNode*		CurrentNode = StartNode;
+
+		while (OutgoingConnections.Contains(CurrentNode) && OutgoingConnections[CurrentNode].Num() > 0)
+		{
+			Depth++;
+			Visited.Add(CurrentNode);
+			CurrentNode = OutgoingConnections[CurrentNode][0]; // Follow the first link
+		}
+
+		if (Depth > MaxDepth)
+		{
+			MaxDepth = Depth;
+			EdgeNode = CurrentNode;
+		}
+	}
+
+	return EdgeNode;
+}
+
+bool UVimGraphEditorSubsystem::IsValidZoom(const FString InZoomLevelStr)
+{
+	TArray<FString> Parsed;
+	InZoomLevelStr.ParseIntoArrayWS(Parsed); // Splits by whitespace
+
+	if (Parsed.Num() > 1) // Ensure we have at least two parts: "Zoom" and the number
+	{
+		float ZoomLevel = FCString::Atof(*Parsed[1]); // Convert the second part to float
+		if (ZoomLevel < -5.0f)
+			return false;
+
+		Logger.Print(FString::Printf(TEXT("Zoom Amount: %f"), ZoomLevel), ELogVerbosity::Warning, true);
+	}
+	else
+		return false;
+
+	Logger.Print(FString::Printf(TEXT("Zoom Amount: %s"), *InZoomLevelStr), ELogVerbosity::Log, true);
+	return true;
+}
+
+void UVimGraphEditorSubsystem::MoveConnectedNodesToRight(UEdGraphNode* StartNode, float OffsetX)
+{
+	if (!StartNode)
+		return;
+
+	TSet<UEdGraphNode*>	  VisitedNodes;
+	TQueue<UEdGraphNode*> NodeQueue;
+
+	NodeQueue.Enqueue(StartNode);
+	VisitedNodes.Add(StartNode);
+
+	while (!NodeQueue.IsEmpty())
+	{
+		UEdGraphNode* CurrentNode;
+		NodeQueue.Dequeue(CurrentNode);
+
+		CurrentNode->NodePosX += OffsetX; // Move current node
+
+		// Enqueue connected nodes
+		CurrentNode->ForEachNodeDirectlyConnectedToOutputs([&](UEdGraphNode* ConnectedNode) {
+			if (!VisitedNodes.Contains(ConnectedNode))
+			{
+				VisitedNodes.Add(ConnectedNode);
+				NodeQueue.Enqueue(ConnectedNode);
+			}
+		});
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

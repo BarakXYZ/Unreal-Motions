@@ -381,9 +381,18 @@ void UUMTabNavigatorEditorSubsystem::BindVimCommands()
 	TWeakObjectPtr<UUMTabNavigatorEditorSubsystem> WeakTabSubsystem =
 		MakeWeakObjectPtr(this);
 
+	VimInputProcessor->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
+		{ EKeys::G, EKeys::T },
+		[this]() { CycleTabs(true, true); });
+
+	VimInputProcessor->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
+		{ EKeys::G, FInputChord(EModifierKey::Shift, EKeys::T) },
+		[this]() { CycleTabs(true, false); });
+
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::Generic,
-		// { EKeys::SpaceBar, EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
