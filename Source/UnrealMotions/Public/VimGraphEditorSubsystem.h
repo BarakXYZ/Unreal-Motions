@@ -30,15 +30,41 @@ public:
 
 	void BindVimCommands();
 
-	void DebugEditor();
-
 	void AddNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	void OnNodeCreationMenuClosed(FSlateApplication& SlateApp, TWeakPtr<SGraphNode> AssociatedNode);
+	void OnNodeCreationMenuClosed(
+		FSlateApplication& SlateApp,
+		UEdGraphPin* DraggedFromPin, bool bIsAppendingNode);
+
+	bool GetPinToLinkedPinDelta(
+		const TSharedRef<SGraphNode> InNode, UEdGraphPin* InPin,
+		const TSharedRef<SGraphNode> LinkedToNode, double& Delta);
+
+	bool GetNewNodeAlignedPosition();
+
+	FVector2D GetAlignedNodePositionX(
+		const TSharedRef<SGraphNode> OriginNode,
+		const TSharedRef<SGraphNode> LinkedNode,
+		bool						 bIsAppendingNode);
+
+	void CollectDownstreamNodes(
+		UEdGraphNode*		 StartNode,
+		TSet<UEdGraphNode*>& OutNodes,
+		bool				 bIsAppending);
+
+	void ShiftNodesForSpace(
+		const TSharedPtr<SGraphPanel>& GraphPanel,
+		const TSet<UEdGraphNode*>&	   NodesToMove,
+		float						   ShiftAmountX);
+
+	void RevertShiftedNodes(const TSharedPtr<SGraphPanel>& GraphPanel);
 
 	bool IsWasNewNodeCreated();
 
 	bool IsValidZoom(const FString InZoomLevelStr);
+
+	bool ConnectNewNodeToPrevConnection(
+		UEdGraphPin* OriginPin, const TSharedRef<SGraphNode> NewNode);
 
 	UEdGraphNode* FindEdgeNodeInChain(
 		const TArray<UEdGraphNode*>& SelectedNodes, bool bFindFirstNode);
@@ -54,4 +80,11 @@ public:
 
 	FUMLogger Logger;
 	int32	  NodeCounter;
+
+	// We’ll store the original positions of any nodes we shift
+	TMap<UEdGraphNode*, FVector2D> ShiftedNodesOriginalPositions;
+
+	// We’ll track whether we’re currently in a “shifted” state
+	// so we know whether to revert on menu close.
+	bool bNodesWereShifted = false;
 };

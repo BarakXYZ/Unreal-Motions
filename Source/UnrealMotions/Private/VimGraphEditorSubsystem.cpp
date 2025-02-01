@@ -1,19 +1,15 @@
 #include "VimGraphEditorSubsystem.h"
 #include "BlueprintEditor.h"
+#include "EdGraph/EdGraphNode.h"
 #include "EdGraphNode_Comment.h"
 #include "Framework/Application/SlateApplication.h"
 #include "UMConfig.h"
 #include "GraphEditorModule.h"
-#include "Kismet2/BlueprintEditorUtils.h"
 #include "UMSlateHelpers.h"
-#include "VimEditorSubsystem.h"
 #include "VimInputProcessor.h"
-#include "UMEditorHelpers.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "EdGraphSchema_K2_Actions.h"
-#include "EdGraph/EdGraph.h"
 #include "BlueprintNodeSpawner.h"
-#include "EdGraphSchema_K2.h"
 #include "K2Node_CallFunction.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "BlueprintNodeBinder.h"
@@ -21,6 +17,7 @@
 #include "UMSlateHelpers.h"
 #include "UMInputHelpers.h"
 #include "KismetPins/SGraphPinExec.h"
+#include "SGraphPin.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, Log, All); // Dev
@@ -65,161 +62,39 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	TWeakObjectPtr<UVimGraphEditorSubsystem> WeakGraphSubsystem =
 		MakeWeakObjectPtr(this);
 
-	VimInputProcessor->AddKeyBinding_NoParam(
-		EUMContextBinding::GraphEditor,
-		{ EKeys::SpaceBar, EKeys::G, EKeys::D },
-		WeakGraphSubsystem,
-		&UVimGraphEditorSubsystem::DebugEditor);
-
+	/* Append after the last selected node */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
 		{ EKeys::A },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNode);
 
+	/* Insert before the last selected node */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
 		{ EKeys::I },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNode);
-}
 
-void UVimGraphEditorSubsystem::DebugEditor()
-{
-	return;
+	/* Append after last node in the chain */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Shift, EKeys::A) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::AddNode);
 
-	IAssetEditorInstance* Editor = FUMEditorHelpers::GetLastActiveEditor();
-	if (!Editor)
-		return;
-
-	Logger.Print(FString::Printf(TEXT("Editor Name: %s"),
-					 *Editor->GetEditorName().ToString()),
-		ELogVerbosity::Verbose, true);
-
-	if (!Editor->GetEditorName().IsEqual("BlueprintEditor"))
-		return;
-
-	// FAssetEditorToolkit* Toolkit =
-	// 	static_cast<FAssetEditorToolkit*>(Editor);
-	// if (!Toolkit)
-	// 	return;
-
-	// Attempt to cast Editor to IBlueprintEditor
-	IBlueprintEditor* BlueprintEditorInterface =
-		StaticCast<IBlueprintEditor*>(Editor);
-	if (!BlueprintEditorInterface)
-		return;
-
-	// Cast to FBlueprintEditor for full access
-	FBlueprintEditor* BlueprintEditor =
-		StaticCast<FBlueprintEditor*>(BlueprintEditorInterface);
-
-	if (!BlueprintEditor)
-		return;
-
-	// BlueprintEditor->SetViewLocation(FVector2D(0.0f, 0.0f), 1);
-	FVector2D CurrViewLocation;
-	float	  CurrZoomAmount;
-	BlueprintEditor->GetViewLocation(CurrViewLocation, CurrZoomAmount);
-
-	Logger.Print(FString::Printf(TEXT("View Location: (%f, %f), Zoom: %f"),
-					 CurrViewLocation.X, CurrViewLocation.Y, CurrZoomAmount),
-		ELogVerbosity::Log, true);
-
-	UEdGraph* Graph = BlueprintEditor->GetFocusedGraph();
-
-	TArray<TObjectPtr<UEdGraphNode>> Nodes = Graph->Nodes;
-	if (Nodes.IsEmpty())
-		return;
-
-	TObjectPtr<UEdGraphNode> SelNode = Nodes[0];
-	BlueprintEditor->AddToSelection(SelNode);
-	// Calculate the position for the new node
-	const float NodeSpacing = 300.0f; // Spacer
-	FVector2D	NewNodePos(
-		  SelNode->NodePosX + NodeSpacing, SelNode->NodePosY);
-
-	BlueprintEditor->GetFocusedGraph();
-
-	// TArray<UEdGraphPin*> Pins = SelNode->GetAllPins();
-	// for (const auto& Pin : Pins)
-	// {
-	// 	Pin->MakeLinkTo();
-	// }
-
-	// Create a node spawner for the PrintString function
-	UBlueprintNodeSpawner* PrintStringSpawner =
-		UBlueprintNodeSpawner::Create(
-			UK2Node_CallFunction::StaticClass(), GetTransientPackage());
-	if (!PrintStringSpawner)
-		return;
-
-	// Get the Blueprint object from the editor
-	// UBlueprint* Blueprint = BlueprintEditor->GetBlueprintObj();
-	// if (!Blueprint || !Graph)
-	// 	return;
-
-	IBlueprintNodeBinder::FBindingSet Bindings; // Create an empty binding set
-
-	// Set the function to PrintString
-	UK2Node_CallFunction* PrintStringNode =
-		Cast<UK2Node_CallFunction>(PrintStringSpawner->Invoke(
-			Graph, Bindings, NewNodePos));
-
-	if (!PrintStringNode)
-		return;
-
-	PrintStringNode->SetFromFunction(UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString")));
-
-	// Finalize node placement
-	// PrintStringNode->NodePosX = NewNodePos.X;
-	// PrintStringNode->NodePosY = NewNodePos.Y;
-	// PrintStringNode->AllocateDefaultPins();
-
-	// FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(BlueprintEditor->GetBlueprintObj());
-
-	return;
-
-	for (const auto& Node : Nodes)
-	{
-		// Logger.Print(FString::Printf(TEXT("Node Name: %s"),
-		// 				 // *Node->GetFullName()),
-		// 				 *Node->GetNodeTitle(ENodeTitleType::FullTitle).ToString()),
-		// 	ELogVerbosity::Log, true);
-
-		// Node->SetEnabledState(ENodeEnabledState::Enabled);
-		// Node->SetEnabledState(ENodeEnabledState::Disabled);
-	}
-
-	return;
-
-	// Logger.Print(TEXT("Successfully cast to IBlueprintEditor"), ELogVerbosity::Verbose, true);
-
-	Logger.Print(FString::Printf(TEXT("Number of Selected Nodes: %d"),
-					 BlueprintEditorInterface->GetNumberOfSelectedNodes()),
-		ELogVerbosity::Log, true);
-
-	UEdGraphNode_Comment* CommentNode = NewObject<UEdGraphNode_Comment>(Graph);
-
-	if (CommentNode)
-	{
-		// Set the comment text
-		CommentNode->NodeComment = "Hi Babe <3";
-		// Add the node to the graph
-		Graph->AddNode(CommentNode, true, false);
-	}
-	else
-	{
-		Logger.Print(TEXT("Failed to cast to IBlueprintEditor"), ELogVerbosity::Warning, true);
-	}
+	/* Insert before the last node in the chain */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Shift, EKeys::I) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::AddNode);
 }
 
 void UVimGraphEditorSubsystem::AddNode(
 	FSlateApplication& SlateApp,
 	const FKeyEvent&   InKeyEvent)
 {
-	// Logger.Print("From Graph <3", ELogVerbosity::Log, true);
-
 	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
@@ -241,144 +116,354 @@ void UVimGraphEditorSubsystem::AddNode(
 		return;
 
 	const FKey InKey = InKeyEvent.GetKey();
+	const bool bIsAppendingNode = InKey == FKey(EKeys::A);
 
-	const UEdGraphNode* NodeObj = InKey == FKey(EKeys::I)
-		? FindEdgeNodeInChain(SelNodes, true)	// first
-		: FindEdgeNodeInChain(SelNodes, false); // last
+	UEdGraphNode* NodeObj = InKeyEvent.IsShiftDown()
+		// Shift + [I] / [A] -> Get the first or last node in the entire chain.
+		? FindEdgeNodeInChain(SelNodes, bIsAppendingNode)
+
+		// [I] / [A] -> Use the last selected node.
+		: SelNodes[SelNodes.Num() - 1];
 
 	if (!NodeObj)
 		return;
 
-	const TSharedPtr<SGraphNode> NodeWidget =
+	const TSharedPtr<SGraphNode> NodeWidget = // Get widget representation.
 		GraphPanel->GetNodeWidgetFromGuid(NodeObj->NodeGuid);
-
 	if (!NodeWidget.IsValid())
 		return;
+
+	// Identify the pin we care about (Out pin if appending, In pin if inserting)
+	// We'll also see if that pin is connected to anything to decide if we shift
+	UEdGraphPin*		  OriginPinObj = nullptr;
+	TSharedPtr<SGraphPin> OriginPinWidget;
 
 	TArray<TSharedRef<SWidget>> AllPins;
 	NodeWidget->GetPins(AllPins);
 
-	if (AllPins.IsEmpty())
-		return;
+	// Get either the Input ([I]nsert) or Output ([A]ppend) pin.
+	const EEdGraphPinDirection TargetPinType =
+		bIsAppendingNode ? EGPD_Output : EGPD_Input;
 
 	for (const auto& Pin : AllPins)
 	{
 		if (!Pin->GetTypeAsString().Equals("SGraphPinExec"))
 			continue;
 
-		const EEdGraphPinDirection TargetPinType =
-			InKey == FKey(EKeys::I) ? EGPD_Input : EGPD_Output;
+		// Cast to the specific widget representation of this pin object
+		// (as the array of pins is fetching them as SWidgets)
+		const TSharedRef<SGraphPin> AsGraphPin =
+			StaticCastSharedRef<SGraphPin>(Pin);
 
-		const TSharedRef<SGraphPinExec> AsGraphPin =
-			StaticCastSharedRef<SGraphPinExec>(Pin);
-
-		// Get the direction of the pin
+		// Verify the direction of the pin matches our TargetPinType (In | Out)
 		UEdGraphPin* EdGraphPin = AsGraphPin->GetPinObj();
 		if (!EdGraphPin || EdGraphPin->Direction != TargetPinType)
-			continue; // Skip if it's an input pin
+			continue; // Skip if there's a mismatch
 
-		// EdGraphPin->LinkedTo;
-
-		// GraphPanel->GetGraphObj()->AddOnGraphChangedHandler();
-		// UEdGraph* Graph = GraphPanel->GetGraphObj();
-		// if (!Graph)
-		// 	return;
-
-		const FVector2D OriginCurPos = SlateApp.GetCursorPos();
-
-		// Switch to Insert mode to immediately type in the Node Menu
-		FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Insert);
-
-		// Store the current number of nodes we have so we can compare it
-		// after the menu window has closed to see if a new node was created.
-		NodeCounter = GraphPanel->GetChildren()->Num();
-		TWeakPtr<SGraphNode> WeakGraphNode = NodeWidget;
-
-		// TODO:
-		// Check if is connected to any node. If so, we will need to move it
-		// and the entire following chain it is connected to - to the right
-		// before inserting or appending a new node
-
-		// TODO: We only need to do the nodes offseting if we have any connected nodes
-		// to the direction we're append or inserting (etc.)
-		FVector2f CursorOffset;
-		FVector2f NodesOffset;
-		if (InKey == FKey(EKeys::I))
-		{
-			CursorOffset = FVector2f(-150.0f, 0.0f);
-			NodesOffset = FVector2f(150.0f, 0.0f);
-		}
-		else
-		{
-			CursorOffset = FVector2f(150.0f, 0.0f);
-			NodesOffset = FVector2f(-150.0f, 0.0f);
-		}
-		MoveConnectedNodesToRight(NodeWidget->GetNodeObj(), NodesOffset.X);
-		FUMInputHelpers::DragAndReleaseWidgetAtPosition(
-			Pin,
-			(Pin->GetCachedGeometry().LocalToAbsolute(CursorOffset)));
-
-		FTimerHandle TimerHandle;
-		GEditor->GetTimerManager()->SetTimer(
-			TimerHandle,
-			[this, &SlateApp, OriginCurPos, WeakGraphNode]() {
-				SlateApp.SetCursorPos(OriginCurPos);
-				const TSharedPtr<SWindow> MenuWin = SlateApp.GetActiveTopLevelWindow(); // Should be the menu
-
-				if (!MenuWin.IsValid())
-					return;
-
-				MenuWin->GetOnWindowClosedEvent().AddLambda(
-					[this, &SlateApp, WeakGraphNode](const TSharedRef<SWindow>& Window) {
-						FTimerHandle TimerHandle;
-						GEditor->GetTimerManager()->SetTimer(
-							TimerHandle,
-							[this, &SlateApp, WeakGraphNode]() {
-								OnNodeCreationMenuClosed(SlateApp, WeakGraphNode);
-								Logger.Print("Menu Closed!", ELogVerbosity::Log, true);
-							},
-							0.05f, false);
-					});
-			},
-			0.05f, false);
-		// SlateApp.SetCursorPos(OriginCurPos);
+		OriginPinObj = EdGraphPin;
+		OriginPinWidget = AsGraphPin;
 		break;
 	}
+
+	if (!OriginPinObj) // Check if any node was actually found
+		return;
+
+	/** Final Pin found, drag a line from it and break afterwards. */
+
+	// --------------------------
+	// 1) Collect nodes to shift
+	// --------------------------
+	TSet<UEdGraphNode*> NodesToShift;
+
+	if (bIsAppendingNode)
+	{
+		// For appending, we typically shift all downstream nodes
+		// (which are on the Out pin chain).
+		// But we do NOT shift this node itself in that scenario
+		// (unless you design it otherwise).
+		for (UEdGraphPin* LinkedPin : OriginPinObj->LinkedTo)
+		{
+			if (LinkedPin && LinkedPin->GetOwningNode())
+			{
+				CollectDownstreamNodes(LinkedPin->GetOwningNode(), NodesToShift, /*bIsAppending=*/true);
+			}
+		}
+	}
+	else
+	{
+		// For inserting, we shift the "current" node plus anything downstream.
+		CollectDownstreamNodes(NodeObj, NodesToShift, /*bIsAppending=*/false);
+	}
+
+	// If there's something to move, shift them.
+	// For example, +300 for shifting “to the right” or -300 if you want left.
+	// You can customize.
+	if (NodesToShift.Num() > 0)
+	{
+		Logger.Print("Nodes to Shift is above 0", ELogVerbosity::Verbose, true);
+		ShiftNodesForSpace(GraphPanel, NodesToShift, /*ShiftAmountX=*/35.f);
+	}
+	else
+		Logger.Print("Nodes to Shift is 0", ELogVerbosity::Error, true);
+
+	// Useful listener, potentially in the future. It's a multicast that
+	// notifies on Node Added, Edited, etc.
+	// GraphPanel->GetGraphObj()->AddOnGraphChangedHandler();
+
+	const FVector2D OriginCurPos = SlateApp.GetCursorPos();
+
+	// Switch to Insert mode to immediately type in the Node Menu
+	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Insert);
+
+	// Store the current number of nodes we have so we can compare it
+	// after the menu window has closed to see if a new node was created.
+	NodeCounter = GraphPanel->GetChildren()->Num();
+
+	const TSharedRef<SGraphPin> PinRef = OriginPinWidget.ToSharedRef();
+
+	// NOTE: Only when appending we need an offset for cursor, because when
+	// inserting a node, we firstly move all the nodes to the right, thus, the
+	// offset is created organically just by moving the nodes.
+	// Other than that, all we need is to get either the top left or top right
+	// abs of the widget depending on if we're inserting or appending.
+	FVector2f OffA(35.0f, 0);
+	FVector2f CurOffset = bIsAppendingNode
+		? (FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(PinRef, OffA))
+		: (FUMSlateHelpers::GetWidgetTopLeftScreenSpacePosition(PinRef));
+
+	FUMInputHelpers::DragAndReleaseWidgetAtPosition(
+		OriginPinWidget.ToSharedRef(), CurOffset);
+
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[this, &SlateApp, OriginCurPos, OriginPinObj, bIsAppendingNode]() {
+			SlateApp.SetCursorPos(OriginCurPos); // Restore cursor position
+
+			const TSharedPtr<SWindow> MenuWin = // Get the Popup Menu Win
+				SlateApp.GetActiveTopLevelWindow();
+
+			if (!MenuWin.IsValid())
+				return;
+
+			// Listen to when this window is closing and evaluate the users
+			// action; Was a new node added?
+			MenuWin->GetOnWindowClosedEvent().AddLambda(
+				[this, &SlateApp, OriginPinObj, bIsAppendingNode](const TSharedRef<SWindow>& Window) {
+					FTimerHandle TimerHandle;
+					GEditor->GetTimerManager()->SetTimer(
+						TimerHandle,
+						[this, &SlateApp,
+							OriginPinObj, bIsAppendingNode]() {
+							OnNodeCreationMenuClosed(
+								SlateApp,
+								OriginPinObj, bIsAppendingNode);
+							Logger.Print("Menu Closed",
+								ELogVerbosity::Log, true);
+						},
+						0.05f, false);
+				});
+		},
+		0.05f, false);
 }
 
-void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(FSlateApplication& SlateApp, TWeakPtr<SGraphNode> AssociatedNode)
+void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
+	FSlateApplication& SlateApp,
+	UEdGraphPin* DraggedFromPin, bool bIsAppendingNode)
 {
-	if (const TSharedPtr<SGraphNode> GraphNode = AssociatedNode.Pin())
+	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
+
+	if (!DraggedFromPin)
 	{
-		const TSharedPtr<SGraphPanel> GraphPanel = GraphNode->GetOwnerPanel();
-		if (!GraphPanel.IsValid())
-			return;
-
-		if (NodeCounter < GraphPanel->GetChildren()->Num())
-		{
-			Logger.Print("New node was created!", ELogVerbosity::Log, true);
-			// GraphPanel->SelectionManager.SetSelectionSet()
-
-			FUMInputHelpers::SimulateClickOnWidget(
-				FSlateApplication::Get(),
-				GraphNode.ToSharedRef(),
-				FKey(EKeys::LeftMouseButton), false,
-				true /* Shift Down (add to selection)*/);
-
-			GraphPanel->StraightenConnections();
-
-			FUMInputHelpers::SimulateClickOnWidget(
-				FSlateApplication::Get(),
-				GraphNode.ToSharedRef(),
-				FKey(EKeys::LeftMouseButton), false, false,
-				true /* Ctrl Down (remove from selection) */);
-		}
-		else
-			Logger.Print("No new nodes were created...", ELogVerbosity::Log, true);
-
-		// Switch to Normal mode to immediately (probably preferred)
-		FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
+		Logger.Print("Dragged From Pin is Invalid", ELogVerbosity::Error, true);
+		return;
 	}
+
+	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+	{
+		Logger.Print("Graph Panel is Invalid", ELogVerbosity::Error, true);
+		return;
+	}
+
+	if (NodeCounter == GraphPanel->GetChildren()->Num())
+	{
+		Logger.Print("No new Nodes were created...", ELogVerbosity::Log, true);
+		// Revert if we had shifted
+		RevertShiftedNodes(GraphPanel);
+		return;
+	}
+
+	Logger.Print("New node was created!", ELogVerbosity::Log, true);
+	// GraphPanel->SelectionManager.SetSelectionSet()
+
+	// Get and neatly reposition the newly created to node.
+	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+	if (SelNodes.Num() != 1 || !SelNodes[0]) // Should have exactly 1 node
+		return;
+	const TSharedPtr<SGraphNode> NewNode =
+		GraphPanel->GetNodeWidgetFromGuid(SelNodes[0]->NodeGuid);
+	if (!NewNode.IsValid())
+		return;
+	const TSharedRef<SGraphNode> NewNodeRef = NewNode.ToSharedRef();
+
+	// TODO: Refactor this
+	TSet<UEdGraphNode*> NodesToShift;
+	for (const auto& Pair : ShiftedNodesOriginalPositions)
+	{
+		if (Pair.Key)
+			NodesToShift.Add(Pair.Key);
+	}
+
+	// Move all the nodes by the width of the new node
+	if (!NodesToShift.IsEmpty())
+		ShiftNodesForSpace(GraphPanel, NodesToShift, NewNode->GetDesiredSize().X);
+
+	// Get the origin node ~~~~
+	UEdGraphNode* NewNodeObj = NewNode->GetNodeObj();
+	if (!NewNodeObj)
+		return;
+
+	// NOTE:
+	// This is currently not the greatest way to get the target pin because
+	// we may be operating on input / output pins with different indexes.
+	// For when we will start to do that - we will need to preserve the index
+	// of the input / output pin that we've been dragging from to get that
+	// specifically (we can also maybe try to store its ID? we have FindPinById
+	// I think)
+	// UEdGraphPin* NewPin =
+	// 	NewNodeObj->FindPinByPredicate([bIsAppendingNode](UEdGraphPin* Pin) {
+	// 		return Pin->Direction == (bIsAppendingNode ? EGPD_Input : EGPD_Output);
+	// 	});
+	// if (!NewPin->HasAnyConnections())
+	// 	return;
+	// // NewNode->FindWidgetForPin(NewPin);
+	// if (!NewPin->LinkedTo[0])
+	// 	return;
+	// TSharedPtr<SGraphNode> DraggedFromNode =
+	// 	GraphPanel->GetNodeWidgetFromGuid(NewPin->LinkedTo[0]->GetOwningNode()->NodeGuid);
+	// if (!DraggedFromNode.IsValid())
+	// 	return;
+	// Get the origin node ^^^^^
+
+	// Get the Dragged From Node:
+	// Simply passing it by a weak ptr doesn't seem to always work - especially
+	// when new macros are created in the graph. Thus we fetch it like that:
+	const TSharedPtr<SGraphNode> DraggedFromNode =
+		GraphPanel->GetNodeWidgetFromGuid(
+			DraggedFromPin->GetOwningNode()->NodeGuid);
+	if (!DraggedFromNode.IsValid())
+		return;
+
+	// Align the X position of the Origin and new node
+	SNodePanel::SNode::FNodeSet MovedNodes;
+	NewNode->MoveTo(
+		GetAlignedNodePositionX(DraggedFromNode.ToSharedRef(),
+			NewNodeRef, bIsAppendingNode),
+		MovedNodes);
+
+	// Add the previous node to the selection and align the Y position too.
+	GraphPanel->SelectionManager.SetNodeSelection(DraggedFromNode->GetNodeObj(), true);
+	GraphPanel->StraightenConnections();
+	GraphPanel->SelectionManager.SelectSingleNode(SelNodes[0]);
+
+	// When inserting we also want to potentially connect the new node to any
+	// existing nodes previous to our origin node (it will be disconnected
+	// by default)
+	if (bIsAppendingNode)
+		return;
+
+	ConnectNewNodeToPrevConnection(DraggedFromPin, NewNodeRef);
+}
+
+bool UVimGraphEditorSubsystem::ConnectNewNodeToPrevConnection(
+	UEdGraphPin* OriginPin, const TSharedRef<SGraphNode> NewNode)
+{
+	if (!OriginPin->HasAnyConnections())
+		return false;
+
+	// Get the pin the origin node is currently connected to
+	UEdGraphPin* PreviousLinkedPin = OriginPin->LinkedTo[0];
+	if (!PreviousLinkedPin)
+		return false;
+
+	// Check if we're connected to an additional node (other than the NewNode)
+	// if we're just connected to the NewNode, we're good to go and we can exit
+	// This check is needed for when we have 0 connections when inserting a node.
+	if (PreviousLinkedPin->GetOwningNode() == NewNode->GetNodeObj())
+		return true;
+
+	// TODO: I think we can refactor this and use the appropriate fetching methods
+	// Unreal provides for finding Pins.
+	TArray<TSharedRef<SWidget>> Pins;
+	NewNode->GetPins(Pins);
+	UEdGraphPin* NewNodePinObj = nullptr;
+	for (const auto& Pin : Pins)
+	{
+		if (!Pin->GetTypeAsString().Equals("SGraphPinExec"))
+			continue;
+
+		// Cast to the specific widget representation of this pin object
+		// (as the array of pins is fetching them as SWidgets)
+		const TSharedRef<SGraphPin> AsGraphPin =
+			StaticCastSharedRef<SGraphPin>(Pin);
+
+		// Verify the direction of the pin matches our TargetPinType (In | Out)
+		UEdGraphPin* EdGraphPin = AsGraphPin->GetPinObj();
+		if (!EdGraphPin || EdGraphPin->Direction != EGPD_Input)
+			continue; // Skip if there's a mismatch
+
+		NewNodePinObj = EdGraphPin;
+		break;
+	}
+	if (!NewNodePinObj)
+		return false; // Pin wasn't found
+
+	PreviousLinkedPin->BreakLinkTo(OriginPin);
+	PreviousLinkedPin->MakeLinkTo(NewNodePinObj);
+	return true;
+}
+
+FVector2D UVimGraphEditorSubsystem::GetAlignedNodePositionX(
+	const TSharedRef<SGraphNode> OriginNode,
+	const TSharedRef<SGraphNode> LinkedNode,
+	bool						 bIsAppendingNode)
+{
+	FVector2D OldNodePos = OriginNode->GetPosition();
+	FVector2D OldNodeSize = OriginNode->GetDesiredSize();
+	FVector2D NewNodeSize = LinkedNode->GetDesiredSize();
+	float	  NodeGap = 35.0f;
+
+	return bIsAppendingNode
+		? FVector2D(OldNodePos.X + OldNodeSize.X + NodeGap, OldNodePos.Y)
+		: FVector2D(OldNodePos.X - (NewNodeSize.X + NodeGap), OldNodePos.Y);
+}
+
+bool UVimGraphEditorSubsystem::GetPinToLinkedPinDelta(
+	const TSharedRef<SGraphNode> InNode, UEdGraphPin* InPin,
+	const TSharedRef<SGraphNode> LinkedToNode, double& Delta)
+{
+	// Check this pin is connected to exactly one node (that can be fetched)
+	if (InPin->LinkedTo.Num() != 1)
+		return false;
+
+	// NOTE:
+	// We can potentially have an override in the future (if needed) and fetch
+	// the new node manually from here. In our case we already have a ref; so
+	// it's not really needed
+	// InPin->LinkedTo[0]->GetOwningNode();
+
+	TSharedPtr<SGraphPin> OriginPinWidget =
+		InNode->FindWidgetForPin(InPin);
+
+	TSharedPtr<SGraphPin> LinkedPinWidget =
+		LinkedToNode->FindWidgetForPin(InPin->LinkedTo[0]);
+
+	if (!OriginPinWidget.IsValid() || !LinkedPinWidget.IsValid())
+		return false;
+
+	Delta = OriginPinWidget->GetNodeOffset().Y - LinkedPinWidget->GetNodeOffset().Y;
+	return true;
 }
 
 const TSharedPtr<SGraphPanel> UVimGraphEditorSubsystem::TryGetActiveGraphPanel(FSlateApplication& SlateApp)
@@ -490,6 +575,7 @@ bool UVimGraphEditorSubsystem::IsValidZoom(const FString InZoomLevelStr)
 	return true;
 }
 
+/** Deprecated but potentially some snippet here are interesting? */
 void UVimGraphEditorSubsystem::MoveConnectedNodesToRight(UEdGraphNode* StartNode, float OffsetX)
 {
 	if (!StartNode)
@@ -517,6 +603,172 @@ void UVimGraphEditorSubsystem::MoveConnectedNodesToRight(UEdGraphNode* StartNode
 			}
 		});
 	}
+}
+
+// TODO: We want to also collect nodes that are linked to pins other
+// that just the main exec. For example in a for loop macro, we will want to
+// shift the array it is connected to too.
+// We will basically need to check if a certain pin has multiple connections(?)
+// and collect them all(?)
+void UVimGraphEditorSubsystem::CollectDownstreamNodes(
+	UEdGraphNode*		 StartNode,
+	TSet<UEdGraphNode*>& OutNodes,
+	bool				 bIsAppending)
+{
+	if (!StartNode)
+	{
+		return;
+	}
+
+	// A simple BFS or DFS approach
+	TQueue<UEdGraphNode*> Queue;
+	Queue.Enqueue(StartNode);
+
+	while (!Queue.IsEmpty())
+	{
+		UEdGraphNode* Current = nullptr;
+		Queue.Dequeue(Current);
+
+		if (!Current || OutNodes.Contains(Current))
+		{
+			continue;
+		}
+
+		// Mark visited
+		OutNodes.Add(Current);
+
+		// For "append", we look at output pins; for "insert",
+		// we might also want to move everything downstream,
+		// including the "current" node itself. So logic can differ.
+		for (UEdGraphPin* Pin : Current->Pins)
+		{
+			if (!Pin)
+				continue;
+
+			// If appending, we want to follow outgoing edges
+			// If inserting, we might do the same, except also
+			// treat the node itself as "to be moved".
+			if (bIsAppending && Pin->Direction == EGPD_Output)
+			{
+				for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
+				{
+					if (LinkedPin && LinkedPin->GetOwningNode())
+					{
+						Queue.Enqueue(LinkedPin->GetOwningNode());
+					}
+				}
+			}
+			else if (!bIsAppending && Pin->Direction == EGPD_Output)
+			{
+				// For insert, we also gather downstream:
+				for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
+				{
+					if (LinkedPin && LinkedPin->GetOwningNode())
+					{
+						Queue.Enqueue(LinkedPin->GetOwningNode());
+					}
+				}
+			}
+		}
+	}
+}
+
+void UVimGraphEditorSubsystem::ShiftNodesForSpace(
+	const TSharedPtr<SGraphPanel>& GraphPanel,
+	const TSet<UEdGraphNode*>&	   NodesToMove,
+	float						   ShiftAmountX)
+{
+	ShiftedNodesOriginalPositions.Empty(); // Clear from previous usage
+
+	// We'll collect them into an SNodePanel::SNode::FNodeSet
+	// which MoveTo() uses for collision checks, etc.
+	SNodePanel::SNode::FNodeSet NodeFilter;
+
+	for (UEdGraphNode* GraphNode : NodesToMove)
+	{
+		if (!GraphNode)
+			continue;
+
+		// Get the SGraphNode so we can call MoveTo
+		const TSharedPtr<SGraphNode> SNode =
+			GraphPanel->GetNodeWidgetFromGuid(GraphNode->NodeGuid);
+
+		if (!SNode.IsValid())
+			continue;
+
+		// Cache its original position
+		const FVector2D OriginalPos = SNode->GetPosition();
+		ShiftedNodesOriginalPositions.Add(GraphNode, OriginalPos);
+
+		// lol this is not how you use the filter :)
+		// We add it to the filter so we can move them as a group
+		// NodeFilter.Add(SNode);
+	}
+
+	// Now apply the shift
+	for (const auto& Pair : ShiftedNodesOriginalPositions)
+	{
+		if (UEdGraphNode* GraphNode = Pair.Key)
+		{
+			const TSharedPtr<SGraphNode> SNode =
+				GraphPanel->GetNodeWidgetFromGuid(GraphNode->NodeGuid);
+			if (!SNode.IsValid())
+				continue;
+
+			// Current position
+			const FVector2D CurPos = Pair.Value;
+			// Shift it
+			FVector2D NewPos(CurPos.X + ShiftAmountX, CurPos.Y);
+
+			// SNodePanel::SNode interface
+			SNode->MoveTo(NewPos, NodeFilter, /*bMarkDirty=*/true);
+			Logger.Print("Try move node!", ELogVerbosity::Verbose, true);
+		}
+	}
+
+	bNodesWereShifted = !ShiftedNodesOriginalPositions.IsEmpty();
+}
+
+void UVimGraphEditorSubsystem::RevertShiftedNodes(
+	const TSharedPtr<SGraphPanel>& GraphPanel)
+{
+	if (!bNodesWereShifted)
+		return;
+
+	SNodePanel::SNode::FNodeSet NodeFilter;
+
+	// Move them back
+	for (auto& Pair : ShiftedNodesOriginalPositions)
+	{
+		if (UEdGraphNode* GraphNode = Pair.Key)
+		{
+			const TSharedPtr<SGraphNode> SNode =
+				GraphPanel->GetNodeWidgetFromGuid(GraphNode->NodeGuid);
+			if (!SNode.IsValid())
+				continue;
+
+			// This is not how you use it!
+			// NodeFilter.Add(SNode);
+		}
+	}
+
+	for (auto& Pair : ShiftedNodesOriginalPositions)
+	{
+		if (UEdGraphNode* GraphNode = Pair.Key)
+		{
+			const TSharedPtr<SGraphNode> SNode =
+				GraphPanel->GetNodeWidgetFromGuid(GraphNode->NodeGuid);
+			if (!SNode.IsValid())
+				continue;
+
+			const FVector2D OriginalPos = Pair.Value;
+			SNode->MoveTo(OriginalPos, NodeFilter, /*bMarkDirty=*/true);
+		}
+	}
+
+	// Cleanup
+	ShiftedNodesOriginalPositions.Empty();
+	bNodesWereShifted = false;
 }
 
 #undef LOCTEXT_NAMESPACE
