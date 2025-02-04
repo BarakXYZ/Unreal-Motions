@@ -89,6 +89,18 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		{ FInputChord(EModifierKey::Shift, EKeys::I) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNode);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Control, EKeys::Hyphen) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::ZoomGraph);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Control, EKeys::Underscore) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::ZoomGraph);
 }
 
 void UVimGraphEditorSubsystem::AddNode(
@@ -99,12 +111,12 @@ void UVimGraphEditorSubsystem::AddNode(
 	if (!GraphPanel.IsValid())
 		return;
 
+	Logger.Print(FString::Printf(TEXT("Zoom Amount (New): %f"), GraphPanel->GetZoomAmount()), ELogVerbosity::Log, true);
+
 	// In node graph, users cannot drag pins from a zoom level below -5.
 	// it will only allow dragging nodes at this zoom level.
 	// Thus we want to early return here & potentially notify the user.
-	// NOTE: Using GetZoomText() and not GetZoomAmount() (which seems more
-	// straight forward) because GetZoomAmount() seems to always return 0 *~*
-	if (!IsValidZoom(GraphPanel->GetZoomText().ToString()))
+	if (GraphPanel->GetZoomAmount() <= 0.25f)
 		return;
 	// Optionally we can ZoomToFit if not valid zoom, but idk; it's a diff UX
 	// and will also require a delay, etc.
@@ -769,6 +781,55 @@ void UVimGraphEditorSubsystem::RevertShiftedNodes(
 	// Cleanup
 	ShiftedNodesOriginalPositions.Empty();
 	bNodesWereShifted = false;
+}
+
+void UVimGraphEditorSubsystem::ZoomGraph(
+	FSlateApplication& SlateApp,
+	const FKeyEvent&   InKeyEvent)
+{
+	// Logger.Print("My Custom Zoom", ELogVerbosity::Verbose, true);
+
+	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+	{
+		return;
+	}
+	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+	FVector2f			  CursorPos;
+	if (SelNodes.IsEmpty())
+		CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPanel.ToSharedRef());
+	else
+	{
+		TSharedPtr<SGraphNode> SelNode = GraphPanel->GetNodeWidgetFromGuid(SelNodes[0]->NodeGuid);
+		if (SelNode.IsValid())
+		{
+			CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(SelNode.ToSharedRef());
+		}
+		else
+			CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPanel.ToSharedRef());
+	}
+
+	// GraphPanel->GetViewOffset();
+	// GraphPanel->GetZoomAmount();
+
+	// Decide the wheel delta based on the key pressed (+ for zoom in, - for zoom out).
+	const float WheelDelta = (InKeyEvent.GetKey() == EKeys::Equals) ? +1.0f : -1.0f;
+
+	// TODO: Zoom-In seems to not work exactly on the right position
+	// Construct a fake pointer event that will be passed to OnMouseWheel
+	FPointerEvent FakeMouseEvent(
+		/* PointerIndex     = */ 0,
+		// /* ScreenSpacePos   = */ FVector2D::ZeroVector,
+		// /* LastScreenSpacePos = */ FVector2D::ZeroVector,
+		/* ScreenSpacePos   = */ CursorPos,
+		/* LastScreenSpacePos = */ CursorPos,
+		/* PressedButton    = */ TSet<FKey>(),
+		/* Effecting Button */ FKey(),
+		/* InputChord       = */ WheelDelta,
+		/* ModifierKeys     = */ FModifierKeysState());
+
+	// Finally, call OnMouseWheel directly:
+	GraphPanel->OnMouseWheel(GraphPanel->GetCachedGeometry(), FakeMouseEvent);
 }
 
 #undef LOCTEXT_NAMESPACE

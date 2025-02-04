@@ -2,6 +2,9 @@
 #include "Editor.h"
 #include "Input/Events.h"
 #include "Logging/LogVerbosity.h"
+#include "SGraphNode.h"
+#include "SGraphPanel.h"
+#include "Templates/SharedPointer.h"
 #include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
 #include "Widgets/Input/SButton.h"
@@ -163,11 +166,25 @@ void FUMFocusHelpers::ClickSPropertyValueWidget(FSlateApplication& SlateApp, con
 	FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, FKey(EKeys::LeftMouseButton));
 }
 
-// UVimGraphEditorSubsystem
-// UVimLevelEditorSubsystem
 void FUMFocusHelpers::ClickSNode(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
-	FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, FKey(EKeys::LeftMouseButton));
+	// FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, FKey(EKeys::LeftMouseButton));
+
+	TSharedRef<SGraphNode> AsGraphNode = // We can safely cast to Base SGraphNode
+		StaticCastSharedRef<SGraphNode>(InWidget);
+
+	UEdGraphNode* AsNodeObj = AsGraphNode->GetNodeObj();
+	if (!AsNodeObj)
+		return;
+
+	const TSharedPtr<SGraphPanel> GraphPanel = AsGraphNode->GetOwnerPanel();
+	if (!GraphPanel.IsValid())
+		return;
+
+	// We wanna focus the Graph first to draw focus to the entire Minor Tab
+	// (just selecting the Node is not enough)
+	SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
+	GraphPanel->SelectionManager.SelectSingleNode(AsNodeObj);
 }
 
 bool FUMFocusHelpers::TryFocusPopupMenu(FSlateApplication& SlateApp)

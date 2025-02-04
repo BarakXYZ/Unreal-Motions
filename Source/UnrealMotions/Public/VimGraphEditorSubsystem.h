@@ -32,6 +32,8 @@ public:
 
 	void AddNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void ZoomGraph(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	void OnNodeCreationMenuClosed(
 		FSlateApplication& SlateApp,
 		UEdGraphPin* DraggedFromPin, bool bIsAppendingNode);

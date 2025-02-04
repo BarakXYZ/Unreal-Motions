@@ -1136,6 +1136,7 @@ const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 
 		"SGraphNodeK2Event",
 		"SGraphNodeK2Default",
+		"SGraphNodePromotableOperator",
 
 		// "SPropertyNameWidget",
 		// "SPropertyEditorTitle",
