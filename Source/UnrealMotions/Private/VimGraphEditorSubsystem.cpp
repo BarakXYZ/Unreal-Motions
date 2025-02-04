@@ -92,15 +92,25 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		{ FInputChord(EModifierKey::Control, EKeys::Hyphen) },
+		{ FInputChord(EModifierKey::Control, EKeys::Equals) },
+		// { FInputChord(EModifierKey::Control, EKeys::Add) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ZoomGraph);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		{ FInputChord(EModifierKey::Control, EKeys::Underscore) },
+		// { FInputChord(EModifierKey::Control, EKeys::Underscore) },
+		{ FInputChord(EModifierKey::Control, EKeys::Hyphen) },
+		// { FInputChord(EModifierKey::Control, EKeys::Subtract) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ZoomGraph);
+
+	// TODO:
+	// 1. zz to center widget (zoom to fit or scroll?)
+	// 2. gg & G to go to focus first or last node in a chain
+	// 3. Figure out movement inside the graph panel (wasd?)
+	// 4. Movement between nodes & pins
+	// 5. Finalize graph appending and insertion edge cases
 }
 
 void UVimGraphEditorSubsystem::AddNode(
@@ -787,7 +797,7 @@ void UVimGraphEditorSubsystem::ZoomGraph(
 	FSlateApplication& SlateApp,
 	const FKeyEvent&   InKeyEvent)
 {
-	// Logger.Print("My Custom Zoom", ELogVerbosity::Verbose, true);
+	Logger.Print("My Custom Zoom", ELogVerbosity::Verbose, true);
 
 	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
@@ -808,27 +818,26 @@ void UVimGraphEditorSubsystem::ZoomGraph(
 		else
 			CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPanel.ToSharedRef());
 	}
+	// SlateApp.SetCursorPos(FVector2D(CursorPos));
 
-	// GraphPanel->GetViewOffset();
-	// GraphPanel->GetZoomAmount();
-
-	// Decide the wheel delta based on the key pressed (+ for zoom in, - for zoom out).
-	const float WheelDelta = (InKeyEvent.GetKey() == EKeys::Equals) ? +1.0f : -1.0f;
+	// Decide the wheel delta based on the key pressed:
+	// (+ for zoom in, - for zoom out).
+	const float WheelDelta = InKeyEvent.GetKey() == EKeys::Equals ? +1.0f : -1.0f;
+	// const float		   WheelDelta = InKeyEvent.GetKey() == EKeys::Add ? +1.0f : -1.0f;
+	FModifierKeysState ModKeys(false, false, true, true,
+		false, false, false, false, false);
 
 	// TODO: Zoom-In seems to not work exactly on the right position
 	// Construct a fake pointer event that will be passed to OnMouseWheel
 	FPointerEvent FakeMouseEvent(
 		/* PointerIndex     = */ 0,
-		// /* ScreenSpacePos   = */ FVector2D::ZeroVector,
-		// /* LastScreenSpacePos = */ FVector2D::ZeroVector,
 		/* ScreenSpacePos   = */ CursorPos,
 		/* LastScreenSpacePos = */ CursorPos,
 		/* PressedButton    = */ TSet<FKey>(),
 		/* Effecting Button */ FKey(),
 		/* InputChord       = */ WheelDelta,
-		/* ModifierKeys     = */ FModifierKeysState());
+		/* ModifierKeys     = */ ModKeys);
 
-	// Finally, call OnMouseWheel directly:
 	GraphPanel->OnMouseWheel(GraphPanel->GetCachedGeometry(), FakeMouseEvent);
 }
 
