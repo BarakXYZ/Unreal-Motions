@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BlueprintEditor.h"
 #include "Input/Events.h"
 #include "UMLogger.h"
 #include "SGraphPanel.h"
@@ -34,6 +35,13 @@ public:
 
 	void ZoomGraph(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	// void
+
+	// Natively Shift + Delete deletes and keep the nodes connected
+	// "Zoom to Graph Extents" is also useful to zoom out to see all nodes.
+
+	void ZoomToFit(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	void OnNodeCreationMenuClosed(
 		FSlateApplication& SlateApp,
 		UEdGraphPin* DraggedFromPin, bool bIsAppendingNode);
@@ -67,6 +75,11 @@ public:
 
 	bool ConnectNewNodeToPrevConnection(
 		UEdGraphPin* OriginPin, const TSharedRef<SGraphNode> NewNode);
+
+	void DebugEditor();
+
+	FBlueprintEditor*		 GetBlueprintEditor(const UEdGraph* ActiveGraphObj);
+	TSharedPtr<SGraphEditor> GetGraphEditor(const TSharedRef<SWidget> InWidget);
 
 	UEdGraphNode* FindEdgeNodeInChain(
 		const TArray<UEdGraphNode*>& SelectedNodes, bool bFindFirstNode);

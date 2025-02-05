@@ -22,6 +22,11 @@ public:
 	static void ToggleRightClickPress(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	static void SimulateScrollWidget(
+		FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
+		FVector2f CursorLocation, float WheelDelta,
+		bool bIsShiftDown = false, bool bIsCtrlDown = false);
+
 	static FEditorViewportClient* GetActiveEditorViewportClient();
 
 	static void OrbitAroundPivot(

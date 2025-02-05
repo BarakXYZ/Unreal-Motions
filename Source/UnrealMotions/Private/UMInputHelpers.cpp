@@ -643,3 +643,25 @@ void FUMInputHelpers::TriggerDragInPlace()
 	// Simulate Move (drag)
 	SlateApp.ProcessMouseMoveEvent(MouseMoveEvent);
 }
+
+void FUMInputHelpers::SimulateScrollWidget(
+	FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
+	FVector2f CursorLocation, float WheelDelta,
+	bool bIsShiftDown, bool bIsCtrlDown)
+{
+	FModifierKeysState ModKeys(
+		bIsShiftDown, bIsShiftDown,
+		bIsCtrlDown, bIsCtrlDown,
+		false, false, false, false, false);
+
+	FPointerEvent PointerEvent(
+		0,				/* PointerIndex     = */
+		CursorLocation, /* ScreenSpacePos   = */
+		CursorLocation, /* LastScreenSpacePos = */
+		TSet<FKey>(),	/* PressedButton    = */
+		FKey(),			/* Effecting Button */
+		WheelDelta,
+		ModKeys);
+
+	Widget->OnMouseWheel(Widget->GetCachedGeometry(), PointerEvent);
+}

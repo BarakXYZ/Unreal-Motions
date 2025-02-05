@@ -3,6 +3,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraphNode_Comment.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 #include "UMConfig.h"
 #include "GraphEditorModule.h"
 #include "UMSlateHelpers.h"
@@ -18,6 +19,8 @@
 #include "UMInputHelpers.h"
 #include "KismetPins/SGraphPinExec.h"
 #include "SGraphPin.h"
+#include "UMEditorHelpers.h"
+#include "Subsystems/AssetEditorSubsystem.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, Log, All); // Dev
@@ -90,20 +93,34 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNode);
 
+	/** Zoom-In -> Ctrl + '=' ('+') */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
 		{ FInputChord(EModifierKey::Control, EKeys::Equals) },
-		// { FInputChord(EModifierKey::Control, EKeys::Add) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ZoomGraph);
 
+	/** Zoom-Out -> Ctrl + '-' */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		// { FInputChord(EModifierKey::Control, EKeys::Underscore) },
 		{ FInputChord(EModifierKey::Control, EKeys::Hyphen) },
-		// { FInputChord(EModifierKey::Control, EKeys::Subtract) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ZoomGraph);
+
+	/** Zoom-to-Fit, center selected nodes -> 'zz' */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		// { FInputChord(EModifierKey::Control, EKeys::Hyphen) },
+		{ EKeys::Z, EKeys::Z },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::ZoomToFit);
+
+	/** Zoom-to-Fit, all nodes in graph -> Shift+'Z' */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Shift, EKeys::Z) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::ZoomToFit);
 
 	// TODO:
 	// 1. zz to center widget (zoom to fit or scroll?)
@@ -801,44 +818,259 @@ void UVimGraphEditorSubsystem::ZoomGraph(
 
 	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
-	{
 		return;
-	}
+
+	const TSharedRef<SGraphPanel> GraphPanelRef = GraphPanel.ToSharedRef();
+
 	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
 	FVector2f			  CursorPos;
 	if (SelNodes.IsEmpty())
-		CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPanel.ToSharedRef());
+		CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPanelRef);
 	else
 	{
 		TSharedPtr<SGraphNode> SelNode = GraphPanel->GetNodeWidgetFromGuid(SelNodes[0]->NodeGuid);
 		if (SelNode.IsValid())
-		{
 			CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(SelNode.ToSharedRef());
-		}
 		else
-			CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPanel.ToSharedRef());
+			CursorPos = FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPanelRef);
 	}
-	// SlateApp.SetCursorPos(FVector2D(CursorPos));
 
 	// Decide the wheel delta based on the key pressed:
 	// (+ for zoom in, - for zoom out).
 	const float WheelDelta = InKeyEvent.GetKey() == EKeys::Equals ? +1.0f : -1.0f;
-	// const float		   WheelDelta = InKeyEvent.GetKey() == EKeys::Add ? +1.0f : -1.0f;
-	FModifierKeysState ModKeys(false, false, true, true,
-		false, false, false, false, false);
 
-	// TODO: Zoom-In seems to not work exactly on the right position
-	// Construct a fake pointer event that will be passed to OnMouseWheel
-	FPointerEvent FakeMouseEvent(
-		/* PointerIndex     = */ 0,
-		/* ScreenSpacePos   = */ CursorPos,
-		/* LastScreenSpacePos = */ CursorPos,
-		/* PressedButton    = */ TSet<FKey>(),
-		/* Effecting Button */ FKey(),
-		/* InputChord       = */ WheelDelta,
-		/* ModifierKeys     = */ ModKeys);
+	FUMInputHelpers::SimulateScrollWidget(SlateApp, GraphPanelRef, CursorPos, WheelDelta, false /*Shift not down */, true /* Control Down */);
+}
 
-	GraphPanel->OnMouseWheel(GraphPanel->GetCachedGeometry(), FakeMouseEvent);
+void UVimGraphEditorSubsystem::ZoomToFit(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+		return;
+
+	if (InKeyEvent.IsShiftDown())
+	{
+		GraphPanel->ZoomToFit(false /* All nodes */);
+		return;
+	}
+
+	// NOTE:
+	// The ZoomToFit doesn't retain zoom level, which is pretty annoying.
+	// We're creating some custom logic to center nodes without losing zoom.
+
+	TSharedPtr<SGraphEditor> GraphEditor = GetGraphEditor(GraphPanel.ToSharedRef());
+	if (!GraphEditor.IsValid())
+		return;
+
+	// Gather the currently selected nodes
+	const TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+
+	if (SelNodes.Num() == 0)
+		return; // Nothing selected, so nothing to center
+
+	float MinX = FLT_MAX;
+	float MinY = FLT_MAX;
+	float MaxX = -FLT_MAX;
+	float MaxY = -FLT_MAX;
+
+	FSlateRect NodeBounds;
+	if (!GraphPanel->GetBoundsForSelectedNodes(NodeBounds))
+		return;
+
+	MinX = FMath::Min(MinX, NodeBounds.Left);
+	MinY = FMath::Min(MinY, NodeBounds.Top);
+	MaxX = FMath::Max(MaxX, NodeBounds.Right);
+	MaxY = FMath::Max(MaxY, NodeBounds.Bottom);
+
+	const float CenterX = (MinX + MaxX) * 0.5f;
+	const float CenterY = (MinY + MaxY) * 0.5f;
+	FVector2D	DesiredCenter(CenterX, CenterY);
+
+	// Get the panel size in *local/pixel* space
+	FVector2D PanelSize = GraphPanel->GetCachedGeometry().GetLocalSize();
+
+	// Get current zoom info from your blueprint editor
+	FVector2D OldViewLocation;
+	float	  OldZoomAmount = 1.0f;
+	GraphEditor->GetViewLocation(OldViewLocation, OldZoomAmount);
+
+	// Convert half the panel size to graph space (divide by zoom)
+	FVector2D HalfPanelInGraphSpace = (PanelSize * 0.5f) / OldZoomAmount;
+
+	// Shift the bounding-box center back by half the panel so that "Center"
+	// ends up in the middle of the screen.
+	FVector2D DesiredCameraTopLeft = FVector2D(CenterX, CenterY) - HalfPanelInGraphSpace;
+
+	// Move the camera (view)
+	GraphEditor->SetViewLocation(DesiredCameraTopLeft, OldZoomAmount);
+}
+
+/** DEPRECATED -> Keeping this for reference (for some code snippets) */
+void UVimGraphEditorSubsystem::DebugEditor()
+{
+	return;
+
+	IAssetEditorInstance* Editor = FUMEditorHelpers::GetLastActiveEditor();
+	if (!Editor)
+		return;
+
+	Logger.Print(FString::Printf(TEXT("Editor Name: %s"),
+					 *Editor->GetEditorName().ToString()),
+		ELogVerbosity::Verbose, true);
+
+	if (!Editor->GetEditorName().IsEqual("BlueprintEditor"))
+		return;
+
+	// FAssetEditorToolkit* Toolkit =
+	// 	static_cast<FAssetEditorToolkit*>(Editor);
+	// if (!Toolkit)
+	// 	return;
+
+	// Attempt to cast Editor to IBlueprintEditor
+	IBlueprintEditor* BlueprintEditorInterface =
+		StaticCast<IBlueprintEditor*>(Editor);
+	if (!BlueprintEditorInterface)
+		return;
+
+	// Cast to FBlueprintEditor for full access
+	FBlueprintEditor* BlueprintEditor =
+		StaticCast<FBlueprintEditor*>(BlueprintEditorInterface);
+
+	if (!BlueprintEditor)
+		return;
+
+	// BlueprintEditor->SetViewLocation(FVector2D(0.0f, 0.0f), 1);
+	FVector2D CurrViewLocation;
+	float	  CurrZoomAmount;
+	BlueprintEditor->GetViewLocation(CurrViewLocation, CurrZoomAmount);
+
+	Logger.Print(FString::Printf(TEXT("View Location: (%f, %f), Zoom: %f"),
+					 CurrViewLocation.X, CurrViewLocation.Y, CurrZoomAmount),
+		ELogVerbosity::Log, true);
+
+	UEdGraph* Graph = BlueprintEditor->GetFocusedGraph();
+
+	TArray<TObjectPtr<UEdGraphNode>> Nodes = Graph->Nodes;
+	if (Nodes.IsEmpty())
+		return;
+
+	TObjectPtr<UEdGraphNode> SelNode = Nodes[0];
+	BlueprintEditor->AddToSelection(SelNode);
+	// Calculate the position for the new node
+	const float NodeSpacing = 300.0f; // Spacer
+	FVector2D	NewNodePos(
+		  SelNode->NodePosX + NodeSpacing, SelNode->NodePosY);
+
+	BlueprintEditor->GetFocusedGraph();
+
+	// TArray<UEdGraphPin*> Pins = SelNode->GetAllPins();
+	// for (const auto& Pin : Pins)
+	// {
+	// 	Pin->MakeLinkTo();
+	// }
+
+	// Create a node spawner for the PrintString function
+	UBlueprintNodeSpawner* PrintStringSpawner =
+		UBlueprintNodeSpawner::Create(
+			UK2Node_CallFunction::StaticClass(), GetTransientPackage());
+	if (!PrintStringSpawner)
+		return;
+
+	// Get the Blueprint object from the editor
+	// UBlueprint* Blueprint = BlueprintEditor->GetBlueprintObj();
+	// if (!Blueprint || !Graph)
+	// 	return;
+
+	IBlueprintNodeBinder::FBindingSet Bindings; // Create an empty binding set
+
+	// Set the function to PrintString
+	UK2Node_CallFunction* PrintStringNode =
+		Cast<UK2Node_CallFunction>(PrintStringSpawner->Invoke(
+			Graph, Bindings, NewNodePos));
+
+	if (!PrintStringNode)
+		return;
+
+	PrintStringNode->SetFromFunction(UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString")));
+
+	// Finalize node placement
+	// PrintStringNode->NodePosX = NewNodePos.X;
+	// PrintStringNode->NodePosY = NewNodePos.Y;
+	// PrintStringNode->AllocateDefaultPins();
+
+	// FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(BlueprintEditor->GetBlueprintObj());
+
+	return;
+
+	for (const auto& Node : Nodes)
+	{
+		// Logger.Print(FString::Printf(TEXT("Node Name: %s"),
+		// 				 // *Node->GetFullName()),
+		// 				 *Node->GetNodeTitle(ENodeTitleType::FullTitle).ToString()),
+		// 	ELogVerbosity::Log, true);
+
+		// Node->SetEnabledState(ENodeEnabledState::Enabled);
+		// Node->SetEnabledState(ENodeEnabledState::Disabled);
+	}
+
+	return;
+
+	// Logger.Print(TEXT("Successfully cast to IBlueprintEditor"), ELogVerbosity::Verbose, true);
+
+	Logger.Print(FString::Printf(TEXT("Number of Selected Nodes: %d"),
+					 BlueprintEditorInterface->GetNumberOfSelectedNodes()),
+		ELogVerbosity::Log, true);
+
+	UEdGraphNode_Comment* CommentNode = NewObject<UEdGraphNode_Comment>(Graph);
+
+	if (CommentNode)
+	{
+		// Set the comment text
+		CommentNode->NodeComment = "Hi Babe <3";
+		// Add the node to the graph
+		Graph->AddNode(CommentNode, true, false);
+	}
+	else
+	{
+		Logger.Print(TEXT("Failed to cast to IBlueprintEditor"), ELogVerbosity::Warning, true);
+	}
+}
+
+FBlueprintEditor* UVimGraphEditorSubsystem::GetBlueprintEditor(const UEdGraph* ActiveGraphObj)
+{
+	if (!ActiveGraphObj)
+		return nullptr;
+
+	// Get the Blueprint that owns the graph
+	UBlueprint* Blueprint =
+		FBlueprintEditorUtils::FindBlueprintForGraph(ActiveGraphObj);
+	if (!Blueprint)
+		return nullptr;
+
+	UAssetEditorSubsystem* AssetEditorSubsystem =
+		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
+	if (!AssetEditorSubsystem)
+		return nullptr;
+
+	// Find the open editor for a specific asset
+	IAssetEditorInstance* EditorInstance =
+		AssetEditorSubsystem->FindEditorForAsset(Blueprint, /*bFocusIfOpen=*/false);
+
+	return StaticCast<FBlueprintEditor*>(EditorInstance);
+}
+
+TSharedPtr<SGraphEditor> UVimGraphEditorSubsystem::GetGraphEditor(const TSharedRef<SWidget> InWidget)
+{
+	TSharedPtr<SWidget> FoundGraphEditor;
+	if (FUMSlateHelpers::TraverseFindWidgetUpwards(
+			InWidget, FoundGraphEditor, "SGraphEditor"))
+	{
+		TSharedPtr<SGraphEditor> AsGraphEditor =
+			StaticCastSharedPtr<SGraphEditor>(FoundGraphEditor);
+		return AsGraphEditor;
+	}
+	return nullptr;
 }
 
 #undef LOCTEXT_NAMESPACE
