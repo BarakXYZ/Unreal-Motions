@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BlueprintEditor.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Input/Events.h"
 #include "UMLogger.h"
 #include "SGraphPanel.h"
@@ -33,6 +34,8 @@ public:
 	void BindVimCommands();
 
 	void AddNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void AddNodeToPin(FSlateApplication& SlateApp, UEdGraphPin* InPin, UEdGraphNode* ParentNode, TSharedRef<SGraphPanel> GraphPanel, bool bIsAppendingNode);
+	void AddNodeToPin(FSlateApplication& SlateApp, const TSharedRef<SGraphPin> InPin);
 
 	void ZoomGraph(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 

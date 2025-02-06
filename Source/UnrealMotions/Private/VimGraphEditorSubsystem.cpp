@@ -253,8 +253,7 @@ void UVimGraphEditorSubsystem::AddNode(
 
 	// Identify the pin we care about (Out pin if appending, In pin if inserting)
 	// We'll also see if that pin is connected to anything to decide if we shift
-	UEdGraphPin*		  OriginPinObj = nullptr;
-	TSharedPtr<SGraphPin> OriginPinWidget;
+	UEdGraphPin* OriginPinObj = nullptr;
 
 	TArray<TSharedRef<SWidget>> AllPins;
 	NodeWidget->GetPins(AllPins);
@@ -279,7 +278,6 @@ void UVimGraphEditorSubsystem::AddNode(
 			continue; // Skip if there's a mismatch
 
 		OriginPinObj = EdGraphPin;
-		OriginPinWidget = AsGraphPin;
 		break;
 	}
 
@@ -287,103 +285,7 @@ void UVimGraphEditorSubsystem::AddNode(
 		return;
 
 	/** Final Pin found, drag a line from it and break afterwards. */
-
-	// --------------------------
-	// 1) Collect nodes to shift
-	// --------------------------
-	TSet<UEdGraphNode*> NodesToShift;
-
-	if (bIsAppendingNode)
-	{
-		// For appending, we typically shift all downstream nodes
-		// (which are on the Out pin chain).
-		// But we do NOT shift this node itself in that scenario
-		// (unless you design it otherwise).
-		for (UEdGraphPin* LinkedPin : OriginPinObj->LinkedTo)
-		{
-			if (LinkedPin && LinkedPin->GetOwningNode())
-			{
-				CollectDownstreamNodes(LinkedPin->GetOwningNode(), NodesToShift, /*bIsAppending=*/true);
-			}
-		}
-	}
-	else
-	{
-		// For inserting, we shift the "current" node plus anything downstream.
-		CollectDownstreamNodes(NodeObj, NodesToShift, /*bIsAppending=*/false);
-	}
-
-	// If there's something to move, shift them.
-	// For example, +300 for shifting “to the right” or -300 if you want left.
-	// You can customize.
-	if (NodesToShift.Num() > 0)
-	{
-		Logger.Print("Nodes to Shift is above 0", ELogVerbosity::Verbose, true);
-		ShiftNodesForSpace(GraphPanel, NodesToShift, /*ShiftAmountX=*/35.f);
-	}
-	else
-		Logger.Print("Nodes to Shift is 0", ELogVerbosity::Error, true);
-
-	// Useful listener, potentially in the future. It's a multicast that
-	// notifies on Node Added, Edited, etc.
-	// GraphPanel->GetGraphObj()->AddOnGraphChangedHandler();
-	// GraphPanel->GetGraphObj()->AddPropertyChangedNotifier();
-
-	const FVector2D OriginCurPos = SlateApp.GetCursorPos();
-
-	// Switch to Insert mode to immediately type in the Node Menu
-	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Insert);
-
-	// Store the current number of nodes we have so we can compare it
-	// after the menu window has closed to see if a new node was created.
-	NodeCounter = GraphPanel->GetChildren()->Num();
-
-	const TSharedRef<SGraphPin> PinRef = OriginPinWidget.ToSharedRef();
-
-	// NOTE: Only when appending we need an offset for cursor, because when
-	// inserting a node, we firstly move all the nodes to the right, thus, the
-	// offset is created organically just by moving the nodes.
-	// Other than that, all we need is to get either the top left or top right
-	// abs of the widget depending on if we're inserting or appending.
-	FVector2f OffA(35.0f, 0);
-	FVector2f CurOffset = bIsAppendingNode
-		? (FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(PinRef, OffA))
-		: (FUMSlateHelpers::GetWidgetTopLeftScreenSpacePosition(PinRef));
-
-	FUMInputHelpers::DragAndReleaseWidgetAtPosition(
-		OriginPinWidget.ToSharedRef(), CurOffset);
-
-	FTimerHandle TimerHandle;
-	GEditor->GetTimerManager()->SetTimer(
-		TimerHandle,
-		[this, &SlateApp, OriginCurPos, OriginPinObj, bIsAppendingNode]() {
-			SlateApp.SetCursorPos(OriginCurPos); // Restore cursor position
-
-			const TSharedPtr<SWindow> MenuWin = // Get the Popup Menu Win
-				SlateApp.GetActiveTopLevelWindow();
-
-			if (!MenuWin.IsValid())
-				return;
-
-			// Listen to when this window is closing and evaluate the users
-			// action; Was a new node added?
-			MenuWin->GetOnWindowClosedEvent().AddLambda(
-				[this, &SlateApp, OriginPinObj, bIsAppendingNode](const TSharedRef<SWindow>& Window) {
-					FTimerHandle TimerHandle;
-					GEditor->GetTimerManager()->SetTimer(
-						TimerHandle,
-						[this, &SlateApp,
-							OriginPinObj, bIsAppendingNode]() {
-							OnNodeCreationMenuClosed(
-								SlateApp,
-								OriginPinObj, bIsAppendingNode);
-							Logger.Print("Menu Closed",
-								ELogVerbosity::Log, true);
-						},
-						0.05f, false);
-				});
-		},
-		0.05f, false);
+	AddNodeToPin(SlateApp, OriginPinObj, NodeObj, GraphPanel.ToSharedRef(), bIsAppendingNode);
 }
 
 void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
@@ -841,7 +743,7 @@ void UVimGraphEditorSubsystem::ShiftNodesForSpace(
 
 			// SNodePanel::SNode interface
 			SNode->MoveTo(NewPos, NodeFilter, /*bMarkDirty=*/true);
-			Logger.Print("Try move node!", ELogVerbosity::Verbose, true);
+			// Logger.Print("Try move node!", ELogVerbosity::Verbose, true);
 		}
 	}
 
@@ -1301,6 +1203,129 @@ void UVimGraphEditorSubsystem::DebugNodeAndPinsTypes()
 						 *WidgetType, *ClassType),
 			ELogVerbosity::Log, true);
 	}
+}
+
+void UVimGraphEditorSubsystem::AddNodeToPin(
+	FSlateApplication& SlateApp, UEdGraphPin* InPin,
+	UEdGraphNode* ParentNode, TSharedRef<SGraphPanel> GraphPanel,
+	bool bIsAppendingNode)
+{
+	// --------------------------
+	// 1) Collect nodes to shift
+	// --------------------------
+	TSet<UEdGraphNode*> NodesToShift;
+
+	if (bIsAppendingNode)
+	{
+		// For appending; shift all downstream nodes (-> on the OutPin chain).
+		// But we do NOT shift this node itself in that scenario.
+		for (UEdGraphPin* LinkedPin : InPin->LinkedTo)
+		{
+			if (LinkedPin && LinkedPin->GetOwningNode())
+			{
+				CollectDownstreamNodes(LinkedPin->GetOwningNode(), NodesToShift, /*bIsAppending=*/true);
+			}
+		}
+	}
+	else
+	{
+		// For inserting, we shift the "current" node plus anything downstream.
+		CollectDownstreamNodes(ParentNode, NodesToShift, /*bIsAppending=*/false);
+	}
+
+	// If there's something to move, shift them.
+	// For example, +300 for shifting “to the right” or -300 if you want left.
+	// You can customize.
+	if (NodesToShift.Num() > 0)
+	{
+		Logger.Print("Nodes to Shift is above 0", ELogVerbosity::Verbose, true);
+		ShiftNodesForSpace(GraphPanel, NodesToShift, /*ShiftAmountX=*/35.f);
+	}
+	else
+		Logger.Print("Nodes to Shift is 0", ELogVerbosity::Error, true);
+
+	const FVector2D OriginCurPos = SlateApp.GetCursorPos();
+
+	// Switch to Insert mode to immediately type in the Node Menu
+	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Insert);
+
+	// Store the current number of nodes we have so we can compare it
+	// after the menu window has closed to see if a new node was created.
+	NodeCounter = GraphPanel->GetChildren()->Num();
+
+	TSharedPtr<SGraphNode> ParentGraphNode =
+		GraphPanel->GetNodeWidgetFromGuid(ParentNode->NodeGuid);
+	if (!ParentGraphNode.IsValid())
+		return;
+	TSharedPtr<SGraphPin> GraphPin = ParentGraphNode->FindWidgetForPin(InPin);
+	if (!GraphPin.IsValid())
+		return;
+	const TSharedRef<SGraphPin> PinRef = GraphPin.ToSharedRef();
+
+	// NOTE: Only when appending we need an offset for cursor, because when
+	// inserting a node, we firstly move all the nodes to the right, thus, the
+	// offset is created organically just by moving the nodes.
+	// Other than that, all we need is to get either the top left or top right
+	// abs of the widget depending on if we're inserting or appending.
+	FVector2f OffA(35.0f, 0);
+	FVector2f CurOffset = bIsAppendingNode
+		? (FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(PinRef, OffA))
+		: (FUMSlateHelpers::GetWidgetTopLeftScreenSpacePosition(PinRef));
+
+	FUMInputHelpers::DragAndReleaseWidgetAtPosition(PinRef, CurOffset);
+
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[this, &SlateApp, OriginCurPos, InPin, bIsAppendingNode]() {
+			SlateApp.SetCursorPos(OriginCurPos); // Restore cursor position
+
+			const TSharedPtr<SWindow> MenuWin = // Get the Popup Menu Win
+				SlateApp.GetActiveTopLevelWindow();
+
+			if (!MenuWin.IsValid())
+				return;
+
+			// Listen to when this window is closing and evaluate the users
+			// action; Was a new node added?
+			MenuWin->GetOnWindowClosedEvent().AddLambda(
+				[this, &SlateApp, InPin, bIsAppendingNode](const TSharedRef<SWindow>& Window) {
+					FTimerHandle TimerHandle;
+					GEditor->GetTimerManager()->SetTimer(
+						TimerHandle,
+						[this, &SlateApp,
+							InPin, bIsAppendingNode]() {
+							OnNodeCreationMenuClosed(
+								SlateApp,
+								InPin, bIsAppendingNode);
+							Logger.Print("Menu Closed",
+								ELogVerbosity::Log, true);
+						},
+						0.05f, false);
+				});
+		},
+		0.05f, false);
+}
+
+void UVimGraphEditorSubsystem::AddNodeToPin(
+	FSlateApplication& SlateApp, const TSharedRef<SGraphPin> InPin)
+{
+	Logger.Print("Add Node to Pin", ELogVerbosity::Log, true);
+	UEdGraphPin* PinObj = InPin->GetPinObj();
+	if (!PinObj)
+		return;
+
+	UEdGraphNode* ParentNode = PinObj->GetOwningNode();
+	if (!ParentNode)
+		return;
+
+	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+		return;
+
+	bool bIsAppendingNode = PinObj->Direction == EGPD_Output;
+
+	AddNodeToPin(SlateApp, PinObj, ParentNode, GraphPanel.ToSharedRef(), bIsAppendingNode);
 }
 
 #undef LOCTEXT_NAMESPACE

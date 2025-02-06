@@ -9,10 +9,12 @@
 #include "Templates/SharedPointer.h"
 #include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
+#include "VimGraphEditorSubsystem.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "VimInputProcessor.h"
+#include "VimGraphEditorSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUMFocusHelpers, Log, All); // Dev
 FUMLogger FUMFocusHelpers::Logger(&LogUMFocusHelpers);
@@ -217,6 +219,11 @@ void FUMFocusHelpers::ClickSNode(FSlateApplication& SlateApp, const TSharedRef<S
 void FUMFocusHelpers::ClickSPin(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
 	Logger.Print("Found SGraphPin", ELogVerbosity::Log, true);
+
+	TSharedRef<SGraphPin> GraphPin = StaticCastSharedRef<SGraphPin>(InWidget);
+	if (UVimGraphEditorSubsystem* GraphSub =
+			GEditor->GetEditorSubsystem<UVimGraphEditorSubsystem>())
+		GraphSub->AddNodeToPin(SlateApp, GraphPin);
 }
 
 bool FUMFocusHelpers::TryFocusPopupMenu(FSlateApplication& SlateApp)
