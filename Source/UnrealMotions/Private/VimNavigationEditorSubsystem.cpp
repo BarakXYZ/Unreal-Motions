@@ -217,6 +217,8 @@ void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
 				SNew(SUMHintMarker)
 					.TargetWidget(WidgetPtr.ToSharedRef())
 					.InWidgetLocalPosition(
+						// TODO: We may want to filter out invalid coords?
+						// (i.e. widgets going out-of-screen?)
 						FUMSlateHelpers::GetWidgetLocalPositionInWindow(
 							WidgetPtr.ToSharedRef(), ParentWin))
 					.MarkerText(AllLabels[LabelIndex]);

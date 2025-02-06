@@ -73,10 +73,23 @@ public:
 		const uint64			  IgnoreWidgetId = INDEX_NONE,
 		int32					  Depth = 0);
 
+	static bool TraverseFindWidget(
+		const TSharedRef<SWidget> BaseWidget,
+		TSharedPtr<SWidget>&	  OutWidget,
+		const TArray<FString>&	  TargetTypes,
+		const uint64			  IgnoreWidgetId = INDEX_NONE,
+		int32					  Depth = 0);
+
 	static bool TraverseFindWidgetUpwards(
 		const TSharedRef<SWidget> BaseWidget,
 		TSharedPtr<SWidget>&	  OutWidget,
 		const FString&			  TargetType,
+		const bool				  bTraverseDownOnceBeforeUp = false);
+
+	static bool TraverseFindWidgetUpwards(
+		const TSharedRef<SWidget> BaseWidget,
+		TSharedPtr<SWidget>&	  OutWidget,
+		const TArray<FString>&	  TargetTypes,
 		const bool				  bTraverseDownOnceBeforeUp = false);
 
 	static bool TraverseFindWidgetUpwards(

@@ -21,6 +21,8 @@
 #include "SGraphPin.h"
 #include "UMEditorHelpers.h"
 #include "Subsystems/AssetEditorSubsystem.h"
+#include "GraphEditor.h"
+#include "UMFocuserEditorSubsystem.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, Log, All); // Dev
@@ -37,19 +39,19 @@ void UVimGraphEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Logger = FUMLogger(&LogVimGraphEditorSubsystem);
 
-	// FBlueprintEditor* CurrentBPEditor =
-	// 	static_cast<FBlueprintEditor*>(
-	// 		FModuleManager::Get().GetModulePtr<FKismetEditorModule>("Kismet")->GetCurrentBlueprintEditor().Get());
-
-	// if (CurrentBPEditor)
-	// {
-	// 	CurrentBPEditor->GetFocusedGraph();
-	// 	CurrentBPEditor->GetToolkitName();
-	// }
-
-	// return nullptr;
-
 	BindVimCommands();
+
+	// Start listening when Context Binding is changed directly
+	// I wonder about this, it's cute. But is it really needed?
+	// FCoreDelegates::OnPostEngineInit.AddLambda([this]() {
+	// 	if (UUMFocuserEditorSubsystem* Focuser =
+	// 			GEditor->GetEditorSubsystem<UUMFocuserEditorSubsystem>())
+	// 	{
+	// 		Focuser->OnBindingContextChanged.AddUObject(
+	// 			this, &UVimGraphEditorSubsystem::HandleOnContextBindingChanged);
+	// 	}
+	// });
+
 	Super::Initialize(Collection);
 }
 
@@ -122,8 +124,85 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ZoomToFit);
 
+	/** Debug */
+	VimInputProcessor->AddKeyBinding_NoParam(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::SpaceBar, EKeys::D, EKeys::G },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::DebugNodeAndPinsTypes);
+
+	// About the pin motions:
+	// Upon the user focusing a node via Hint Markers we have access to the
+	// future selected node, thus we can setup the pin visualization easily.
+	// We have the "AddOnGraphChangedHandler" to know when nodes are deleted
+	// or added. Also, we can start listening to OnMouseButtonDown from the
+	// VimProcessor and things like that when we're entering the GraphEditor
+	// context. Also the OnKeyButtonDown is available, etc.
+	// Other than that though, we then user tries to navigate pins via HJKL
+	// we can simply upon the event check we have everything we need (i.e.
+	// 1 selected node we know we're operating on, etc.) so there isn't a real
+	// need to know about focus changing inside the node graph too much.
+	// It will be the most robust to build the HJKL event as independent as
+	// possible and to not rely on too many outside delegates.
+	//
+	// Thinking more about this, we might still need to rely partially
+	// one SelectionChanged. We can make it more robust by listening
+	// to OnFocusChanged while we're on the GraphEditor context.
+	// I think the OnSelectionChanged will be needed because we kind
+	// of have to know when there are no nodes selected vs. any.
+	// In these cases, we will have to hide the highlight overlay
+	// for the pins. If we can think of a cleaner architecture
+	// it will be great; but that's what I currently have.
+	//
+	// Maybe............ we can also have the following flow:
+	// let's say we have a node with 6 inputs and 3 outputs.
+	// In this case, when we press 'A' to append (and the
+	// node is actually selected) we will have hint markers
+	// popping for each of the output nodes with numbers 1-3.
+	// So the user can easily complete 1-3 to select to which
+	// pin he wants to append. Similarly for 'I' to insert,
+	// it will pop 6 hint markers (1-6) for the 6 input pins
+	// of the node. So i1, i2, i3... we send the cursor to
+	// pull a string to insert a new node for the correct
+	// pin index!
+	// That actually sounds really cool, simple and also
+	// fast and nice UX. Because needing to go to each
+	// pin does sounds kind of weird honestly.
+	// That way HJKL just navigates the nodes themselves
+	// and we don't have to worry about highlighting and
+	// navigating pins which feels really intense!
+	// PROBLEM SOLVED!
+
+	// Selection + Move HJKL
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		// { FInputChord(EModifierKey::Shift, EKeys::H) },
+		{ EKeys::H },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		// { FInputChord(EModifierKey::Shift, EKeys::J) },
+		{ EKeys::J },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		// { FInputChord(EModifierKey::Shift, EKeys::K) },
+		{ EKeys::K },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		// { FInputChord(EModifierKey::Shift, EKeys::L) },
+		{ EKeys::L },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
 	// TODO:
-	// 1. zz to center widget (zoom to fit or scroll?)
 	// 2. gg & G to go to focus first or last node in a chain
 	// 3. Figure out movement inside the graph panel (wasd?)
 	// 4. Movement between nodes & pins
@@ -248,6 +327,7 @@ void UVimGraphEditorSubsystem::AddNode(
 	// Useful listener, potentially in the future. It's a multicast that
 	// notifies on Node Added, Edited, etc.
 	// GraphPanel->GetGraphObj()->AddOnGraphChangedHandler();
+	// GraphPanel->GetGraphObj()->AddPropertyChangedNotifier();
 
 	const FVector2D OriginCurPos = SlateApp.GetCursorPos();
 
@@ -859,9 +939,15 @@ void UVimGraphEditorSubsystem::ZoomToFit(
 	// The ZoomToFit doesn't retain zoom level, which is pretty annoying.
 	// We're creating some custom logic to center nodes without losing zoom.
 
-	TSharedPtr<SGraphEditor> GraphEditor = GetGraphEditor(GraphPanel.ToSharedRef());
+	UEdGraph* GraphObj = GraphPanel->GetGraphObj();
+	if (!GraphObj)
+		return;
+
+	TSharedPtr<SGraphEditor> GraphEditor = SGraphEditor::FindGraphEditorForGraph(GraphObj);
 	if (!GraphEditor.IsValid())
 		return;
+
+	// GraphEditor->OnSelectionChanged;
 
 	// Gather the currently selected nodes
 	const TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
@@ -1060,6 +1146,13 @@ FBlueprintEditor* UVimGraphEditorSubsystem::GetBlueprintEditor(const UEdGraph* A
 	return StaticCast<FBlueprintEditor*>(EditorInstance);
 }
 
+/** DEPRECATED: Keeping this for reference, but theres a better method ->
+ *
+ * TSharedPtr<SGraphEditor> GraphEditor =
+ * SGraphEditor::FindGraphEditorForGraph(GraphObj);
+ * if (!GraphEditor.IsValid())
+ *		return;
+ */
 TSharedPtr<SGraphEditor> UVimGraphEditorSubsystem::GetGraphEditor(const TSharedRef<SWidget> InWidget)
 {
 	TSharedPtr<SWidget> FoundGraphEditor;
@@ -1071,6 +1164,143 @@ TSharedPtr<SGraphEditor> UVimGraphEditorSubsystem::GetGraphEditor(const TSharedR
 		return AsGraphEditor;
 	}
 	return nullptr;
+}
+
+void UVimGraphEditorSubsystem::HandleOnContextBindingChanged(
+	EUMContextBinding NewContext, const TSharedRef<SWidget> NewWidget)
+{
+	UnhookFromActiveGraphPanel();
+
+	if (NewContext == EUMContextBinding::GraphEditor
+		&& NewWidget->GetTypeAsString().Equals("SGraphPanel"))
+	{
+		TSharedRef<SGraphPanel> GraphPanel = StaticCastSharedRef<SGraphPanel>(NewWidget);
+
+		ActiveGraphPanel = GraphPanel;
+
+		// Store the original Delegate
+		OnSelectionChangedOriginDelegate =
+			GraphPanel->SelectionManager.OnSelectionChanged;
+
+		// NOTE: This can be fragile if someone else is wrapping around this
+		// (i.e. overriding this delegate). Might need to re-think this.
+		// Another method might be listening to mouse-click & keyboard events
+		// like crazy. Not sure what is better. Will test this out for a bit
+		// and see if it behaves ok.
+		// Create a new one that calls both the old delegate and our custom code
+		GraphPanel->SelectionManager.OnSelectionChanged =
+			SGraphEditor::FOnSelectionChanged::CreateLambda(
+				[this](const FGraphPanelSelectionSet& NewSelection) {
+					// First, call the old one (if it’s still bound)
+					OnSelectionChangedOriginDelegate.ExecuteIfBound(NewSelection);
+					// Then do your stuff
+					HandleOnSelectionChanged(NewSelection);
+				});
+
+		///////////////////////////////////////////////////////
+		// Other listener:
+		UEdGraph* GraphObj = GraphPanel->GetGraphObj();
+		if (!GraphObj)
+			return;
+
+		OnGraphChangedHandler = GraphObj->AddOnGraphChangedHandler(
+			FOnGraphChanged::FDelegate::CreateUObject(
+				this, &UVimGraphEditorSubsystem::HandleOnGraphChanged));
+	}
+}
+
+void UVimGraphEditorSubsystem::HandleOnGraphChanged(const FEdGraphEditAction& InAction)
+{
+	Logger.Print("On Graph Changed!", ELogVerbosity::Log, true);
+}
+
+void UVimGraphEditorSubsystem::HandleOnSelectionChanged(
+	const FGraphPanelSelectionSet& GraphPanelSelectionSet)
+{
+	Logger.Print("On Selection Changed!", ELogVerbosity::Log, true);
+}
+
+void UVimGraphEditorSubsystem::UnhookFromActiveGraphPanel()
+{
+	// If we still have a valid GraphPanel
+	if (TSharedPtr<SGraphPanel> GraphPanel = ActiveGraphPanel.Pin())
+	{
+		// Restore the original selection-changed delegate
+		// (or unbind entirely if you prefer)
+		GraphPanel->SelectionManager.OnSelectionChanged = OnSelectionChangedOriginDelegate;
+
+		// Remove our OnGraphChanged handler if we had one
+		if (UEdGraph* GraphObj = GraphPanel->GetGraphObj())
+		{
+			GraphObj->RemoveOnGraphChangedHandler(OnGraphChangedHandler);
+		}
+	}
+
+	// Reset local references
+	OnSelectionChangedOriginDelegate.Unbind();
+	ActiveGraphPanel.Reset();
+	OnGraphChangedHandler.Reset();
+}
+
+void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+		return;
+
+	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+	if (SelNodes.IsEmpty() || !SelNodes[0])
+		return;
+
+	TArray<UEdGraphPin*> PinObjs = SelNodes[0]->GetAllPins();
+	if (PinObjs.IsEmpty())
+		return;
+
+	TSharedPtr<SGraphNode> GraphNode =
+		GraphPanel->GetNodeWidgetFromGuid(SelNodes[0]->NodeGuid);
+
+	TArray<TSharedRef<SWidget>> Pins;
+	GraphNode->GetPins(Pins);
+	if (Pins.IsEmpty())
+		return;
+}
+
+void UVimGraphEditorSubsystem::DebugNodeAndPinsTypes()
+{
+	FSlateApplication&			  SlateApp = FSlateApplication::Get();
+	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+		return;
+
+	UEdGraph* GraphObj = GraphPanel->GetGraphObj();
+	if (!GraphObj)
+		return;
+
+	TArray<TObjectPtr<UEdGraphNode>> Nodes = GraphObj->Nodes;
+	for (const auto& Node : Nodes)
+	{
+		if (!Node)
+			continue;
+
+		TSharedPtr<SGraphNode> GraphNode = GraphPanel->GetNodeWidgetFromGuid(Node->NodeGuid);
+		if (!GraphNode.IsValid())
+			return;
+
+		// For Nodes: Chop 10 chars left (SGraphNode)
+		// For Pins: Chop 9 chars left (SGraphPin)
+		// Potentially I can only chop 9 and get both?
+		// Or: just add them all to the set. It will still be O(1), just a bit
+		// longer in terms of types.
+		//
+		GraphNode->GetType();
+		const FString WidgetType = GraphNode->GetTypeAsString();
+		const FString ClassType = GraphNode->GetWidgetClass().GetWidgetType().ToString();
+
+		Logger.Print(FString::Printf(TEXT("Widget Type: %s | Class Type: %s"),
+						 *WidgetType, *ClassType),
+			ELogVerbosity::Log, true);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -3,7 +3,9 @@
 #include "Input/Events.h"
 #include "Logging/LogVerbosity.h"
 #include "SGraphNode.h"
+#include "SGraphPin.h"
 #include "SGraphPanel.h"
+#include "EdGraph/EdGraphNode.h"
 #include "Templates/SharedPointer.h"
 #include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
@@ -72,8 +74,9 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		{ "SCheckBox", &FUMFocusHelpers::ClickSCheckBox },
 		{ "SPropertyValueWidget", &FUMFocusHelpers::ClickSPropertyValueWidget },
 		{ "SDockTab", &FUMFocusHelpers::ClickSDockTab },
-		{ "SGraphNodeK2Event", &FUMFocusHelpers::ClickSNode },
-		{ "SGraphNodeK2Default", &FUMFocusHelpers::ClickSNode },
+		{ "SGraphNodeK2Event", &FUMFocusHelpers::ClickSNodeSPin },
+		{ "SGraphNodeK2Default", &FUMFocusHelpers::ClickSNodeSPin },
+		{ "SLevelOfDetailBranchNode", &FUMFocusHelpers::ClickSNodeSPin },
 	};
 
 	// SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
@@ -166,9 +169,33 @@ void FUMFocusHelpers::ClickSPropertyValueWidget(FSlateApplication& SlateApp, con
 	FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, FKey(EKeys::LeftMouseButton));
 }
 
+void FUMFocusHelpers::ClickSNodeSPin(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	static const TArray<FString> NodeAndPinTypes = { "SGraphPin", "SGraphNode" };
+	// We need to skip the first parent, as it shares the SGraphPin:
+	const TSharedPtr<SWidget> BaseWidget = InWidget->GetParentWidget();
+	if (!BaseWidget.IsValid())
+		return;
+	const TSharedRef<SWidget> BaseRef = BaseWidget.ToSharedRef();
+
+	// Search for both types and get the nearest one. Whichever is found first
+	// is the actual intended target widget.
+	TSharedPtr<SWidget> FoundWidget;
+	if (FUMSlateHelpers::TraverseFindWidgetUpwards(BaseRef, FoundWidget, NodeAndPinTypes))
+	{
+		// Logger.Print("Found either SGraphPin | SGraphNode",
+		// 	ELogVerbosity::Log, true);
+
+		if (FoundWidget->GetTypeAsString().StartsWith("SGraphPin"))
+			ClickSPin(SlateApp, FoundWidget.ToSharedRef());
+		else
+			ClickSNode(SlateApp, FoundWidget.ToSharedRef());
+	}
+}
+
 void FUMFocusHelpers::ClickSNode(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
-	// FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, FKey(EKeys::LeftMouseButton));
+	Logger.Print("Found SGraphNode", ELogVerbosity::Log, true);
 
 	TSharedRef<SGraphNode> AsGraphNode = // We can safely cast to Base SGraphNode
 		StaticCastSharedRef<SGraphNode>(InWidget);
@@ -185,6 +212,11 @@ void FUMFocusHelpers::ClickSNode(FSlateApplication& SlateApp, const TSharedRef<S
 	// (just selecting the Node is not enough)
 	SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
 	GraphPanel->SelectionManager.SelectSingleNode(AsNodeObj);
+}
+
+void FUMFocusHelpers::ClickSPin(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	Logger.Print("Found SGraphPin", ELogVerbosity::Log, true);
 }
 
 bool FUMFocusHelpers::TryFocusPopupMenu(FSlateApplication& SlateApp)

@@ -30,7 +30,10 @@ public:
 	static void ClickSCheckBox(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
 	static void ClickSDockTab(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
 	static void ClickSPropertyValueWidget(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
+
+	static void ClickSNodeSPin(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
 	static void ClickSNode(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
+	static void ClickSPin(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
 
 	static FUMLogger Logger;
 };

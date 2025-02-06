@@ -24,6 +24,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 		return false;
 
 	// LogTraversalSearch(Depth, BaseWidget);
+
 	if (BaseWidget->GetTypeAsString().StartsWith(TargetType)
 		|| BaseWidget->GetWidgetClass().GetWidgetType().ToString().StartsWith(TargetType))
 	{
@@ -57,11 +58,12 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	const FString&				 TargetType,
 	int32 SearchCount, int32 Depth)
 {
-	// LogTraversalSearch(Depth, BaseWidget);
 	bool bFoundAllRequested = false;
 
 	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
 		return false;
+
+	// LogTraversalSearch(Depth, BaseWidget);
 
 	if (BaseWidget->GetTypeAsString().StartsWith(TargetType)
 		|| BaseWidget->GetWidgetClass().GetWidgetType().ToString().StartsWith(TargetType))
@@ -109,12 +111,13 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	const TSet<FString>&		 TargetTypes,
 	int32 SearchCount, int32 Depth)
 {
-	LogTraversalSearch(Depth, BaseWidget);
 	bool bFoundAllRequested = false;
 
 	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
 		// if (!BaseWidget->GetVisibility().IsVisible())
 		return false;
+
+	// LogTraversalSearch(Depth, BaseWidget);
 
 	if (TargetTypes.Contains(GetCleanWidgetType(BaseWidget->GetTypeAsString()))
 		|| TargetTypes.Contains(GetCleanWidgetType(
@@ -166,7 +169,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
 		return false;
 
-	LogTraversalSearch(Depth, BaseWidget);
+	// LogTraversalSearch(Depth, BaseWidget);
 
 	if (BaseWidget->GetId() == LookupWidgetId)
 	{
@@ -201,10 +204,10 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	const uint64			  IgnoreWidgetId,
 	int32					  Depth)
 {
-	LogTraversalSearch(Depth, BaseWidget);
-
 	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
 		return false;
+
+	// LogTraversalSearch(Depth, BaseWidget);
 
 	if (TargetTypes.Contains(GetCleanWidgetType(BaseWidget->GetTypeAsString()))
 		|| TargetTypes.Contains(GetCleanWidgetType(
@@ -213,6 +216,48 @@ bool FUMSlateHelpers::TraverseFindWidget(
 		// LogTraverseFoundWidget(Depth, BaseWidget, BaseWidget->GetTypeAsString());
 		OutWidget = BaseWidget;
 		return true;
+	}
+
+	// Recursively traverse the children of the current widget
+	FChildren* Children = BaseWidget->GetChildren();
+	if (Children)
+	{
+		for (int32 i = 0; i < Children->Num(); ++i)
+		{
+			const TSharedRef<SWidget> Child = Children->GetChildAt(i);
+
+			if (IgnoreWidgetId != INDEX_NONE && Child->GetId() == IgnoreWidgetId)
+				continue;
+
+			if (TraverseFindWidget(Child, OutWidget, TargetTypes,
+					IgnoreWidgetId, Depth + 1))
+				return true;
+		}
+	}
+	return false;
+}
+
+bool FUMSlateHelpers::TraverseFindWidget(
+	const TSharedRef<SWidget> BaseWidget,
+	TSharedPtr<SWidget>&	  OutWidget,
+	const TArray<FString>&	  TargetTypes,
+	const uint64			  IgnoreWidgetId,
+	int32					  Depth)
+{
+	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
+		return false;
+
+	// LogTraversalSearch(Depth, BaseWidget);
+
+	for (const auto& Type : TargetTypes)
+	{
+		if (BaseWidget->GetTypeAsString().StartsWith(Type)
+			|| BaseWidget->GetWidgetClass().GetWidgetType().ToString().StartsWith(Type))
+		{
+			// LogTraverseFoundWidget(Depth, BaseWidget, TargetType);
+			OutWidget = BaseWidget;
+			return true;
+		}
 	}
 
 	// Recursively traverse the children of the current widget
@@ -255,6 +300,34 @@ bool FUMSlateHelpers::TraverseFindWidgetUpwards(
 	{
 		if (TraverseFindWidget(Parent.ToSharedRef(), OutWidget,
 				TargetType, IgnoreWidgetId))
+			return true;
+
+		// Update the ignore parent ID, as we've just traversed all its children.
+		IgnoreWidgetId = Parent->GetId();
+		Parent = Parent->GetParentWidget(); // Climb up to the next parent
+	}
+	return false;
+}
+
+bool FUMSlateHelpers::TraverseFindWidgetUpwards(
+	const TSharedRef<SWidget> BaseWidget,
+	TSharedPtr<SWidget>&	  OutWidget,
+	const TArray<FString>&	  TargetTypes,
+	const bool				  bTraverseDownOnceBeforeUp)
+{
+	if (bTraverseDownOnceBeforeUp) // Collect Widgets Downwards
+	{
+		if (TraverseFindWidget(BaseWidget, OutWidget, TargetTypes))
+			return true;
+	}
+
+	uint64				IgnoreWidgetId = BaseWidget->GetId();
+	TSharedPtr<SWidget> Parent = BaseWidget->GetParentWidget();
+
+	while (Parent.IsValid()) // Collect Widgets Upwards
+	{
+		if (TraverseFindWidget(Parent.ToSharedRef(), OutWidget,
+				TargetTypes, IgnoreWidgetId))
 			return true;
 
 		// Update the ignore parent ID, as we've just traversed all its children.
@@ -1134,15 +1207,66 @@ const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 		"SSpinBox",
 		"SColorBlock",
 
-		"SGraphNodeK2Event",
-		"SGraphNodeK2Default",
-		"SGraphNodePromotableOperator",
-
 		// "SPropertyNameWidget",
 		// "SPropertyEditorTitle",
 		// "SEditConditionWidget",
 		// "SPropertyEditorNumeric<float>",
 		// "SNumericEntryBox<NumericType>",
+
+		// Takes care of all nodes & all pins?!
+		"SLevelOfDetailBranchNode",
+
+		// // ~ SGraphPin types ~  //
+		// // Kismet Pins:
+		// "SGraphPinBool",
+		// "SGraphPinClass",
+		// "SGraphPinCollisionProfile",
+		// "SGraphPinColor",
+		// "SGraphPinDataTableRowName",
+		// "SGraphPinEnum",
+		// "SGraphPinExec",
+		// "SGraphPinIndex",
+		// "SGraphPinInteger",
+		// "SGraphPinIntegerSlider",
+		// "SGraphPinKey",
+		// "SGraphPinNameList",
+		// "SGraphPinObject",
+		// "SGraphPinString",
+		// "SGraphPinStruct",
+		// "SGraphPinStructInstance",
+		// "SGraphPinText",
+		// // "SNameComboBox", // Also part of pins?
+		// // Material Pins:
+		// "SGraphPinMaterialInput",
+		// // ~ SGraphPin types ~  //
+
+		// // ~ SGraphNode types ~  //
+		// // Kismet Nodes:
+		// "SGraphNodeK2Base",
+		// "SGraphNodeK2Composite",
+		// "SGraphNodeK2Copy",
+		// "SGraphNodeK2CreateDelegate",
+		// "SGraphNodeK2Default",
+		// "SGraphNodeK2Event",
+		// "SGraphNodeK2Sequence",
+		// "SGraphNodeK2Terminator",
+		// "SGraphNodeK2Timeline",
+		// "SGraphNodeK2Var",
+		// "SGraphNodeMakeStruct",
+		// "SGraphNodeSpawnActor",
+		// "SGraphNodeSpawnActorFromClass",
+		// "SGraphNodeSwitchStatement",
+		// // Material Nodes:
+		// "SGraphNodeMaterialBase",
+		// "SGraphNodeMaterialComment",
+		// "SGraphNodeMaterialComposite",
+		// "SGraphNodeMaterialCustom",
+		// "SGraphNodeMaterialResult",
+		// "SGraphSubstrateMaterial",
+		// // Misc:
+		// "SGraphNodePromotableOperator",
+		// // ~ SGraphNode types ~  //
+
 	};
 
 	return InteractableWidgetTypes;

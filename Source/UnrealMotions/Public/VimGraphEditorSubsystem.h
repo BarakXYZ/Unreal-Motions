@@ -4,6 +4,7 @@
 #include "Input/Events.h"
 #include "UMLogger.h"
 #include "SGraphPanel.h"
+#include "VimInputProcessor.h"
 #include "EditorSubsystem.h"
 #include "VimGraphEditorSubsystem.generated.h"
 
@@ -42,6 +43,8 @@ public:
 
 	void ZoomToFit(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void HandleVimNodeNavigation(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	void OnNodeCreationMenuClosed(
 		FSlateApplication& SlateApp,
 		UEdGraphPin* DraggedFromPin, bool bIsAppendingNode);
@@ -77,6 +80,7 @@ public:
 		UEdGraphPin* OriginPin, const TSharedRef<SGraphNode> NewNode);
 
 	void DebugEditor();
+	void DebugNodeAndPinsTypes();
 
 	FBlueprintEditor*		 GetBlueprintEditor(const UEdGraph* ActiveGraphObj);
 	TSharedPtr<SGraphEditor> GetGraphEditor(const TSharedRef<SWidget> InWidget);
@@ -93,6 +97,12 @@ public:
 
 	void MoveConnectedNodesToRight(UEdGraphNode* StartNode, float OffsetX);
 
+	void HandleOnContextBindingChanged(EUMContextBinding NewContext, const TSharedRef<SWidget> NewWidget);
+
+	void HandleOnGraphChanged(const FEdGraphEditAction& InAction);
+	void HandleOnSelectionChanged(const FGraphPanelSelectionSet& GraphPanelSelectionSet);
+	void UnhookFromActiveGraphPanel();
+
 	FUMLogger Logger;
 	int32	  NodeCounter;
 
@@ -102,4 +112,8 @@ public:
 	// We’ll track whether we’re currently in a “shifted” state
 	// so we know whether to revert on menu close.
 	bool bNodesWereShifted = false;
+
+	FDelegateHandle					  OnGraphChangedHandler;
+	SGraphEditor::FOnSelectionChanged OnSelectionChangedOriginDelegate;
+	TWeakPtr<SGraphPanel>			  ActiveGraphPanel;
 };

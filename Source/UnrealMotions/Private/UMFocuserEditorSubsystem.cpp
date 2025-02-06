@@ -379,23 +379,43 @@ void UUMFocuserEditorSubsystem::HandleOnWindowChanged(
 
 void UUMFocuserEditorSubsystem::UpdateBindingContext(const TSharedRef<SWidget> NewWidget)
 {
-	TMap<FString, EUMContextBinding> ContextByWidgetType = {
+	static TMap<FString, EUMContextBinding> ContextByWidgetType = {
 		{ "SGraphPanel", EUMContextBinding::GraphEditor },
 		// { "SEditableText", EUMContextBinding::TextEditing },
 	};
 
-	EUMContextBinding* Context;
-	if ((Context = ContextByWidgetType.Find(NewWidget->GetTypeAsString())))
+	const FString SpecificType = NewWidget->GetTypeAsString();
+	const FString BaseType = NewWidget->GetWidgetClass().GetWidgetType().ToString();
+
+	if (EUMContextBinding* Context = ContextByWidgetType.Find(SpecificType))
 	{
-		FVimInputProcessor::Get()->SetCurrentContext(*Context);
+		if (CurrentContext != *Context)
+		{
+			FVimInputProcessor::Get()->SetCurrentContext(*Context);
+			CurrentContext = *Context;
+			OnBindingContextChanged.Broadcast(CurrentContext, NewWidget);
+		}
+		return;
 	}
-	else if ((Context = ContextByWidgetType.Find(
-				  NewWidget->GetWidgetClass().GetWidgetType().ToString())))
+
+	if (EUMContextBinding* Context = ContextByWidgetType.Find(BaseType))
 	{
-		FVimInputProcessor::Get()->SetCurrentContext(*Context);
+		if (CurrentContext != *Context)
+		{
+			FVimInputProcessor::Get()->SetCurrentContext(*Context);
+			CurrentContext = *Context;
+			OnBindingContextChanged.Broadcast(CurrentContext, NewWidget);
+		}
 	}
-	else
-		FVimInputProcessor::Get()->SetCurrentContext(EUMContextBinding::Generic);
+	else // Fallback to generic
+	{
+		if (CurrentContext != EUMContextBinding::Generic)
+		{
+			FVimInputProcessor::Get()->SetCurrentContext(EUMContextBinding::Generic);
+			CurrentContext = EUMContextBinding::Generic;
+			OnBindingContextChanged.Broadcast(CurrentContext, NewWidget);
+		}
+	}
 }
 
 bool UUMFocuserEditorSubsystem::ShouldFilterNewWidget(TSharedRef<SWidget> InWidget)

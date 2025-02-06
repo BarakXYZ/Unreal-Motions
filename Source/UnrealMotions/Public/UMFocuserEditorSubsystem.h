@@ -10,6 +10,8 @@
 
 DECLARE_DELEGATE_RetVal_TwoParams(bool, FUMOnWindowAction, const TSharedRef<FGenericWindow>&, EWindowAction::Type);
 
+DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnBindingContextChanged, EUMContextBinding /* New Context */, const TSharedRef<SWidget> /* New Widget */);
+
 /**
  *
  */
@@ -182,6 +184,9 @@ public:
 
 	void ValidateFocusedWidget();
 
+	FUMOnBindingContextChanged Subscribe_OnBindingContextChanged();
+	FUMOnBindingContextChanged Unsubscribe_OnBindingContextChanged();
+
 	// For Nomad Tabs:
 	// Fetch splitters
 	// get the splitter childrens and filter out "SDockTabStack" (I think)
@@ -198,8 +203,11 @@ public:
 	TWeakPtr<SWidget>  TrackedPrevWidget;
 
 public:
-	FDelegateHandle DelegateHandle_OnActiveTabChanged;
-	FDelegateHandle DelegateHandle_OnTabForegrounded;
+	FDelegateHandle			   DelegateHandle_OnActiveTabChanged;
+	FDelegateHandle			   DelegateHandle_OnTabForegrounded;
+	FUMOnBindingContextChanged OnBindingContextChanged;
+
+	EUMContextBinding CurrentContext{ EUMContextBinding::Generic };
 
 	FTimerHandle TimerHandleNewWidgetTracker;
 	FTimerHandle TimerHandleNewMinorTabTracker;
