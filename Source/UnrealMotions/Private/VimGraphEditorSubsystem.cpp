@@ -23,6 +23,7 @@
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "GraphEditor.h"
 #include "UMFocuserEditorSubsystem.h"
+#include "VimNavigationEditorSubsystem.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, Log, All); // Dev
@@ -253,8 +254,6 @@ void UVimGraphEditorSubsystem::AddNode(
 
 	// Identify the pin we care about (Out pin if appending, In pin if inserting)
 	// We'll also see if that pin is connected to anything to decide if we shift
-	UEdGraphPin* OriginPinObj = nullptr;
-
 	TArray<TSharedRef<SWidget>> AllPins;
 	NodeWidget->GetPins(AllPins);
 
@@ -262,10 +261,12 @@ void UVimGraphEditorSubsystem::AddNode(
 	const EEdGraphPinDirection TargetPinType =
 		bIsAppendingNode ? EGPD_Output : EGPD_Input;
 
+	UEdGraphPin*				OriginPinObj = nullptr;
+	TArray<TSharedRef<SWidget>> FoundPinWidgets;
 	for (const auto& Pin : AllPins)
 	{
-		if (!Pin->GetTypeAsString().Equals("SGraphPinExec"))
-			continue;
+		// if (!Pin->GetTypeAsString().Equals("SGraphPinExec"))
+		// 	continue;
 
 		// Cast to the specific widget representation of this pin object
 		// (as the array of pins is fetching them as SWidgets)
@@ -274,15 +275,28 @@ void UVimGraphEditorSubsystem::AddNode(
 
 		// Verify the direction of the pin matches our TargetPinType (In | Out)
 		UEdGraphPin* EdGraphPin = AsGraphPin->GetPinObj();
-		if (!EdGraphPin || EdGraphPin->Direction != TargetPinType)
-			continue; // Skip if there's a mismatch
+		if (!EdGraphPin
+			// || EdGraphPin->bHidden
+			|| EdGraphPin->bAdvancedView // Check if this pin is visible
+			|| EdGraphPin->Direction != TargetPinType)
+			continue;
 
-		OriginPinObj = EdGraphPin;
-		break;
+		FoundPinWidgets.Add(Pin);
+
+		if (!OriginPinObj) // Store only the first pin found.
+			OriginPinObj = EdGraphPin;
 	}
 
-	if (!OriginPinObj) // Check if any node was actually found
+	if (!OriginPinObj)
 		return;
+	else if (FoundPinWidgets.Num() > 1)
+	{
+		// Generate markers for the found pins (TODO: numbered widgets)
+		if (UVimNavigationEditorSubsystem* NavSub =
+				GEditor->GetEditorSubsystem<UVimNavigationEditorSubsystem>())
+			NavSub->GenerateMarkersForWidgets(SlateApp, FoundPinWidgets, true);
+		return;
+	}
 
 	/** Final Pin found, drag a line from it and break afterwards. */
 	AddNodeToPin(SlateApp, OriginPinObj, NodeObj, GraphPanel.ToSharedRef(), bIsAppendingNode);

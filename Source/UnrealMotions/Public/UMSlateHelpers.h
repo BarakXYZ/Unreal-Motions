@@ -54,7 +54,7 @@ public:
 	 */
 	static bool TraverseFindWidget(
 		const TSharedRef<SWidget>	 BaseWidget,
-		TArray<TSharedPtr<SWidget>>& OutWidgets,
+		TArray<TSharedRef<SWidget>>& OutWidgets,
 		const TSet<FString>&		 TargetTypes,
 		int32						 SearchCount = -1,
 		int32						 Depth = 0);
@@ -94,7 +94,7 @@ public:
 
 	static bool TraverseFindWidgetUpwards(
 		const TSharedRef<SWidget>	 BaseWidget,
-		TArray<TSharedPtr<SWidget>>& OutWidgets,
+		TArray<TSharedRef<SWidget>>& OutWidgets,
 		const TSet<FString>&		 TargetTypes,
 		const bool					 bTraverseDownOnceBeforeUp = false);
 

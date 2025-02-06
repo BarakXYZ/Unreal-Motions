@@ -83,6 +83,16 @@ public:
 	// All widget dissapear.
 	void FlashHintMarkers(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void FlashHintMarkers(
+		FSlateApplication&				   SlateApp,
+		const TArray<TSharedRef<SWidget>>& InWidgets,
+		bool							   bDigitHintMarkers = false);
+
+	bool GenerateMarkersForWidgets(
+		FSlateApplication&				   SlateApp,
+		const TArray<TSharedRef<SWidget>>& InWidgets,
+		bool							   bDigitHintMarkers = false);
+
 	void FlashHintMarkersMultiWindow(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	/**
@@ -92,7 +102,7 @@ public:
 	 * @param OutWidgets  Array to store the collected interactable widgets.
 	 * @return true if any interactable widgets were found, false otherwise.
 	 */
-	bool CollectInteractableWidgets(TArray<TSharedPtr<SWidget>>& OutWidgets);
+	bool CollectInteractableWidgets(TArray<TSharedRef<SWidget>>& OutWidgets);
 
 	/**
 	 * Multi-Window Edition:
@@ -108,10 +118,10 @@ public:
 	 * otherwise.
 	 */
 	bool CollectInteractableWidgets(
-		TArray<TArray<TSharedPtr<SWidget>>>& OutWidgets,
+		TArray<TArray<TSharedRef<SWidget>>>& OutWidgets,
 		TArray<TSharedRef<SWindow>>&		 ParentWindows);
 
-	TArray<FString> GenerateLabels(int32 NumLabels);
+	TArray<FString> GenerateLabels(int32 NumLabels, bool bDigitMarkers = false);
 
 	////////////////////////////////////////////////////////////////////////////
 	//							Trie Handling

@@ -107,7 +107,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 
 bool FUMSlateHelpers::TraverseFindWidget(
 	const TSharedRef<SWidget>	 BaseWidget,
-	TArray<TSharedPtr<SWidget>>& OutWidgets,
+	TArray<TSharedRef<SWidget>>& OutWidgets,
 	const TSet<FString>&		 TargetTypes,
 	int32 SearchCount, int32 Depth)
 {
@@ -341,7 +341,7 @@ bool FUMSlateHelpers::TraverseFindWidgetUpwards(
 // are out of the viewports visibility.
 bool FUMSlateHelpers::TraverseFindWidgetUpwards(
 	const TSharedRef<SWidget>	 BaseWidget,
-	TArray<TSharedPtr<SWidget>>& OutWidgets,
+	TArray<TSharedRef<SWidget>>& OutWidgets,
 	const TSet<FString>&		 TargetTypes,
 	const bool					 bTraverseDownOnceBeforeUp)
 {

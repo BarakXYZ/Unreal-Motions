@@ -117,21 +117,57 @@ void UVimNavigationEditorSubsystem::NavigatePanelTabs(
 void UVimNavigationEditorSubsystem::FlashHintMarkers(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	if (HintOverlayData.IsDisplayed())
-		ResetHintMarkers(); // Reset existing Hint Markers (if any)
-
-	const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
-	if (!ActiveWindow.IsValid())
-		return;
-
-	TArray<TSharedPtr<SWidget>> InteractableWidgets;
+	TArray<TSharedRef<SWidget>> InteractableWidgets;
 	if (!CollectInteractableWidgets(InteractableWidgets))
 		return; // Will return false if no widgets were found.
 
-	const int32 NumWidgets = InteractableWidgets.Num();
+	GenerateMarkersForWidgets(SlateApp, InteractableWidgets);
+}
 
-	// Create Hint Marker Labels (e.g. "HH", "HL", "S", etc.)
-	const TArray<FString> Labels = GenerateLabels(NumWidgets);
+bool UVimNavigationEditorSubsystem::GenerateMarkersForWidgets(
+	FSlateApplication&				   SlateApp,
+	const TArray<TSharedRef<SWidget>>& InWidgets,
+	bool							   bDigitHintMarkers)
+{
+	// TODO: Implement bDigitHintMarkers
+
+	if (HintOverlayData.IsDisplayed())
+		ResetHintMarkers(); // Reset existing Hint Markers (if any)
+
+	if (InWidgets.IsEmpty())
+		return false;
+
+	const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWindow.IsValid())
+		return false;
+
+	// TODO: Refactor to a function?
+	const int32 NumWidgets = InWidgets.Num();
+	// Create Hint Marker Labels:
+	// "HH", "HL", "S"...
+	// Or Digit 1, 2, 3...
+	// Or Combined (1, 2, 3, 4, 5, 6, 7, 8, 9, "HH", "HL", "S"...)
+	TArray<FString> Labels;
+	if (bDigitHintMarkers)
+	{
+		const int MaxDigit{ 9 };
+		if (NumWidgets > MaxDigit)
+		{
+			// Combination of digit and non-digit markers
+			const TArray<FString> CharLabels = GenerateLabels(NumWidgets);
+			Labels = GenerateLabels(NumWidgets, bDigitHintMarkers);
+			int x{ 0 };
+			for (int i{ MaxDigit }; i < NumWidgets; ++i)
+			{
+				Labels[i] = CharLabels[x];
+				++x;
+			}
+		}
+		else
+			Labels = GenerateLabels(NumWidgets, bDigitHintMarkers);
+	}
+	else
+		Labels = GenerateLabels(NumWidgets);
 
 	// Create the Hint Marker Widgets
 	TArray<TSharedRef<SUMHintMarker>> HintMarkers;
@@ -139,7 +175,7 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 
 	for (int32 i = 0; i < NumWidgets; ++i)
 	{
-		const TSharedRef<SWidget> WidgetRef = InteractableWidgets[i].ToSharedRef();
+		const TSharedRef<SWidget> WidgetRef = InWidgets[i];
 		TSharedRef<SUMHintMarker> HintMarker =
 			SNew(SUMHintMarker)
 				.TargetWidget(WidgetRef)
@@ -150,7 +186,7 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 	}
 
 	if (!BuildHintTrie(Labels, HintMarkers)) // Build the Trie from these markers
-		return;
+		return false;
 
 	// Add all Hint Markers to the screen
 	TSharedRef<SUMHintOverlay> HintOverlay = SNew(SUMHintOverlay, MoveTemp(HintMarkers));
@@ -166,6 +202,8 @@ void UVimNavigationEditorSubsystem::FlashHintMarkers(
 		&UVimNavigationEditorSubsystem::ProcessHintInput);
 
 	Logger.Print(FString::Printf(TEXT("Created %d Hint Markers!"), NumWidgets), ELogVerbosity::Verbose, true);
+
+	return true;
 }
 
 void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
@@ -176,7 +214,7 @@ void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
 		ResetHintMarkersMultiWindow();
 
 	// Collect interactable widgets from *all* visible windows:
-	TArray<TArray<TSharedPtr<SWidget>>> InteractableWidgetsPerWindow;
+	TArray<TArray<TSharedRef<SWidget>>> InteractableWidgetsPerWindow;
 	TArray<TSharedRef<SWindow>>			ParentWindows;
 	if (!CollectInteractableWidgets(InteractableWidgetsPerWindow, ParentWindows))
 		return; // No widgets found anywhere
@@ -256,7 +294,7 @@ void UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow(
 }
 
 bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
-	TArray<TSharedPtr<SWidget>>& OutWidgets)
+	TArray<TSharedRef<SWidget>>& OutWidgets)
 {
 	// Get & validate the currently focused widget (from which we will traverse)
 	FSlateApplication& SlateApp = FSlateApplication::Get();
@@ -270,7 +308,7 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 }
 
 bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
-	TArray<TArray<TSharedPtr<SWidget>>>& OutWidgets,
+	TArray<TArray<TSharedRef<SWidget>>>& OutWidgets,
 	TArray<TSharedRef<SWindow>>&		 ParentWindows)
 {
 	// Get & validate the currently focused widget (from which we will traverse)
@@ -282,7 +320,7 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	// Fetch the Interactive Widgets that each windows has.
 	for (const TSharedRef<SWindow>& Win : VisibleWindows)
 	{
-		TArray<TSharedPtr<SWidget>> InteractableWidgets;
+		TArray<TSharedRef<SWidget>> InteractableWidgets;
 		if (FUMSlateHelpers::TraverseFindWidget(Win,
 				InteractableWidgets, FUMSlateHelpers::GetInteractableWidgetTypes()))
 		{
@@ -299,10 +337,18 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	return (!OutWidgets.IsEmpty() && !OutWidgets[0].IsEmpty());
 }
 
-TArray<FString> UVimNavigationEditorSubsystem::GenerateLabels(int32 NumLabels)
+TArray<FString> UVimNavigationEditorSubsystem::GenerateLabels(int32 NumLabels, bool bDigitMarkers)
 {
 	if (NumLabels <= 0)
 		return TArray<FString>(); // No labels
+
+	if (bDigitMarkers) // Handle Digit Markers generation
+	{
+		TArray<FString> DigitMarkers;
+		for (int i{ 0 }; i < NumLabels; ++i)
+			DigitMarkers.Add(FString::FromInt(i + 1)); // Start from 1
+		return DigitMarkers;
+	}
 
 	// Default Chars; These are classics, but we may want to support configuration
 	const FString Alphabet = TEXT("ASDFGHJKLWECP");

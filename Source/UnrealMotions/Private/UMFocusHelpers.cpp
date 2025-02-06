@@ -97,6 +97,13 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		(*ExecFuncWidget)(SlateApp, InWidget);
 		return true;
 	}
+	// TODO: Refactor to an array of startswith? or send over the
+	// SLevelOfDetailBranchNode from the caller?
+	else if (WidgetType.StartsWith("SGraphPin"))
+	{
+		ClickSPin(SlateApp, InWidget);
+		return true;
+	}
 
 	// Generic set focus & press
 	SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
@@ -174,7 +181,7 @@ void FUMFocusHelpers::ClickSPropertyValueWidget(FSlateApplication& SlateApp, con
 void FUMFocusHelpers::ClickSNodeSPin(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
 	static const TArray<FString> NodeAndPinTypes = { "SGraphPin", "SGraphNode" };
-	// We need to skip the first parent, as it shares the SGraphPin:
+	// We need to skip the first parent, as it shares both widgets (Pin & Node):
 	const TSharedPtr<SWidget> BaseWidget = InWidget->GetParentWidget();
 	if (!BaseWidget.IsValid())
 		return;
