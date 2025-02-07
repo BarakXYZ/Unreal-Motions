@@ -6,6 +6,7 @@
 #include "SGraphPin.h"
 #include "SGraphPanel.h"
 #include "EdGraph/EdGraphNode.h"
+#include "EdGraph/EdGraph.h"
 #include "Templates/SharedPointer.h"
 #include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
@@ -76,9 +77,9 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		{ "SCheckBox", &FUMFocusHelpers::ClickSCheckBox },
 		{ "SPropertyValueWidget", &FUMFocusHelpers::ClickSPropertyValueWidget },
 		{ "SDockTab", &FUMFocusHelpers::ClickSDockTab },
-		{ "SGraphNodeK2Event", &FUMFocusHelpers::ClickSNodeSPin },
-		{ "SGraphNodeK2Default", &FUMFocusHelpers::ClickSNodeSPin },
 		{ "SLevelOfDetailBranchNode", &FUMFocusHelpers::ClickSNodeSPin },
+		{ "SGraphNode", &FUMFocusHelpers::ClickSNode },
+		{ "SGraphPin", &FUMFocusHelpers::ClickSPin },
 	};
 
 	// SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
@@ -97,15 +98,18 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		(*ExecFuncWidget)(SlateApp, InWidget);
 		return true;
 	}
-	// TODO: Refactor to an array of startswith? or send over the
-	// SLevelOfDetailBranchNode from the caller?
-	else if (WidgetType.StartsWith("SGraphPin"))
+
+	// Useful for catching all types of nodes & pins (and probably more in future)
+	for (const auto& Pair : WidgetExecMap)
 	{
-		ClickSPin(SlateApp, InWidget);
-		return true;
+		if (ClassType.StartsWith(Pair.Key) || WidgetType.StartsWith(Pair.Key))
+		{
+			Pair.Value(SlateApp, InWidget);
+			return true;
+		}
 	}
 
-	// Generic set focus & press
+	// Generic set focus & press fallback
 	SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
 	FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, FKey(EKeys::Enter));
 	return false;
@@ -227,10 +231,41 @@ void FUMFocusHelpers::ClickSPin(FSlateApplication& SlateApp, const TSharedRef<SW
 {
 	Logger.Print("Found SGraphPin", ELogVerbosity::Log, true);
 
-	TSharedRef<SGraphPin> GraphPin = StaticCastSharedRef<SGraphPin>(InWidget);
+	TSharedPtr<SWidget> FoundWidget;
+	if (!FUMSlateHelpers::TraverseFindWidgetUpwards(InWidget, FoundWidget, "SGraphPanel"))
+		return;
+
+	auto AddNode = [](FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget) {
+	TSharedRef<SGraphPin>
+		GraphPin = StaticCastSharedRef<SGraphPin>(InWidget);
 	if (UVimGraphEditorSubsystem* GraphSub =
 			GEditor->GetEditorSubsystem<UVimGraphEditorSubsystem>())
-		GraphSub->AddNodeToPin(SlateApp, GraphPin);
+		GraphSub->AddNodeToPin(SlateApp, GraphPin); };
+
+	TSharedPtr<SGraphPanel> GraphPanel = StaticCastSharedPtr<SGraphPanel>(FoundWidget);
+	if (GraphPanel->HasAnyUserFocusOrFocusedDescendants())
+	{
+		AddNode(SlateApp, InWidget);
+		return;
+	}
+
+	SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
+	// Timer seems to be needed to give a second for the focus to be properly set
+	// and for the node to be properly pulled from the pin. Around 0.25f seems
+	// to do the job, while less seems to be less stable.
+	TWeakPtr<SWidget> WeakWidget = InWidget;
+	FTimerHandle	  TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[&SlateApp, WeakWidget, AddNode]() {
+			TSharedPtr<SWidget> InWidget = WeakWidget.Pin();
+			if (!InWidget.IsValid())
+				return;
+
+			// Pull string from the pin itself:
+			AddNode(SlateApp, InWidget.ToSharedRef());
+		},
+		0.3f, false);
 }
 
 bool FUMFocusHelpers::TryFocusPopupMenu(FSlateApplication& SlateApp)

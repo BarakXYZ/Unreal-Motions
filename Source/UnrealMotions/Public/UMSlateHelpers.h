@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Framework/Docking/TabManager.h"
 #include "ISceneOutlinerTreeItem.h"
+#include "SGraphPanel.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Views/STreeView.h"
 #include "Widgets/SWidget.h"
@@ -262,6 +263,8 @@ public:
 		TArray<TSharedPtr<SWidget>>& OutInteractableWidgets);
 
 	static bool DoesWidgetResidesInRegularWindow(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
+
+	static TSharedPtr<SGraphPanel> TryGetActiveGraphPanel(FSlateApplication& SlateApp);
 
 	static FUMLogger Logger;
 };

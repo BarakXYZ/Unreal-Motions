@@ -1214,58 +1214,66 @@ const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 		// "SNumericEntryBox<NumericType>",
 
 		// Takes care of all nodes & all pins?!
-		"SLevelOfDetailBranchNode",
+		// "SLevelOfDetailBranchNode",
 
-		// // ~ SGraphPin types ~  //
-		// // Kismet Pins:
-		// "SGraphPinBool",
-		// "SGraphPinClass",
-		// "SGraphPinCollisionProfile",
-		// "SGraphPinColor",
-		// "SGraphPinDataTableRowName",
-		// "SGraphPinEnum",
-		// "SGraphPinExec",
-		// "SGraphPinIndex",
-		// "SGraphPinInteger",
-		// "SGraphPinIntegerSlider",
-		// "SGraphPinKey",
-		// "SGraphPinNameList",
-		// "SGraphPinObject",
-		// "SGraphPinString",
-		// "SGraphPinStruct",
-		// "SGraphPinStructInstance",
-		// "SGraphPinText",
-		// // "SNameComboBox", // Also part of pins?
-		// // Material Pins:
-		// "SGraphPinMaterialInput",
-		// // ~ SGraphPin types ~  //
+		// ~ SGraphPin types ~  //
+		// Kismet Pins:
+		"SGraphPin", // Found in the wild
+		"SGraphPinBool",
+		"SGraphPinClass",
+		"SGraphPinCollisionProfile",
+		"SGraphPinColor",
+		"SGraphPinDataTableRowName",
+		"SGraphPinEnum",
+		"SGraphPinExec",
+		"SGraphPinIndex",
+		"SGraphPinInteger",
+		"SGraphPinIntegerSlider",
+		"SGraphPinKey",
+		"SGraphPinNameList",
+		"SGraphPinObject",
+		"SGraphPinString",
+		"SGraphPinStruct",
+		"SGraphPinStructInstance",
+		"SGraphPinText",
+		// "SNameComboBox", // Also part of pins?
+		// Material Pins:
+		"SGraphPinMaterialInput",
 
-		// // ~ SGraphNode types ~  //
-		// // Kismet Nodes:
-		// "SGraphNodeK2Base",
-		// "SGraphNodeK2Composite",
-		// "SGraphNodeK2Copy",
-		// "SGraphNodeK2CreateDelegate",
-		// "SGraphNodeK2Default",
-		// "SGraphNodeK2Event",
-		// "SGraphNodeK2Sequence",
-		// "SGraphNodeK2Terminator",
-		// "SGraphNodeK2Timeline",
-		// "SGraphNodeK2Var",
-		// "SGraphNodeMakeStruct",
-		// "SGraphNodeSpawnActor",
-		// "SGraphNodeSpawnActorFromClass",
-		// "SGraphNodeSwitchStatement",
-		// // Material Nodes:
-		// "SGraphNodeMaterialBase",
-		// "SGraphNodeMaterialComment",
-		// "SGraphNodeMaterialComposite",
-		// "SGraphNodeMaterialCustom",
-		// "SGraphNodeMaterialResult",
-		// "SGraphSubstrateMaterial",
-		// // Misc:
-		// "SGraphNodePromotableOperator",
-		// // ~ SGraphNode types ~  //
+		// More encounters:
+		"SGraphPinNum", // < SGraphPinNum<double> is cleaned-up to <
+
+		// ~ SGraphPin types ~  //
+
+		// ~ SGraphNode types ~  //
+		// Kismet Nodes:
+		"SGraphNode",
+		"SGraphNodeK2Base",
+		"SGraphNodeK2Composite",
+		"SGraphNodeK2Copy",
+		"SGraphNodeK2CreateDelegate",
+		"SGraphNodeK2Default",
+		"SGraphNodeK2Event",
+		"SGraphNodeK2Sequence",
+		"SGraphNodeK2Terminator",
+		"SGraphNodeK2Timeline",
+		"SGraphNodeK2Var", // Doesn't have SLevelOfDetailBranchNode
+
+		"SGraphNodeMakeStruct",
+		"SGraphNodeSpawnActor",
+		"SGraphNodeSpawnActorFromClass",
+		"SGraphNodeSwitchStatement",
+		// Material Nodes:
+		"SGraphNodeMaterialBase",
+		"SGraphNodeMaterialComment",
+		"SGraphNodeMaterialComposite",
+		"SGraphNodeMaterialCustom",
+		"SGraphNodeMaterialResult",
+		"SGraphSubstrateMaterial",
+		// Misc:
+		"SGraphNodePromotableOperator", // Doesn't have SLevelOfDetailBranchNode
+
+		// ~ SGraphNode types ~  //
 
 	};
 
@@ -1276,4 +1284,14 @@ bool FUMSlateHelpers::DoesWidgetResidesInRegularWindow(FSlateApplication& SlateA
 {
 	const TSharedPtr<SWindow> ParentWindow = SlateApp.FindWidgetWindow(InWidget);
 	return (ParentWindow.IsValid() && ParentWindow->IsRegularWindow());
+}
+
+TSharedPtr<SGraphPanel> FUMSlateHelpers::TryGetActiveGraphPanel(
+	FSlateApplication& SlateApp)
+{
+	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	return (FocusedWidget.IsValid()
+			   && FocusedWidget->GetTypeAsString().Equals("SGraphPanel"))
+		? StaticCastSharedPtr<SGraphPanel>(FocusedWidget)
+		: nullptr;
 }

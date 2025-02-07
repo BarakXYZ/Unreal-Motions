@@ -96,8 +96,6 @@ public:
 		const TMap<UEdGraphNode*, TArray<UEdGraphNode*>>& OutgoingConnections,
 		bool											  bFindFirstNode);
 
-	const TSharedPtr<SGraphPanel> TryGetActiveGraphPanel(FSlateApplication& SlateApp);
-
 	void MoveConnectedNodesToRight(UEdGraphNode* StartNode, float OffsetX);
 
 	void HandleOnContextBindingChanged(EUMContextBinding NewContext, const TSharedRef<SWidget> NewWidget);

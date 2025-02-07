@@ -132,47 +132,19 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DebugNodeAndPinsTypes);
 
-	// About the pin motions:
-	// Upon the user focusing a node via Hint Markers we have access to the
-	// future selected node, thus we can setup the pin visualization easily.
-	// We have the "AddOnGraphChangedHandler" to know when nodes are deleted
-	// or added. Also, we can start listening to OnMouseButtonDown from the
-	// VimProcessor and things like that when we're entering the GraphEditor
-	// context. Also the OnKeyButtonDown is available, etc.
-	// Other than that though, we then user tries to navigate pins via HJKL
-	// we can simply upon the event check we have everything we need (i.e.
-	// 1 selected node we know we're operating on, etc.) so there isn't a real
-	// need to know about focus changing inside the node graph too much.
-	// It will be the most robust to build the HJKL event as independent as
-	// possible and to not rely on too many outside delegates.
-	//
-	// Thinking more about this, we might still need to rely partially
-	// one SelectionChanged. We can make it more robust by listening
-	// to OnFocusChanged while we're on the GraphEditor context.
-	// I think the OnSelectionChanged will be needed because we kind
-	// of have to know when there are no nodes selected vs. any.
-	// In these cases, we will have to hide the highlight overlay
-	// for the pins. If we can think of a cleaner architecture
-	// it will be great; but that's what I currently have.
-	//
-	// Maybe............ we can also have the following flow:
-	// let's say we have a node with 6 inputs and 3 outputs.
-	// In this case, when we press 'A' to append (and the
-	// node is actually selected) we will have hint markers
-	// popping for each of the output nodes with numbers 1-3.
-	// So the user can easily complete 1-3 to select to which
-	// pin he wants to append. Similarly for 'I' to insert,
-	// it will pop 6 hint markers (1-6) for the 6 input pins
-	// of the node. So i1, i2, i3... we send the cursor to
-	// pull a string to insert a new node for the correct
-	// pin index!
-	// That actually sounds really cool, simple and also
-	// fast and nice UX. Because needing to go to each
-	// pin does sounds kind of weird honestly.
-	// That way HJKL just navigates the nodes themselves
-	// and we don't have to worry about highlighting and
-	// navigating pins which feels really intense!
-	// PROBLEM SOLVED!
+	// Some more thoughts in regards to moving between nodes:
+	// I think it makes the most sense to move (pan around) inside the node graph
+	// itself via HJKL. This gives us freedom to assign natural motions like
+	// moving to next / previous node via 'b' & 'w' and also doesn't collide with
+	// 'a' which is preserved for appending node. (HJKL is better than AWSD in
+	// that case).
+	// We can go to the above / below node via 'e' & 'q' (which feels natural
+	// as users are used to this motion feel from moving inside the UE viewport)
+	// And we can have 'Shift + e' & 'Shift + q' for potentiall moving between
+	// entire rows of disconnected nodes.
+	// We can start now by implementing 'b' & 'w' for previous & next node,
+	// then do panning inside the panel via HJKL and see how things feel from
+	// there.
 
 	// Selection + Move HJKL
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -204,17 +176,18 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
 	// TODO:
-	// 2. gg & G to go to focus first or last node in a chain
-	// 3. Figure out movement inside the graph panel (wasd?)
-	// 4. Movement between nodes & pins
-	// 5. Finalize graph appending and insertion edge cases
+	// 1. gg & G to go to focus first or last node in a chain
+	// 3. Finalize graph appending and insertion edge cases
+	// 4. 'b' & 'w' for moving to previous & next node.
+	// 5. Panel panning via HJKL
+	// 6. Move 'up' & 'down' between nodes via 'q' & 'e' & Shift ...
 }
 
 void UVimGraphEditorSubsystem::AddNode(
 	FSlateApplication& SlateApp,
 	const FKeyEvent&   InKeyEvent)
 {
-	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
 
@@ -314,7 +287,7 @@ void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
 		return;
 	}
 
-	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 	{
 		Logger.Print("Graph Panel is Invalid", ELogVerbosity::Error, true);
@@ -499,15 +472,6 @@ bool UVimGraphEditorSubsystem::GetPinToLinkedPinDelta(
 
 	Delta = OriginPinWidget->GetNodeOffset().Y - LinkedPinWidget->GetNodeOffset().Y;
 	return true;
-}
-
-const TSharedPtr<SGraphPanel> UVimGraphEditorSubsystem::TryGetActiveGraphPanel(FSlateApplication& SlateApp)
-{
-	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	return (FocusedWidget.IsValid()
-			   && FocusedWidget->GetTypeAsString().Equals("SGraphPanel"))
-		? StaticCastSharedPtr<SGraphPanel>(FocusedWidget)
-		: nullptr;
 }
 
 UEdGraphNode* UVimGraphEditorSubsystem::FindEdgeNodeInChain(
@@ -812,7 +776,7 @@ void UVimGraphEditorSubsystem::ZoomGraph(
 {
 	Logger.Print("My Custom Zoom", ELogVerbosity::Verbose, true);
 
-	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
 
@@ -841,7 +805,7 @@ void UVimGraphEditorSubsystem::ZoomGraph(
 void UVimGraphEditorSubsystem::ZoomToFit(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
 
@@ -1161,7 +1125,7 @@ void UVimGraphEditorSubsystem::UnhookFromActiveGraphPanel()
 void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
 
@@ -1185,7 +1149,7 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 void UVimGraphEditorSubsystem::DebugNodeAndPinsTypes()
 {
 	FSlateApplication&			  SlateApp = FSlateApplication::Get();
-	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
 
@@ -1276,6 +1240,13 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 		return;
 	const TSharedRef<SGraphPin> PinRef = GraphPin.ToSharedRef();
 
+	// We want to grab the pin image (that lives inside the pin itself) for the
+	// optimal pulling point (for the cursor):
+	TSharedPtr<SWidget> FoundPinImage;
+	const FString		ImageType = "SLayeredImage";
+	if (!FUMSlateHelpers::TraverseFindWidget(PinRef, FoundPinImage, ImageType))
+		return;
+
 	// NOTE: Only when appending we need an offset for cursor, because when
 	// inserting a node, we firstly move all the nodes to the right, thus, the
 	// offset is created organically just by moving the nodes.
@@ -1286,7 +1257,7 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 		? (FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(PinRef, OffA))
 		: (FUMSlateHelpers::GetWidgetTopLeftScreenSpacePosition(PinRef));
 
-	FUMInputHelpers::DragAndReleaseWidgetAtPosition(PinRef, CurOffset);
+	FUMInputHelpers::DragAndReleaseWidgetAtPosition(FoundPinImage.ToSharedRef(), CurOffset);
 
 	FTimerHandle TimerHandle;
 	GEditor->GetTimerManager()->SetTimer(
@@ -1333,7 +1304,7 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 	if (!ParentNode)
 		return;
 
-	const TSharedPtr<SGraphPanel> GraphPanel = TryGetActiveGraphPanel(SlateApp);
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
 
