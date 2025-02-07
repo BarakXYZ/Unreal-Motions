@@ -105,6 +105,7 @@ public:
 		const FKey KeyToRelease = EKeys::LeftMouseButton);
 
 	static void MoveMouseButtonToPosition(const FVector2D TargetPosition);
+	static void SimulateMouseMoveToPosition(FSlateApplication& SlateApp, const FVector2D TargetPosition);
 
 	/**
 	 * Drag and release widget at the given position.

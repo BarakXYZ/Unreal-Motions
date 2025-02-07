@@ -207,7 +207,7 @@ public:
 	FDelegateHandle			   DelegateHandle_OnTabForegrounded;
 	FUMOnBindingContextChanged OnBindingContextChanged;
 
-	EUMContextBinding CurrentContext{ EUMContextBinding::Generic };
+	static EUMContextBinding CurrentContext;
 
 	FTimerHandle TimerHandleNewWidgetTracker;
 	FTimerHandle TimerHandleNewMinorTabTracker;

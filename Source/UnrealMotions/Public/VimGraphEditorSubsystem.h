@@ -3,6 +3,7 @@
 #include "BlueprintEditor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Input/Events.h"
+#include "SNodePanel.h"
 #include "UMLogger.h"
 #include "SGraphPanel.h"
 #include "VimInputProcessor.h"
@@ -36,6 +37,7 @@ public:
 	void AddNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void AddNodeToPin(FSlateApplication& SlateApp, UEdGraphPin* InPin, UEdGraphNode* ParentNode, TSharedRef<SGraphPanel> GraphPanel, bool bIsAppendingNode);
 	void AddNodeToPin(FSlateApplication& SlateApp, const TSharedRef<SGraphPin> InPin);
+	void Log_AddNodeToPin(bool bIsAppendingNode);
 
 	void ZoomGraph(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
@@ -103,6 +105,20 @@ public:
 	void HandleOnGraphChanged(const FEdGraphEditAction& InAction);
 	void HandleOnSelectionChanged(const FGraphPanelSelectionSet& GraphPanelSelectionSet);
 	void UnhookFromActiveGraphPanel();
+	void DeleteNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void ProcessNodeClick(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
+
+	void AddNodeToHighlightedPin(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void HighlightPinForSelectedNode(
+		FSlateApplication&			  SlateApp,
+		const TSharedRef<SGraphPanel> GraphPanel,
+		const TSharedRef<SGraphNode>  SelectedNode);
+
+	void HighlightPinForSelectedNode(
+		FSlateApplication&			  SlateApp,
+		const TSharedRef<SGraphPanel> GraphPanel);
 
 	FUMLogger Logger;
 	int32	  NodeCounter;
@@ -113,6 +129,24 @@ public:
 	// We’ll track whether we’re currently in a “shifted” state
 	// so we know whether to revert on menu close.
 	bool bNodesWereShifted = false;
+
+	struct FGraphSelectionTracker
+	{
+		TWeakPtr<SGraphPanel> GraphPanel;
+		TWeakPtr<SGraphNode>  GraphNode;
+		TWeakPtr<SGraphPin>	  GraphPin;
+
+		FGraphSelectionTracker() = default;
+		FGraphSelectionTracker(
+			TWeakPtr<SGraphPanel> InGraphPanel,
+			TWeakPtr<SGraphNode>  InGraphNode,
+			TWeakPtr<SGraphPin>	  InGraphPin);
+
+		bool IsValid();
+		bool IsTrackedNodeSelected();
+	};
+
+	FGraphSelectionTracker GraphSelectionTracker;
 
 	FDelegateHandle					  OnGraphChangedHandler;
 	SGraphEditor::FOnSelectionChanged OnSelectionChangedOriginDelegate;

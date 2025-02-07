@@ -175,12 +175,35 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
+	/** Delete Node */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		// { FInputChord(EModifierKey::Shift, EKeys::Delete) },
+		{ EKeys::Delete },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::DeleteNode);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		// { FInputChord(EModifierKey::Shift, EKeys::X) },
+		{ EKeys::X },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::DeleteNode);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		// { FInputChord(EModifierKey::Shift, EKeys::X) },
+		{ EKeys::Enter },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::AddNodeToHighlightedPin);
+
 	// TODO:
 	// 1. gg & G to go to focus first or last node in a chain
-	// 3. Finalize graph appending and insertion edge cases
-	// 4. 'b' & 'w' for moving to previous & next node.
-	// 5. Panel panning via HJKL
-	// 6. Move 'up' & 'down' between nodes via 'q' & 'e' & Shift ...
+	// 2. Finalize graph appending and insertion edge cases
+	// 3. 'b' & 'w' for moving to previous & next node.
+	// 4. Panel panning via HJKL
+	// 5. Move 'up' & 'down' between nodes via 'q' & 'e' & Shift ...
+	// 6. 'Enter' to pull from the currently highlighted node?
 }
 
 void UVimGraphEditorSubsystem::AddNode(
@@ -238,13 +261,14 @@ void UVimGraphEditorSubsystem::AddNode(
 	TArray<TSharedRef<SWidget>> FoundPinWidgets;
 	for (const auto& Pin : AllPins)
 	{
-		// if (!Pin->GetTypeAsString().Equals("SGraphPinExec"))
-		// 	continue;
-
 		// Cast to the specific widget representation of this pin object
 		// (as the array of pins is fetching them as SWidgets)
 		const TSharedRef<SGraphPin> AsGraphPin =
 			StaticCastSharedRef<SGraphPin>(Pin);
+
+		// We can also access these conditionals from here:
+		// AsGraphPin->IsPinVisibleAsAdvanced();
+		// AsGraphPin->GetDirection();
 
 		// Verify the direction of the pin matches our TargetPinType (In | Out)
 		UEdGraphPin* EdGraphPin = AsGraphPin->GetPinObj();
@@ -268,11 +292,12 @@ void UVimGraphEditorSubsystem::AddNode(
 		if (UVimNavigationEditorSubsystem* NavSub =
 				GEditor->GetEditorSubsystem<UVimNavigationEditorSubsystem>())
 			NavSub->GenerateMarkersForWidgets(SlateApp, FoundPinWidgets, true);
-		return;
 	}
-
-	/** Final Pin found, drag a line from it and break afterwards. */
-	AddNodeToPin(SlateApp, OriginPinObj, NodeObj, GraphPanel.ToSharedRef(), bIsAppendingNode);
+	else
+	{
+		// In case we have only 1 pin, we can directly just pull from it.
+		AddNodeToPin(SlateApp, OriginPinObj, NodeObj, GraphPanel.ToSharedRef(), bIsAppendingNode);
+	}
 }
 
 void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
@@ -294,11 +319,16 @@ void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
 		return;
 	}
 
-	if (NodeCounter == GraphPanel->GetChildren()->Num())
+	UEdGraph* GraphObj = GraphPanel->GetGraphObj();
+	if (!GraphObj)
+		return;
+	// if (NodeCounter == GraphPanel->GetChildren()->Num())
+	if (NodeCounter == GraphObj->Nodes.Num())
 	{
 		Logger.Print("No new Nodes were created...", ELogVerbosity::Log, true);
 		// Revert if we had shifted
 		RevertShiftedNodes(GraphPanel);
+		HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef());
 		return;
 	}
 
@@ -332,28 +362,6 @@ void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
 	if (!NewNodeObj)
 		return;
 
-	// NOTE:
-	// This is currently not the greatest way to get the target pin because
-	// we may be operating on input / output pins with different indexes.
-	// For when we will start to do that - we will need to preserve the index
-	// of the input / output pin that we've been dragging from to get that
-	// specifically (we can also maybe try to store its ID? we have FindPinById
-	// I think)
-	// UEdGraphPin* NewPin =
-	// 	NewNodeObj->FindPinByPredicate([bIsAppendingNode](UEdGraphPin* Pin) {
-	// 		return Pin->Direction == (bIsAppendingNode ? EGPD_Input : EGPD_Output);
-	// 	});
-	// if (!NewPin->HasAnyConnections())
-	// 	return;
-	// // NewNode->FindWidgetForPin(NewPin);
-	// if (!NewPin->LinkedTo[0])
-	// 	return;
-	// TSharedPtr<SGraphNode> DraggedFromNode =
-	// 	GraphPanel->GetNodeWidgetFromGuid(NewPin->LinkedTo[0]->GetOwningNode()->NodeGuid);
-	// if (!DraggedFromNode.IsValid())
-	// 	return;
-	// Get the origin node ^^^^^
-
 	// Get the Dragged From Node:
 	// Simply passing it by a weak ptr doesn't seem to always work - especially
 	// when new macros are created in the graph. Thus we fetch it like that:
@@ -374,6 +382,8 @@ void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
 	GraphPanel->SelectionManager.SetNodeSelection(DraggedFromNode->GetNodeObj(), true);
 	GraphPanel->StraightenConnections();
 	GraphPanel->SelectionManager.SelectSingleNode(SelNodes[0]);
+
+	HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef(), NewNodeRef);
 
 	// When inserting we also want to potentially connect the new node to any
 	// existing nodes previous to our origin node (it will be disconnected
@@ -774,8 +784,6 @@ void UVimGraphEditorSubsystem::ZoomGraph(
 	FSlateApplication& SlateApp,
 	const FKeyEvent&   InKeyEvent)
 {
-	Logger.Print("My Custom Zoom", ELogVerbosity::Verbose, true);
-
 	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
@@ -1125,25 +1133,157 @@ void UVimGraphEditorSubsystem::UnhookFromActiveGraphPanel()
 void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
-	if (!GraphPanel.IsValid())
-		return;
+	// if no tracking available try get selected node and init pin highlight
+	if (!GraphSelectionTracker.IsValid() || !GraphSelectionTracker.IsTrackedNodeSelected())
+	{
+		TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
+		if (!GraphPanel.IsValid())
+			return;
+		TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+		if (SelNodes.IsEmpty() || !SelNodes[0])
+			return;
+		TSharedPtr<SGraphNode> GraphNode = GraphPanel->GetNodeWidgetFromGuid(SelNodes[0]->NodeGuid);
+		if (!GraphNode.IsValid())
+			return;
 
-	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
-	if (SelNodes.IsEmpty() || !SelNodes[0])
+		ProcessNodeClick(SlateApp, GraphNode.ToSharedRef());
 		return;
+	}
 
-	TArray<UEdGraphPin*> PinObjs = SelNodes[0]->GetAllPins();
-	if (PinObjs.IsEmpty())
-		return;
-
-	TSharedPtr<SGraphNode> GraphNode =
-		GraphPanel->GetNodeWidgetFromGuid(SelNodes[0]->NodeGuid);
+	TSharedPtr<SGraphPanel> GraphPanel = GraphSelectionTracker.GraphPanel.Pin();
+	TSharedPtr<SGraphNode>	GraphNode = GraphSelectionTracker.GraphNode.Pin();
+	TSharedPtr<SGraphPin>	GraphPin = GraphSelectionTracker.GraphPin.Pin();
 
 	TArray<TSharedRef<SWidget>> Pins;
 	GraphNode->GetPins(Pins);
+
+	// Remove (filter) non‐visible pins as they're not important or useful
+	Pins.RemoveAll([](const TSharedRef<SWidget>& Pin) { return !Pin->GetVisibility().IsVisible(); });
 	if (Pins.IsEmpty())
 		return;
+
+	int32 CurrPinIndex = Pins.Find(GraphPin.ToSharedRef());
+	if (CurrPinIndex == INDEX_NONE)
+		return; // Pin not found in the current node's pins array
+
+	const FKey			InKey = InKeyEvent.GetKey();
+	TSharedPtr<SWidget> TargetPin;
+	int					Inc, FallbackIndex;
+
+	// Lambda to handle the 'H' and 'L' cases without duplicating code.
+	//
+	// *For key 'H' we want:
+	//   if current pin is an input (EGPD_Input) → follow its connection,
+	//   else (i.e. current is output) → navigate to the corresponding input pin.
+	//
+	// *For key 'L' we want the mirror:
+	//   if current is output → follow its connection
+	//   else (i.e. current is input) → navigate to the corresponding output pin.
+	auto HandleDirectionalNavigation =
+		[&](EEdGraphPinDirection FollowDir, EEdGraphPinDirection NavDir) -> bool {
+		if (GraphPin->GetDirection() == FollowDir) // Try Move to new Pin & Node
+		{
+			UEdGraphPin* PinObj = GraphPin->GetPinObj();
+			if (!PinObj)
+				return false; // Invalid current Pin Object
+			if (PinObj->LinkedTo.IsEmpty())
+				return false; // No Connections (might want to handle this diff)
+			UEdGraphPin* NewPin = PinObj->LinkedTo[0];
+			if (!NewPin)
+				return false; // Invalid Linked Pin Object
+			UEdGraphNode* NewOwningNode = NewPin->GetOwningNode();
+			if (!NewOwningNode)
+				return false; // Invalid New Owning Node Object
+			TSharedPtr<SGraphNode> NewGraphNode =
+				GraphPanel->GetNodeWidgetFromGuid(NewOwningNode->NodeGuid);
+			if (!NewGraphNode.IsValid())
+				return false; // Invalid New Owning Node Widget
+			TSharedPtr<SGraphPin> NewGraphPin = NewGraphNode->FindWidgetForPin(NewPin);
+			if (!NewGraphPin.IsValid())
+				return false; // Invalid New Pin Widget
+
+			// Select the new node we're moving into // Add to selection?
+			GraphPanel->SelectionManager.SelectSingleNode(NewOwningNode);
+
+			// Highlight the New Pin we're moving into:
+			FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+				FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(NewGraphPin.ToSharedRef())));
+
+			// Update tracking params
+			GraphSelectionTracker.GraphNode = NewGraphNode;
+			GraphSelectionTracker.GraphPin = NewGraphPin;
+			return true;
+		}
+
+		// Else: Move inside the same node, try grab parallel indexed pin:
+		TArray<TSharedRef<SGraphPin>> ParallelPins;
+		for (const auto& Widget : Pins) // Collect all Parallel Pins
+		{
+			TSharedRef<SGraphPin> PinWidget = StaticCastSharedRef<SGraphPin>(Widget);
+			if (PinWidget->GetDirection() == NavDir)
+				ParallelPins.Add(PinWidget);
+		}
+		if (ParallelPins.IsEmpty())
+			return false; // No pins to navigate to.
+
+		// Because the node's pins are ordered (all inputs first,
+		// then outputs), we can compute the “relative index” as follows:
+		// *For H (NavDir == EGPD_Input):
+		//     Current pin is output, so subtract total input count.
+		// *For L (NavDir == EGPD_Output):
+		//     Current pin is input so its index is already relative.
+		int32 RelativeIndex = 0;
+		RelativeIndex = (NavDir == EGPD_Input)
+			? CurrPinIndex - ParallelPins.Num() // Output to Input
+			: CurrPinIndex;						// Input to Output
+
+		if (!ParallelPins.IsValidIndex(RelativeIndex))
+			RelativeIndex = ParallelPins.Num() - 1; // Get last parallel node
+		TargetPin = ParallelPins[RelativeIndex];	// Directly grab the node
+
+		// Highlight the New Pin we're moving into:
+		FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+			FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(TargetPin.ToSharedRef())));
+
+		// Update tracking params
+		GraphSelectionTracker.GraphPin = StaticCastSharedPtr<SGraphPin>(TargetPin);
+		return true;
+	};
+
+	// Handle keys H and L using the lambda.
+	if (InKey == FKey(EKeys::H))
+	{
+		if (!HandleDirectionalNavigation(EGPD_Input, EGPD_Input))
+			return;
+		return;
+	}
+	else if (InKey == FKey(EKeys::L))
+	{
+		if (!HandleDirectionalNavigation(EGPD_Output, EGPD_Output))
+			return;
+		return;
+	}
+	else if (InKey == FKey(EKeys::J))
+	{
+		Inc = 1;		   // Get Next node.
+		FallbackIndex = 0; // Wrap to first parallel node.
+	}
+	else if (InKey == FKey(EKeys::K))
+	{
+		Inc = -1;						// Get Previous node.
+		FallbackIndex = Pins.Num() - 1; // Wrap to last parallel node.
+	}
+	else
+		return;
+
+	// J and K simply move among the node's pins (regardless of direction)
+	TargetPin = Pins.IsValidIndex(CurrPinIndex + Inc)
+		? Pins[CurrPinIndex + Inc]
+		: Pins[FallbackIndex];
+
+	FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+		FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(TargetPin.ToSharedRef())));
+	GraphSelectionTracker.GraphPin = StaticCastSharedPtr<SGraphPin>(TargetPin);
 }
 
 void UVimGraphEditorSubsystem::DebugNodeAndPinsTypes()
@@ -1188,6 +1328,13 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 	UEdGraphNode* ParentNode, TSharedRef<SGraphPanel> GraphPanel,
 	bool bIsAppendingNode)
 {
+	// Log_AddNodeToPin(bIsAppendingNode);
+
+	// Reset both tracking parameters for a clean start (these are also cleaned
+	// in other places, but for safety, we want to clean here too)
+	ShiftedNodesOriginalPositions.Empty();
+	bNodesWereShifted = false;
+
 	// --------------------------
 	// 1) Collect nodes to shift
 	// --------------------------
@@ -1211,16 +1358,14 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 		CollectDownstreamNodes(ParentNode, NodesToShift, /*bIsAppending=*/false);
 	}
 
-	// If there's something to move, shift them.
-	// For example, +300 for shifting “to the right” or -300 if you want left.
-	// You can customize.
+	// Shift nodes if there are any
 	if (NodesToShift.Num() > 0)
 	{
-		Logger.Print("Nodes to Shift is above 0", ELogVerbosity::Verbose, true);
+		Logger.Print("Nodes to Shift is above 0", ELogVerbosity::Log, true);
 		ShiftNodesForSpace(GraphPanel, NodesToShift, /*ShiftAmountX=*/35.f);
 	}
 	else
-		Logger.Print("Nodes to Shift is 0", ELogVerbosity::Error, true);
+		Logger.Print("Nodes to Shift is 0", ELogVerbosity::Log, true);
 
 	const FVector2D OriginCurPos = SlateApp.GetCursorPos();
 
@@ -1229,7 +1374,11 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 
 	// Store the current number of nodes we have so we can compare it
 	// after the menu window has closed to see if a new node was created.
-	NodeCounter = GraphPanel->GetChildren()->Num();
+	UEdGraph* GraphObj = GraphPanel->GetGraphObj();
+	if (!GraphObj)
+		return;
+	NodeCounter = GraphObj->Nodes.Num();
+	// NodeCounter = GraphPanel->GetChildren()->Num();
 
 	TSharedPtr<SGraphNode> ParentGraphNode =
 		GraphPanel->GetNodeWidgetFromGuid(ParentNode->NodeGuid);
@@ -1295,7 +1444,8 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 void UVimGraphEditorSubsystem::AddNodeToPin(
 	FSlateApplication& SlateApp, const TSharedRef<SGraphPin> InPin)
 {
-	Logger.Print("Add Node to Pin", ELogVerbosity::Log, true);
+	// Logger.Print("Add Node to Pin", ELogVerbosity::Log, true);
+
 	UEdGraphPin* PinObj = InPin->GetPinObj();
 	if (!PinObj)
 		return;
@@ -1312,5 +1462,169 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 
 	AddNodeToPin(SlateApp, PinObj, ParentNode, GraphPanel.ToSharedRef(), bIsAppendingNode);
 }
+
+void UVimGraphEditorSubsystem::Log_AddNodeToPin(bool bIsAppendingNode)
+{
+	Logger.Print(FString::Printf(TEXT("bIsAppendingNode: %s"),
+					 bIsAppendingNode ? TEXT("TRUE") : TEXT("FALSE")),
+		ELogVerbosity::Log, true);
+
+	Logger.Print(FString::Printf(TEXT("Node Positions Stored: %d"),
+					 ShiftedNodesOriginalPositions.Num()),
+		ELogVerbosity::Log, true);
+}
+
+// TODO: Add Shift+X to delete previous node and keep connection.
+void UVimGraphEditorSubsystem::DeleteNode(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+		return;
+
+	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+	if (SelNodes.IsEmpty())
+		return;
+
+	TArray<UEdGraphPin*> Pins = SelNodes[0]->GetAllPins();
+	UEdGraphNode*		 FallbackNode = nullptr;
+	for (const auto& Pin : Pins)
+	{
+		if (Pin->LinkedTo.IsEmpty())
+			continue;
+
+		UEdGraphNode* OwningNode = Pin->LinkedTo[0]->GetOwningNode();
+		if (!OwningNode)
+			continue;
+
+		FallbackNode = OwningNode;
+		break;
+	}
+
+	SelNodes[0]->DestroyNode();
+	if (FallbackNode)
+		GraphPanel->SelectionManager.SelectSingleNode(FallbackNode);
+}
+
+void UVimGraphEditorSubsystem::ProcessNodeClick(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	Logger.Print("Found SGraphNode", ELogVerbosity::Log, true);
+
+	TSharedRef<SGraphNode> GraphNode = // We can safely cast to Base SGraphNode
+		StaticCastSharedRef<SGraphNode>(InWidget);
+
+	UEdGraphNode* AsNodeObj = GraphNode->GetNodeObj();
+	if (!AsNodeObj)
+		return;
+
+	const TSharedPtr<SGraphPanel> GraphPanel = GraphNode->GetOwnerPanel();
+	if (!GraphPanel.IsValid())
+		return;
+
+	// We wanna focus the Graph first to draw focus to the entire Minor Tab
+	// (just selecting the Node is not enough)
+	SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
+	GraphPanel->SelectionManager.SelectSingleNode(AsNodeObj);
+
+	HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef(), GraphNode);
+}
+
+// TODO: Look out to see if we want to also simulate pure Enter key
+void UVimGraphEditorSubsystem::AddNodeToHighlightedPin(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// if no tracking available try get selected node and init pin highlight?
+	// Not sure if truly needed...
+	if (!GraphSelectionTracker.IsValid()
+		|| !GraphSelectionTracker.IsTrackedNodeSelected())
+		return;
+	TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
+	AddNodeToPin(SlateApp, GraphPin.ToSharedRef());
+}
+
+void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(
+	FSlateApplication&			  SlateApp,
+	const TSharedRef<SGraphPanel> GraphPanel,
+	const TSharedRef<SGraphNode>  SelectedNode)
+{
+	// Check if there's a tracked node available and if it's the curr sel one:
+	if (GraphSelectionTracker.IsValid()
+		&& GraphSelectionTracker.IsTrackedNodeSelected())
+	{
+		// Highlight the previous pin it has tracked for continuity:
+		TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
+		FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+			FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPin.ToSharedRef())));
+		return;
+	}
+
+	// Highlight first Pin in currently selected node (Pin Input 0)
+	TArray<TSharedRef<SWidget>> Pins;
+	SelectedNode->GetPins(Pins);
+	if (Pins.IsEmpty())
+		return;
+	TSharedRef<SGraphPin> GraphPin = StaticCastSharedRef<SGraphPin>(Pins[0]);
+
+	// Track Parameters:
+	GraphSelectionTracker = FGraphSelectionTracker(GraphPanel, SelectedNode, GraphPin);
+
+	// Highlight Pin:
+	FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+		FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPin)));
+}
+
+void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(
+	FSlateApplication&			  SlateApp,
+	const TSharedRef<SGraphPanel> GraphPanel)
+{
+	GraphPanel->GetSelectedGraphNodes();
+	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+	if (SelNodes.IsEmpty() || !SelNodes[0])
+		return;
+	TSharedPtr<SGraphNode> GraphNode = GraphPanel->GetNodeWidgetFromGuid(SelNodes[0]->NodeGuid);
+	if (!GraphNode.IsValid())
+		return;
+
+	HighlightPinForSelectedNode(SlateApp, GraphPanel, GraphNode.ToSharedRef());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//				~ FGraphSelectionTracker Implementation ~ //
+//
+UVimGraphEditorSubsystem::FGraphSelectionTracker::FGraphSelectionTracker(
+	TWeakPtr<SGraphPanel> InGraphPanel,
+	TWeakPtr<SGraphNode>  InGraphNode,
+	TWeakPtr<SGraphPin>	  InGraphPin)
+{
+	GraphPanel = InGraphPanel;
+	GraphNode = InGraphNode;
+	GraphPin = InGraphPin;
+}
+
+bool UVimGraphEditorSubsystem::FGraphSelectionTracker::IsValid()
+{
+	return GraphPanel.IsValid() && GraphNode.IsValid() && GraphPin.IsValid();
+}
+
+bool UVimGraphEditorSubsystem::FGraphSelectionTracker::IsTrackedNodeSelected()
+{
+	if (TSharedPtr<SGraphNode> Node = GraphNode.Pin())
+	{
+		if (TSharedPtr<SGraphPanel> Panel = GraphPanel.Pin())
+		{
+			TArray<UEdGraphNode*> SelNodes = Panel->GetSelectedGraphNodes();
+			if (!SelNodes.IsEmpty())
+			{
+				UEdGraphNode* NodeObj = Node->GetNodeObj();
+				if (NodeObj && SelNodes[0])
+					return SelNodes[0] == NodeObj;
+			}
+		}
+	}
+	return false;
+}
+
+//
+//				~ FGraphSelectionTracker Implementation ~ //
+///////////////////////////////////////////////////////////////////////////////
 
 #undef LOCTEXT_NAMESPACE

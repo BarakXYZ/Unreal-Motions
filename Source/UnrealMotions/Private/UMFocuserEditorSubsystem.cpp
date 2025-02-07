@@ -17,6 +17,7 @@
 
 // DEFINE_LOG_CATEGORY_STATIC(UMFocuserEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(UMFocuserEditorSubsystem, Log, All); // Dev
+EUMContextBinding UUMFocuserEditorSubsystem::CurrentContext{ EUMContextBinding::Generic };
 
 bool UUMFocuserEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {

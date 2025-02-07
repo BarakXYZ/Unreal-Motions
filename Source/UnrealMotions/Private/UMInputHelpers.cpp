@@ -474,6 +474,19 @@ void FUMInputHelpers::MoveMouseButtonToPosition(
 	// Or move to with the pointer thingy?
 }
 
+void FUMInputHelpers::SimulateMouseMoveToPosition(FSlateApplication& SlateApp, const FVector2D TargetPosition)
+{
+	SlateApp.ProcessMouseMoveEvent(
+		FPointerEvent(
+			0,
+			TargetPosition,
+			SlateApp.GetCursorPos(),
+			TSet<FKey>(),
+			FKey(),
+			0,
+			FModifierKeysState()));
+}
+
 bool FUMInputHelpers::DragAndReleaseWidgetAtPosition(
 	const TSharedRef<SWidget> InWidget,
 	const FVector2f			  TargetPosition)
