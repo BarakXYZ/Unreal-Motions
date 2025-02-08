@@ -30,6 +30,8 @@ bool UUMFocuserEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 void UUMFocuserEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Logger = FUMLogger(&UMFocuserEditorSubsystem);
+	ListNavigationManager.Logger = &Logger;
+	ListNavigationManager.FocuserSub = this;
 
 	FCoreDelegates::OnPostEngineInit.AddUObject(
 		this, &UUMFocuserEditorSubsystem::RegisterSlateEvents);
@@ -38,6 +40,9 @@ void UUMFocuserEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		this, &UUMFocuserEditorSubsystem::UpdateWidgetForActiveTab);
 
 	Super::Initialize(Collection);
+
+	if (FUMConfig::Get()->IsVimEnabled())
+		BindVimCommands();
 }
 
 void UUMFocuserEditorSubsystem::Deinitialize()
@@ -1019,6 +1024,8 @@ void UUMFocuserEditorSubsystem::ValidateFocusedWidget()
 
 			if (!FocusedWidget.IsValid())
 				TryBringFocusToActiveTab();
+			else
+				ListNavigationManager.TrackFocusedWidget(FocusedWidget.ToSharedRef());
 		},
 		0.2f,
 		false);
@@ -1073,4 +1080,279 @@ void UUMFocuserEditorSubsystem::Log_OnFocusChanged(
 	Logger.Print(
 		LogFunc + FString::Printf(TEXT("Old Widget: %s\nNew Widget: %s"), *LogOldWidget, *LogNewWidget),
 		ELogVerbosity::Verbose, true);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//				~ FGraphSelectionTracker Implementation ~ //
+UUMFocuserEditorSubsystem::FListNavigationManager::FTrackedInst::FTrackedInst(
+	TWeakPtr<SWidget>  InWidget,
+	TWeakPtr<SWindow>  InParentWindow,
+	TWeakPtr<SDockTab> InParentMajorTab,
+	bool			   InbParentNomadTab,
+	TWeakPtr<SDockTab> InParentMinorTab)
+{
+	Widget = InWidget;
+	ParentWindow = InParentWindow;
+	ParentMajorTab = InParentMajorTab;
+	bIsParentNomadTab = InbParentNomadTab;
+	ParentMinorTab = InParentMinorTab;
+}
+
+bool UUMFocuserEditorSubsystem::FListNavigationManager::FTrackedInst::IsValid()
+{
+	return (Widget.IsValid() && ParentWindow.IsValid() && ParentMajorTab.IsValid()
+		&& (bIsParentNomadTab || ParentMinorTab.IsValid()));
+}
+
+void UUMFocuserEditorSubsystem::FListNavigationManager::Push(
+	TSharedRef<SWidget>	 InWidget,
+	TSharedRef<SWindow>	 InParentWindow,
+	TSharedRef<SDockTab> InParentMajorTab,
+	bool				 InbParentNomadTab,
+	TSharedPtr<SDockTab> InParentMinorTab)
+{
+	// if (!TrackedWidgets.IsEmpty())
+	// {
+	// 	for (int32 i = TrackedWidgets.Num() - 1; i >= 0; --i)
+	// 	{
+	// 		if (!TrackedWidgets[i].IsValid())
+	// 		{
+	// 			TrackedWidgets.RemoveAt(i); // Remove invalid widgets
+	// 			continue;
+	// 		}
+	// 		else if (TrackedWidgets[i].Widget.Pin()->GetId() == InWidget->GetId())
+	// 		{
+	// 			TrackedWidgets.RemoveAt(i); // No duplicates
+	// 			break;
+	// 		}
+	// 	}
+	// }
+
+	if (bHasJumpedToNewWidget)
+	{
+		bHasJumpedToNewWidget = false;
+		return;
+	}
+
+	TrackedWidgets.RemoveAll([&](const FTrackedInst& Inst) {
+		if (const TSharedPtr<SWidget> Widget = Inst.Widget.Pin())
+		{
+			return Widget->GetId() == InWidget->GetId();
+		}
+		return true;
+	});
+
+	while (TrackedWidgets.Num() > CAP) // Shrink the array if it exceeds Max
+		TrackedWidgets.RemoveAt(TrackedWidgets.Num() - 1);
+
+	// if our currently focused widget is a widget we've previously jumped to:
+	// we want it to be behind the upcoming new widget (for continuity)
+	if (CurrWidgetIndex != 0
+		&& TrackedWidgets.IsValidIndex(CurrWidgetIndex)
+		&& TrackedWidgets[CurrWidgetIndex].IsValid()
+		&& TrackedWidgets[CurrWidgetIndex].Widget.Pin()->HasAnyUserFocusOrFocusedDescendants())
+	{
+		FTrackedInst Temp = TrackedWidgets[CurrWidgetIndex];
+		TrackedWidgets.RemoveAt(CurrWidgetIndex);
+		TrackedWidgets.Insert(Temp, 0);
+	}
+
+	TrackedWidgets.Insert(FTrackedInst(InWidget, InParentWindow, InParentMajorTab, InbParentNomadTab, InParentMinorTab), 0);
+	CurrWidgetIndex = 0; // We're at the front when a new widget is added, right?
+}
+
+// TODO: Figure out what's going on with pop-up windows -> they seem to crash
+void UUMFocuserEditorSubsystem::FListNavigationManager::TrackFocusedWidget(const TSharedRef<SWidget> NewWidget)
+{
+	TWeakPtr<SWidget>		  WeakNewWidget = NewWidget;
+	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+	TimerManager->ClearTimer(TimerHandle_TrackFocusedWidget);
+
+	// Not sure if we need a timer if we're using the earlier validator
+	// from OnFocusChanged. Need some testings.
+
+	// TimerManager->SetTimer(
+	// 	TimerHandle_TrackFocusedWidget,
+	// 	[this, WeakNewWidget]() {
+	// 		TSharedPtr<SWidget> NewWidgetPtr = WeakNewWidget.Pin();
+	// 		if (!NewWidgetPtr.IsValid())
+	// 			return;
+
+	// TSharedRef<SWidget> NewWidget = NewWidgetPtr.ToSharedRef();
+
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+
+	// TSharedPtr<SWindow> ParentWindow = SlateApp.FindWidgetWindow(NewWidget);
+	TSharedPtr<SWindow> ParentWindow = SlateApp.GetActiveTopLevelRegularWindow();
+
+	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
+	TSharedPtr<SDockTab>		  ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
+	if (!ActiveMajorTab.IsValid())
+		return;
+	TSharedPtr<SDockTab> ActiveMinorTab = nullptr;
+	// if nomad tab, no Minor Tab can be fetched (Nomad Tabs doesn't have minors)
+	bool bIsParentNomadTab = ActiveMajorTab->GetTabRole() == ETabRole::NomadTab;
+	if (!bIsParentNomadTab)
+		ActiveMinorTab = FUMSlateHelpers::GetActiveMinorTab();
+
+	// Maybe should be checked?
+	// FUMSlateHelpers::DoesWidgetResideInTab(
+	// 	ActiveMajorTab.ToSharedRef(), NewWidget);
+
+	// Track widget params:
+	Push(NewWidget, ParentWindow.ToSharedRef(),
+		ActiveMajorTab.ToSharedRef(), bIsParentNomadTab, ActiveMinorTab);
+	// },
+	// 0.3f /* Test */, false);
+}
+
+void UUMFocuserEditorSubsystem::FListNavigationManager::JumpListNavigation(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	if (TrackedWidgets.IsEmpty())
+		return;
+
+	// Logger->Print(FString::Printf(TEXT("Current Index: %d"),
+	// 				  CurrWidgetIndex),
+	// 	ELogVerbosity::Log, true);
+
+	const FKey InKey = InKeyEvent.GetKey();
+	int32	   TempIndex = CurrWidgetIndex;
+
+	if (InKey == FKey(EKeys::I)) // In
+	{
+		if (TempIndex <= 0)
+		{
+			// Logger->Print("Can't Jump: Index is at top-of-stack", ELogVerbosity::Warning);
+			CurrWidgetIndex = 0;
+			return; // We're at the top of the stack: No widgets to go into
+		}
+
+		--TempIndex;
+
+		while (!TrackedWidgets[TempIndex].IsValid())
+		{
+			TrackedWidgets.RemoveAt(TempIndex);
+
+			if (TempIndex <= 0 || TrackedWidgets.IsEmpty())
+			{
+				// Logger->Print("Can't Jump: Index is at top-of-stack", ELogVerbosity::Warning);
+				CurrWidgetIndex = 0;
+				return; // No widgets to go into
+			}
+
+			--TempIndex;
+		}
+	}
+	else // Out
+	{
+		int32 NumOfWidgets = TrackedWidgets.Num() - 1; // 0 index
+
+		if (TempIndex == NumOfWidgets)
+			return; // We're at the bottom of the stack: No widgets to go out to
+		else if (TempIndex > NumOfWidgets)
+		{
+			CurrWidgetIndex = NumOfWidgets;
+			return; // We shouldn't really ever get here, but for safety.
+		}
+
+		++TempIndex;
+		while (!TrackedWidgets[TempIndex].IsValid())
+		{
+			TrackedWidgets.RemoveAt(TempIndex);
+
+			NumOfWidgets = TrackedWidgets.Num();
+			if (NumOfWidgets == 0)
+			{
+				CurrWidgetIndex = 0;
+				return; // Empty Stack: No widgets to go out to
+			}
+
+			--NumOfWidgets; // 0 index
+			if (TempIndex >= NumOfWidgets)
+			{
+				CurrWidgetIndex = NumOfWidgets;
+				return; // Bottom of the stack: No widgets to go out to
+			}
+
+			// We've removed a widget, so the array shrinked.
+			// We don't need to touch the TempIndex as it will now point to
+			// a new entry (if it exists)
+		}
+	}
+
+	// We've found a valid widget to go In-Out-to
+	FTrackedInst*		 JumpToWidget = &TrackedWidgets[TempIndex];
+	TSharedPtr<SWindow>	 TrackedWindow = JumpToWidget->ParentWindow.Pin();
+	TSharedPtr<SDockTab> TrackedMajorTab = JumpToWidget->ParentMajorTab.Pin();
+	TSharedPtr<SDockTab> TrackedMinorTab = JumpToWidget->ParentMinorTab.Pin();
+	TSharedPtr<SWidget>	 WidgetPtr = JumpToWidget->Widget.Pin();
+	bool				 bIsParentNomadTab = JumpToWidget->bIsParentNomadTab;
+
+	Logger->Print(FString::Printf(TEXT("Valid Widget Found: %s | New Index: %d"),
+					  *WidgetPtr->GetTypeAsString(), TempIndex),
+		ELogVerbosity::Verbose, true);
+
+	TSharedPtr<SWindow>	 ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
+	TSharedPtr<SDockTab> ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
+	TSharedPtr<SDockTab> ActiveMinorTab = FUMSlateHelpers::GetActiveMinorTab();
+	if (!(ActiveWindow.IsValid() && ActiveMajorTab.IsValid() && ActiveMinorTab.IsValid()))
+		return;
+
+	// Activate the window of the new widget if it's not the current
+	if (ActiveWindow->GetId() != TrackedWindow->GetId())
+		TrackedWindow->BringToFront(true);
+
+	// Activate the Major Tab of the new widget if it's not the current
+	if (ActiveMajorTab->GetId() != TrackedMajorTab->GetId())
+		TrackedMajorTab->ActivateInParent(ETabActivationCause::SetDirectly);
+
+	// Activate the Minor Tab of the new widget if it's not the current
+	// + Make sure the parent Major Tab of the new widget isn't Nomad
+	else if (!bIsParentNomadTab /** Minor tab is nullptr if parent Maj=Nomad */
+		&& (ActiveMinorTab->GetId() != TrackedMinorTab->GetId()))
+		TrackedMinorTab->ActivateInParent(ETabActivationCause::SetDirectly);
+
+	bHasJumpedToNewWidget = true; /* Bypass registration for jumped-to-widget */
+	SlateApp.SetAllUserFocus(WidgetPtr, EFocusCause::Navigation);
+	CurrWidgetIndex = TempIndex; // Update index
+}
+//
+//				~ FGraphSelectionTracker Implementation ~ //
+///////////////////////////////////////////////////////////////////////////////
+
+void UUMFocuserEditorSubsystem::BindVimCommands()
+{
+	TSharedRef<FVimInputProcessor> VimInputProcessor = FVimInputProcessor::Get();
+
+	TWeakObjectPtr<UUMFocuserEditorSubsystem> WeakFocuserSubsystem =
+		MakeWeakObjectPtr(this);
+
+	// /* Jump List Navigation: In */
+	// VimInputProcessor->AddKeyBinding_KeyEvent(
+	// 	EUMContextBinding::Generic,
+	// 	{ FInputChord(EModifierKey::Control, EKeys::I) },
+	// 	WeakFocuserSubsystem,
+	// 	// &FListNavigationManager::JumpListNavigation);
+	// 	[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+
+	// 	});
+
+	// /* Jump List Navigation: Out */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
+		{ FInputChord(EModifierKey::Control, EKeys::I) },
+		// WeakFocuserSubsystem,
+		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+			ListNavigationManager.JumpListNavigation(SlateApp, InKeyEvent);
+		});
+
+	// /* Jump List Navigation: Out */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
+		{ FInputChord(EModifierKey::Control, EKeys::O) },
+		// WeakFocuserSubsystem,
+		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+			ListNavigationManager.JumpListNavigation(SlateApp, InKeyEvent);
+		});
 }

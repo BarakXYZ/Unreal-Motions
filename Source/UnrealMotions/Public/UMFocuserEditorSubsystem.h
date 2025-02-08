@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AudioDevice.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/SWidget.h"
@@ -41,6 +42,8 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collction) override;
 
 	virtual void Deinitialize() override;
+
+	void BindVimCommands();
 
 	void RegisterSlateEvents();
 
@@ -176,7 +179,7 @@ public:
 	bool IsFirstEncounter(const TSharedRef<SWindow> InWindow);
 
 	bool FirstEncounterDefaultInit(const TSharedRef<SDockTab> InTab);
-	bool FirstEncounterDefaultInit(const TSharedRef<SWindow> InWIndow);
+	bool FirstEncounterDefaultInit(const TSharedRef<SWindow> InWindow);
 
 	void Log_FirstEncounterDefaultInit(const TSharedRef<SDockTab> InTab, const TSharedPtr<SWidget> FoundWidget);
 
@@ -187,12 +190,52 @@ public:
 	FUMOnBindingContextChanged Subscribe_OnBindingContextChanged();
 	FUMOnBindingContextChanged Unsubscribe_OnBindingContextChanged();
 
-	// For Nomad Tabs:
-	// Fetch splitters
-	// get the splitter childrens and filter out "SDockTabStack" (I think)
-	// check which of the childrens has focus decendents
-	// send it to the visualizer
-	// We should also be able to navigate these childrens as if they we're panels
+	struct FListNavigationManager
+	{
+		FListNavigationManager() = default;
+
+		struct FTrackedInst
+		{
+			TWeakPtr<SWidget>  Widget;
+			TWeakPtr<SWindow>  ParentWindow;
+			TWeakPtr<SDockTab> ParentMajorTab;
+			bool			   bIsParentNomadTab;
+			TWeakPtr<SDockTab> ParentMinorTab;
+
+			FTrackedInst(
+				TWeakPtr<SWidget>  InWidget,
+				TWeakPtr<SWindow>  InParentWindow,
+				TWeakPtr<SDockTab> InParentMajorTab,
+				bool			   InbParentNomadTab,
+				TWeakPtr<SDockTab> InParentMinorTab);
+
+			bool IsValid();
+		};
+
+		bool IsValid();
+
+		void Push(
+			TSharedRef<SWidget>	 InWidget,
+			TSharedRef<SWindow>	 InParentWindow,
+			TSharedRef<SDockTab> InParentMajorTab,
+			bool				 InbParentNomadTab,
+			TSharedPtr<SDockTab> InParentMinorTab);
+		// void Pop();
+
+		void TrackFocusedWidget(const TSharedRef<SWidget> NewWidget);
+		void JumpListNavigation(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+		int32		 CurrWidgetIndex{ 0 };
+		const int32	 CAP{ 50 };
+		bool		 bHasJumpedToNewWidget{ false };
+		FTimerHandle TimerHandle_TrackFocusedWidget;
+		// TArray<FTrackedInst, TFixedAllocator<50>> TrackedWidgets;
+		TArray<FTrackedInst>				  TrackedWidgets;
+		FUMLogger*							  Logger;
+		TObjectPtr<UUMFocuserEditorSubsystem> FocuserSub;
+	};
+
+	FListNavigationManager ListNavigationManager;
 
 	// TODO: protected + friend classes?
 	TWeakPtr<SWindow>  TrackedActiveWindow;
@@ -280,6 +323,7 @@ public:
 	TMap<uint64, TWeakPtr<SWidget>> LastActiveWidgetByTabId;
 };
 
+// NOTES:
 // 1.
 // When cycling Major Tabs, OnTabForegrounded will be triggered while
 // OnActiveTabChanged won't.
@@ -302,18 +346,3 @@ public:
 // Tabs like Preferences, Output Log and Project Setting are considered
 // Nomad Tabs. Nomad tabs are not constrained by the standard tab hierarchy.
 // They can be docked or floated anywhere within the Unreal Engine editor.
-//
-//
-// TODO:
-// Event Graph & Construction Script panels (and other panels) should have default
-// fallback widgets that should be looked when gained focus.
-// If the Event Graph gains focus it should potentially always just go look for
-// the SGraphPanel (or at least as a fallback rather than the cursed
-// SDockingTabStack that still gains focus somehow).
-//
-// Then, we need some method for navigating inside the Blueprint Graph.
-// I'm thinking:
-// 1. General navigation that will mimic dragging the mouse right-click drag.
-// 2. Navigate between nodes.
-// 3. Pulling from a node and straightning both new and old nodes (or old to new).
-//
