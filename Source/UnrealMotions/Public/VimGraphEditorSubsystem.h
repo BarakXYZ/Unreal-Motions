@@ -111,6 +111,8 @@ public:
 
 	void AddNodeToHighlightedPin(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void ClickOnInteractableWithinPin(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	void HighlightPinForSelectedNode(
 		FSlateApplication&			  SlateApp,
 		const TSharedRef<SGraphPanel> GraphPanel,

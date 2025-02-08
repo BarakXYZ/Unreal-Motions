@@ -6,6 +6,7 @@
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "UMConfig.h"
 #include "GraphEditorModule.h"
+#include "UMFocusHelpers.h"
 #include "UMSlateHelpers.h"
 #include "VimInputProcessor.h"
 #include "Subsystems/AssetEditorSubsystem.h"
@@ -190,12 +191,19 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DeleteNode);
 
+	/** 'Enter': Add a new node to the currently highlighted pin */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		// { FInputChord(EModifierKey::Shift, EKeys::X) },
 		{ EKeys::Enter },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNodeToHighlightedPin);
+
+	/** Shift + 'Enter': Access the clickable within the pin field */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Shift, EKeys::Enter) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::ClickOnInteractableWithinPin);
 
 	// TODO:
 	// 1. gg & G to go to focus first or last node in a chain
@@ -1539,6 +1547,25 @@ void UVimGraphEditorSubsystem::AddNodeToHighlightedPin(FSlateApplication& SlateA
 		return;
 	TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
 	AddNodeToPin(SlateApp, GraphPin.ToSharedRef());
+}
+
+void UVimGraphEditorSubsystem::ClickOnInteractableWithinPin(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	if (!GraphSelectionTracker.IsValid()
+		|| !GraphSelectionTracker.IsTrackedNodeSelected())
+		return;
+
+	TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
+	FChildren*			  Children = GraphPin->GetChildren();
+	if (!Children || Children->Num() == 0)
+		return;
+	TSharedRef<SWidget> FirstChild = Children->GetChildAt(0);
+	TSharedPtr<SWidget> FoundWidget;
+	if (!FUMSlateHelpers::TraverseFindWidget(FirstChild, FoundWidget, FUMSlateHelpers::GetInteractableWidgetTypes()))
+		return;
+
+	FUMFocusHelpers::HandleWidgetExecution(SlateApp, FoundWidget.ToSharedRef());
 }
 
 void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(

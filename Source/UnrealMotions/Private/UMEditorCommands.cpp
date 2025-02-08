@@ -404,3 +404,22 @@ void FUMEditorCommands::Search(FSlateApplication& SlateApp, const FKeyEvent& InK
 		}
 	}
 }
+
+void FUMEditorCommands::FocusWindowRoot(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	TSharedPtr<SWindow> RootWindow = FGlobalTabmanager::Get()->GetRootWindow();
+	if (!RootWindow.IsValid())
+		return;
+
+	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWindow.IsValid())
+		return;
+
+	if (ActiveWindow->GetId() == RootWindow->GetId())
+		return; // Already at root window
+
+	// Alert focuser
+	UUMFocuserEditorSubsystem* Focuser =
+		GEditor->GetEditorSubsystem<UUMFocuserEditorSubsystem>();
+	Focuser->HandleOnWindowChanged(ActiveWindow.ToSharedRef(), RootWindow.ToSharedRef());
+}

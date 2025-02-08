@@ -93,5 +93,7 @@ public:
 
 	static void Search(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	static void FocusWindowRoot(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	static FUMLogger Logger;
 };

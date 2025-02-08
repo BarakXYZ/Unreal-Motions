@@ -611,6 +611,11 @@ void UVimEditorSubsystem::BindCommands()
 		{ EKeys::SpaceBar, EKeys::R, EKeys::L, EKeys::D },
 		&FUMEditorCommands::ResetEditorToDefaultLayout);
 
+	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
+		{ EKeys::SpaceBar, EKeys::F, EKeys::W, EKeys::R },
+		&FUMEditorCommands::FocusWindowRoot);
+
 	//
 	/////////////////////////////////////////////////////////////////////////
 }
