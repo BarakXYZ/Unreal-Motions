@@ -1149,8 +1149,7 @@ void UUMFocuserEditorSubsystem::FListNavigationManager::Push(
 	// we want it to be behind the upcoming new widget (for continuity)
 	if (CurrWidgetIndex != 0
 		&& TrackedWidgets.IsValidIndex(CurrWidgetIndex)
-		&& TrackedWidgets[CurrWidgetIndex].IsValid()
-		&& TrackedWidgets[CurrWidgetIndex].Widget.Pin()->HasAnyUserFocusOrFocusedDescendants())
+		&& TrackedWidgets[CurrWidgetIndex].IsValid())
 	{
 		FTrackedInst Temp = TrackedWidgets[CurrWidgetIndex];
 		TrackedWidgets.RemoveAt(CurrWidgetIndex);

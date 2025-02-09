@@ -1161,6 +1161,9 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	TSharedPtr<SGraphPanel> GraphPanel = GraphSelectionTracker.GraphPanel.Pin();
 	TSharedPtr<SGraphNode>	GraphNode = GraphSelectionTracker.GraphNode.Pin();
 	TSharedPtr<SGraphPin>	GraphPin = GraphSelectionTracker.GraphPin.Pin();
+	UEdGraphNode*			TrackedNodeObj = GraphNode->GetNodeObj();
+	if (!TrackedNodeObj)
+		return;
 
 	TArray<TSharedRef<SWidget>> Pins;
 	GraphNode->GetPins(Pins);
@@ -1194,8 +1197,42 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 			UEdGraphPin* PinObj = GraphPin->GetPinObj();
 			if (!PinObj)
 				return false; // Invalid current Pin Object
+
+			// Try find any linked pins if the current highlighted pin isn't
+			// linked and fallback to the closest linked one.
 			if (PinObj->LinkedTo.IsEmpty())
-				return false; // No Connections (might want to handle this diff)
+			{
+				int32 IndexA{ CurrPinIndex - 1 }, // Try find upwards
+					IndexB{ CurrPinIndex + 1 },	  // Try find downwards
+					TimeOut{ (Pins.Num() / 2) + 1 };
+				TArray<UEdGraphPin*> ObjPins = TrackedNodeObj->GetAllPins();
+				auto				 Pred = [&](int32 Index) {
+					return (ObjPins.IsValidIndex(Index)
+						&& ObjPins[Index]
+						&& !ObjPins[Index]->bAdvancedView
+						&& ObjPins[Index]->Direction == FollowDir
+						&& !ObjPins[Index]->LinkedTo.IsEmpty());
+				};
+				PinObj = nullptr;
+				while (TimeOut > 0)
+				{
+					if (Pred(IndexA))
+					{
+						PinObj = ObjPins[IndexA];
+						break;
+					}
+					else if (Pred(IndexB))
+					{
+						PinObj = ObjPins[IndexB];
+						break;
+					}
+					--IndexA;
+					++IndexB;
+					--TimeOut;
+				}
+				if (!PinObj)
+					return false; // No links found in any of the pins
+			}
 			UEdGraphPin* NewPin = PinObj->LinkedTo[0];
 			if (!NewPin)
 				return false; // Invalid Linked Pin Object
