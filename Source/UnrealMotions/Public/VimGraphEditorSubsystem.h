@@ -122,6 +122,10 @@ public:
 		FSlateApplication&			  SlateApp,
 		const TSharedRef<SGraphPanel> GraphPanel);
 
+	bool TryGetNearestLinkedPin(
+		TArray<UEdGraphPin*>& InObjPins, UEdGraphPin*& InPin,
+		int32 TrackedPinIndex, EEdGraphPinDirection FollowDir);
+
 	FUMLogger Logger;
 	int32	  NodeCounter;
 

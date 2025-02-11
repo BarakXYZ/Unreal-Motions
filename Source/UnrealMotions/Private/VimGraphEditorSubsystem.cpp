@@ -1142,7 +1142,8 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// if no tracking available try get selected node and init pin highlight
-	if (!GraphSelectionTracker.IsValid() || !GraphSelectionTracker.IsTrackedNodeSelected())
+	if (!GraphSelectionTracker.IsValid()
+		|| !GraphSelectionTracker.IsTrackedNodeSelected())
 	{
 		TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 		if (!GraphPanel.IsValid())
@@ -1173,6 +1174,18 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	if (Pins.IsEmpty())
 		return;
 
+	// NOTE: Unlike Widget Pins array getter: ObjPins array comes unsorted!
+	// Thus we're constructing the ObjPins array manually (sorted).
+	TArray<UEdGraphPin*> ObjPins;
+	for (const auto& Pin : Pins)
+	{
+		TSharedRef<SGraphPin> AsGraphPin = StaticCastSharedRef<SGraphPin>(Pin);
+		if (UEdGraphPin* ObjPin = AsGraphPin->GetPinObj())
+			ObjPins.Add(ObjPin);
+	}
+	if (ObjPins.IsEmpty())
+		return; // No useful obj pins found
+
 	int32 CurrPinIndex = Pins.Find(GraphPin.ToSharedRef());
 	if (CurrPinIndex == INDEX_NONE)
 		return; // Pin not found in the current node's pins array
@@ -1181,7 +1194,7 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	TSharedPtr<SWidget> TargetPin;
 	int					Inc, FallbackIndex;
 
-	// Lambda to handle the 'H' and 'L' cases without duplicating code.
+	// Lambda to handle the 'H' and 'L' cases:
 	//
 	// *For key 'H' we want:
 	//   if current pin is an input (EGPD_Input) → follow its connection,
@@ -1199,40 +1212,11 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 				return false; // Invalid current Pin Object
 
 			// Try find any linked pins if the current highlighted pin isn't
-			// linked and fallback to the closest linked one.
-			if (PinObj->LinkedTo.IsEmpty())
-			{
-				int32 IndexA{ CurrPinIndex - 1 }, // Try find upwards
-					IndexB{ CurrPinIndex + 1 },	  // Try find downwards
-					TimeOut{ (Pins.Num() / 2) + 1 };
-				TArray<UEdGraphPin*> ObjPins = TrackedNodeObj->GetAllPins();
-				auto				 Pred = [&](int32 Index) {
-					return (ObjPins.IsValidIndex(Index)
-						&& ObjPins[Index]
-						&& !ObjPins[Index]->bAdvancedView
-						&& ObjPins[Index]->Direction == FollowDir
-						&& !ObjPins[Index]->LinkedTo.IsEmpty());
-				};
-				PinObj = nullptr;
-				while (TimeOut > 0)
-				{
-					if (Pred(IndexA))
-					{
-						PinObj = ObjPins[IndexA];
-						break;
-					}
-					else if (Pred(IndexB))
-					{
-						PinObj = ObjPins[IndexB];
-						break;
-					}
-					--IndexA;
-					++IndexB;
-					--TimeOut;
-				}
-				if (!PinObj)
-					return false; // No links found in any of the pins
-			}
+			// linked and fallback to the nearest linked one.
+			if (PinObj->LinkedTo.IsEmpty() && !TryGetNearestLinkedPin(ObjPins, PinObj, CurrPinIndex, FollowDir))
+				return false; // No links found in any of the other pins
+
+			// Post-found linked pin to go to
 			UEdGraphPin* NewPin = PinObj->LinkedTo[0];
 			if (!NewPin)
 				return false; // Invalid Linked Pin Object
@@ -1329,6 +1313,39 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
 		FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(TargetPin.ToSharedRef())));
 	GraphSelectionTracker.GraphPin = StaticCastSharedPtr<SGraphPin>(TargetPin);
+}
+
+bool UVimGraphEditorSubsystem::TryGetNearestLinkedPin(
+	TArray<UEdGraphPin*>& InObjPins, UEdGraphPin*& InPin,
+	int32 TrackedPinIndex, EEdGraphPinDirection FollowDir)
+{
+	int32 SearchUp{ TrackedPinIndex - 1 }, // Try find upwards
+		SearchDown{ TrackedPinIndex + 1 }, // Try find downwards
+		TimeOut{ (InObjPins.Num() / 2) + 1 };
+	auto Pred = [&](int32 Index) {
+		return (InObjPins.IsValidIndex(Index)
+			&& InObjPins[Index]
+			&& !InObjPins[Index]->bAdvancedView
+			&& InObjPins[Index]->Direction == FollowDir
+			&& !InObjPins[Index]->LinkedTo.IsEmpty());
+	};
+	while (TimeOut > 0)
+	{
+		if (Pred(SearchUp))
+		{
+			InPin = InObjPins[SearchUp];
+			return true;
+		}
+		else if (Pred(SearchDown))
+		{
+			InPin = InObjPins[SearchDown];
+			return true;
+		}
+		--SearchUp;
+		++SearchDown;
+		--TimeOut;
+	}
+	return false; // No links found in any of the other pins
 }
 
 void UVimGraphEditorSubsystem::DebugNodeAndPinsTypes()
@@ -1553,7 +1570,7 @@ void UVimGraphEditorSubsystem::DeleteNode(
 
 void UVimGraphEditorSubsystem::ProcessNodeClick(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
-	Logger.Print("Found SGraphNode", ELogVerbosity::Log, true);
+	// Logger.Print("Found SGraphNode", ELogVerbosity::Log, true);
 
 	TSharedRef<SGraphNode> GraphNode = // We can safely cast to Base SGraphNode
 		StaticCastSharedRef<SGraphNode>(InWidget);
@@ -1567,10 +1584,10 @@ void UVimGraphEditorSubsystem::ProcessNodeClick(FSlateApplication& SlateApp, con
 		return;
 
 	// We wanna focus the Graph first to draw focus to the entire Minor Tab
-	// (just selecting the Node is not enough)
+	// (just selecting the Node won't be enough if coming from a diff minor tab)
 	SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
-	GraphPanel->SelectionManager.SelectSingleNode(AsNodeObj);
 
+	GraphPanel->SelectionManager.SelectSingleNode(AsNodeObj);
 	HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef(), GraphNode);
 }
 
@@ -1621,7 +1638,7 @@ void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(
 		return;
 	}
 
-	// Highlight first Pin in currently selected node (Pin Input 0)
+	// Else: Highlight first Pin in currently selected node (Pin Input 0)
 	TArray<TSharedRef<SWidget>> Pins;
 	SelectedNode->GetPins(Pins);
 	if (Pins.IsEmpty())
@@ -1675,12 +1692,15 @@ bool UVimGraphEditorSubsystem::FGraphSelectionTracker::IsTrackedNodeSelected()
 	{
 		if (TSharedPtr<SGraphPanel> Panel = GraphPanel.Pin())
 		{
+			if (!Panel->HasAnyUserFocusOrFocusedDescendants())
+				return false; // Verify that this panel is actually active;
+							  // This is needed for when switching tabs.
+
 			TArray<UEdGraphNode*> SelNodes = Panel->GetSelectedGraphNodes();
 			if (!SelNodes.IsEmpty())
 			{
 				UEdGraphNode* NodeObj = Node->GetNodeObj();
-				if (NodeObj && SelNodes[0])
-					return SelNodes[0] == NodeObj;
+				return SelNodes[0] && NodeObj && SelNodes[0] == NodeObj;
 			}
 		}
 	}
