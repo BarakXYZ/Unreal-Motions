@@ -176,6 +176,20 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
+	// gg: Go to first node in chain from pin.
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::G, EKeys::G },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	// Shift+G: Go to last node in chain from pin.
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Shift, EKeys::G) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
 	/** Delete Node */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
@@ -1161,10 +1175,14 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 
 	TSharedPtr<SGraphPanel> GraphPanel = GraphSelectionTracker.GraphPanel.Pin();
 	TSharedPtr<SGraphNode>	GraphNode = GraphSelectionTracker.GraphNode.Pin();
-	TSharedPtr<SGraphPin>	GraphPin = GraphSelectionTracker.GraphPin.Pin();
 	UEdGraphNode*			TrackedNodeObj = GraphNode->GetNodeObj();
 	if (!TrackedNodeObj)
 		return;
+
+	TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
+	UEdGraphPin*		  PinObj = GraphPin->GetPinObj();
+	if (!PinObj)
+		return; // Invalid current Pin Object
 
 	TArray<TSharedRef<SWidget>> Pins;
 	GraphNode->GetPins(Pins);
@@ -1192,28 +1210,24 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 
 	const FKey			InKey = InKeyEvent.GetKey();
 	TSharedPtr<SWidget> TargetPin;
-	int					Inc, FallbackIndex;
+	int					Inc{ 0 }, FallbackIndex{ 0 };
 
 	// Lambda to handle the 'H' and 'L' cases:
 	//
 	// *For key 'H' we want:
-	//   if current pin is an input (EGPD_Input) → follow its connection,
-	//   else (i.e. current is output) → navigate to the corresponding input pin.
+	//   if curr pin is Input: Follow nearest link to a *New Node's ~ Output Pin*
+	//   else is Output: Move inside the current node to the *Parallel Input Pin*
 	//
 	// *For key 'L' we want the mirror:
-	//   if current is output → follow its connection
-	//   else (i.e. current is input) → navigate to the corresponding output pin.
-	auto HandleDirectionalNavigation =
-		[&](EEdGraphPinDirection FollowDir, EEdGraphPinDirection NavDir) -> bool {
-		if (GraphPin->GetDirection() == FollowDir) // Try Move to new Pin & Node
+	//   if curr pin is Output: Follow nearest link to a *New Node's ~ Input Pin*
+	//   else is Input: Move inside the current node to the *Parallel Output Pin*
+	auto HandleLeftRightNavigation =
+		[&](EEdGraphPinDirection TargetDir) -> bool {
+		if (GraphPin->GetDirection() == TargetDir) // Move to a new Node & Pin
 		{
-			UEdGraphPin* PinObj = GraphPin->GetPinObj();
-			if (!PinObj)
-				return false; // Invalid current Pin Object
-
 			// Try find any linked pins if the current highlighted pin isn't
 			// linked and fallback to the nearest linked one.
-			if (PinObj->LinkedTo.IsEmpty() && !TryGetNearestLinkedPin(ObjPins, PinObj, CurrPinIndex, FollowDir))
+			if (PinObj->LinkedTo.IsEmpty() && !TryGetNearestLinkedPin(ObjPins, PinObj, CurrPinIndex, TargetDir))
 				return false; // No links found in any of the other pins
 
 			// Post-found linked pin to go to
@@ -1231,114 +1245,234 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 			if (!NewGraphPin.IsValid())
 				return false; // Invalid New Pin Widget
 
-			// Select the new node we're moving into // Add to selection?
+			// Update tracking params
+			GraphSelectionTracker.GraphNode = NewGraphNode;
+			GraphSelectionTracker.GraphPin = NewGraphPin;
+
+			// Select the new node we're moving to // Add to selection if visual?
 			GraphPanel->SelectionManager.SelectSingleNode(NewOwningNode);
 
 			// Highlight the New Pin we're moving into:
 			FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
 				FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(NewGraphPin.ToSharedRef())));
 
-			// Update tracking params
-			GraphSelectionTracker.GraphNode = NewGraphNode;
-			GraphSelectionTracker.GraphPin = NewGraphPin;
 			return true;
 		}
-
-		// Else: Move inside the same node, try grab parallel indexed pin:
-		TArray<TSharedRef<SGraphPin>> ParallelPins;
-		for (const auto& Widget : Pins) // Collect all Parallel Pins
+		else // Move inside the same node; try grab parallel indexed pin:
 		{
-			TSharedRef<SGraphPin> PinWidget = StaticCastSharedRef<SGraphPin>(Widget);
-			if (PinWidget->GetDirection() == NavDir)
-				ParallelPins.Add(PinWidget);
+			TSharedPtr<SGraphPin> FoundPin;
+			if (!TryGetParallelPin(Pins, CurrPinIndex, TargetDir, FoundPin))
+				return false;
+
+			// Highlight the New Pin we're moving into:
+			FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+				FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(FoundPin.ToSharedRef())));
+
+			// Update tracking params
+			GraphSelectionTracker.GraphPin = FoundPin;
+			return true;
 		}
-		if (ParallelPins.IsEmpty())
-			return false; // No pins to navigate to.
+	};
 
-		// Because the node's pins are ordered (all inputs first,
-		// then outputs), we can compute the “relative index” as follows:
-		// *For H (NavDir == EGPD_Input):
-		//     Current pin is output, so subtract total input count.
-		// *For L (NavDir == EGPD_Output):
-		//     Current pin is input so its index is already relative.
-		int32 RelativeIndex = 0;
-		RelativeIndex = (NavDir == EGPD_Input)
-			? CurrPinIndex - ParallelPins.Num() // Output to Input
-			: CurrPinIndex;						// Input to Output
+	auto HandleUpDownNavigation =
+		[&]() -> bool {
+		// J and K simply move among the node's pins (regardless of direction)
+		TargetPin = Pins.IsValidIndex(CurrPinIndex + Inc)
+			? Pins[CurrPinIndex + Inc]
+			: Pins[FallbackIndex];
 
-		if (!ParallelPins.IsValidIndex(RelativeIndex))
-			RelativeIndex = ParallelPins.Num() - 1; // Get last parallel node
-		TargetPin = ParallelPins[RelativeIndex];	// Directly grab the node
-
-		// Highlight the New Pin we're moving into:
 		FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
 			FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(TargetPin.ToSharedRef())));
-
-		// Update tracking params
 		GraphSelectionTracker.GraphPin = StaticCastSharedPtr<SGraphPin>(TargetPin);
 		return true;
 	};
 
-	// Handle keys H and L using the lambda.
+	// Handle Left & Right Pin / Node Navigation:
 	if (InKey == FKey(EKeys::H))
-	{
-		if (!HandleDirectionalNavigation(EGPD_Input, EGPD_Input))
-			return;
-		return;
-	}
+		HandleLeftRightNavigation(EGPD_Input);
 	else if (InKey == FKey(EKeys::L))
-	{
-		if (!HandleDirectionalNavigation(EGPD_Output, EGPD_Output))
-			return;
-		return;
-	}
+		HandleLeftRightNavigation(EGPD_Output);
+
+	// Handle Up & Down Pin / Node Navigation:
 	else if (InKey == FKey(EKeys::J))
 	{
 		Inc = 1;		   // Get Next node.
 		FallbackIndex = 0; // Wrap to first parallel node.
+		HandleUpDownNavigation();
 	}
 	else if (InKey == FKey(EKeys::K))
 	{
 		Inc = -1;						// Get Previous node.
 		FallbackIndex = Pins.Num() - 1; // Wrap to last parallel node.
+		HandleUpDownNavigation();
 	}
+
+	// Handle Goto First ('gg') & Last Pin (Shift+G) / Node Navigation:
+	else if (InKey == FKey(EKeys::G))
+	{
+		EEdGraphPinDirection FollowDir = InKeyEvent.IsShiftDown() ? EGPD_Output : EGPD_Input;
+
+		UEdGraphPin* NewPin = GetFirstOrLastLinkedPinFromPin(GraphPanel.ToSharedRef(), PinObj, FollowDir);
+
+		UEdGraphNode* NewOwningNode = NewPin->GetOwningNode();
+		if (!NewOwningNode)
+			return;
+		TSharedPtr<SGraphNode> NewOwningNodeWidget = GraphPanel->GetNodeWidgetFromGuid(NewOwningNode->NodeGuid);
+		if (!NewOwningNodeWidget.IsValid())
+			return;
+		TSharedPtr<SGraphPin> NewPinWidget = NewOwningNodeWidget->FindWidgetForPin(NewPin);
+		if (!NewPinWidget.IsValid())
+			return;
+
+		// Update tracking params
+		GraphSelectionTracker.GraphNode = NewOwningNodeWidget;
+		GraphSelectionTracker.GraphPin = NewPinWidget;
+
+		// Select the new node we're moving into // Add to selection?
+		GraphPanel->SelectionManager.SelectSingleNode(NewOwningNode);
+
+		ZoomToFit(SlateApp, FKeyEvent(FKey(EKeys::Z), FModifierKeysState(), 0, 0, 0, 0));
+
+		// Highlight the New Pin we're moving into:
+		// In order to simulate this correctly we will need to wait a bit
+		// for the centering to occur:
+		FTimerHandle	  TimerHandle;
+		TWeakPtr<SWidget> WeakPinWidget = NewPinWidget;
+		GEditor->GetTimerManager()->SetTimer(
+			TimerHandle,
+			[&SlateApp, WeakPinWidget]() {
+				if (const TSharedPtr<SWidget> PinWidget = WeakPinWidget.Pin())
+				{
+					FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+						FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(PinWidget.ToSharedRef())));
+				}
+			},
+			0.02f, false);
+	}
+}
+
+UEdGraphPin* UVimGraphEditorSubsystem::GetFirstOrLastLinkedPinFromPin(const TSharedRef<SGraphPanel> GraphPanel, UEdGraphPin* InPin, EEdGraphPinDirection TargetDir)
+{
+	UEdGraphNode* OwningNode = InPin->GetOwningNode();
+	if (!OwningNode)
+		return InPin;
+
+	TSharedPtr<SGraphNode> OwningNodeWidget = GraphPanel->GetNodeWidgetFromGuid(OwningNode->NodeGuid);
+	if (!OwningNodeWidget.IsValid())
+		return InPin;
+
+	TArray<TSharedRef<SWidget>> WidgetPins;
+	OwningNodeWidget->GetPins(WidgetPins);
+
+	// Remove (filter) non‐visible pins as they're not important or useful
+	WidgetPins.RemoveAll([](const TSharedRef<SWidget>& Pin) { return !Pin->GetVisibility().IsVisible(); });
+	if (WidgetPins.IsEmpty())
+		return InPin;
+
+	// NOTE: Unlike Widget Pins array getter: ObjPins array comes unsorted!
+	// Thus we're constructing the ObjPins array manually (sorted).
+	TArray<UEdGraphPin*> ObjPins;
+	for (const auto& Pin : WidgetPins)
+	{
+		TSharedRef<SGraphPin> AsGraphPin = StaticCastSharedRef<SGraphPin>(Pin);
+		if (UEdGraphPin* ObjPin = AsGraphPin->GetPinObj())
+			ObjPins.Add(ObjPin);
+	}
+	if (ObjPins.IsEmpty())
+		return InPin; // No useful obj pins found
+
+	int32 CurrPinIndex = ObjPins.Find(InPin);
+	if (CurrPinIndex == INDEX_NONE)
+		return InPin; // Pin not found in the current node's pins array
+
+	if (InPin->Direction == TargetDir) // Find linked pin in a new node
+	{
+		if (InPin->LinkedTo.IsEmpty())
+		{
+			if (!TryGetNearestLinkedPin(ObjPins, InPin, CurrPinIndex, TargetDir)
+				|| !InPin->LinkedTo[0])
+				return InPin;
+		}
+		InPin = InPin->LinkedTo[0];
+	}
+	// Find parallel pin inside the same node
 	else
-		return;
+	{
+		TSharedPtr<SGraphPin> FoundPinWidget;
+		if (!TryGetParallelPin(WidgetPins, CurrPinIndex, TargetDir, FoundPinWidget))
+			return InPin;
 
-	// J and K simply move among the node's pins (regardless of direction)
-	TargetPin = Pins.IsValidIndex(CurrPinIndex + Inc)
-		? Pins[CurrPinIndex + Inc]
-		: Pins[FallbackIndex];
+		UEdGraphPin* CheckPin = FoundPinWidget->GetPinObj();
+		if (!CheckPin)
+			return InPin;
+		InPin = CheckPin;
+	}
 
-	FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
-		FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(TargetPin.ToSharedRef())));
-	GraphSelectionTracker.GraphPin = StaticCastSharedPtr<SGraphPin>(TargetPin);
+	return GetFirstOrLastLinkedPinFromPin(GraphPanel, InPin, TargetDir);
+}
+
+bool UVimGraphEditorSubsystem::TryGetParallelPin(
+	const TArray<TSharedRef<SWidget>> InWidgetPins,
+	int32 BasePinIndex, EEdGraphPinDirection TargetDir,
+	TSharedPtr<SGraphPin>& OutPinWidget, bool bShouldMatchExactIndex)
+{
+	TArray<TSharedRef<SGraphPin>> ParallelPins;
+	for (const auto& Widget : InWidgetPins) // Collect all Parallel Pins
+	{
+		TSharedRef<SGraphPin> PinWidget = StaticCastSharedRef<SGraphPin>(Widget);
+		if (PinWidget->GetDirection() == TargetDir)
+			ParallelPins.Add(PinWidget);
+	}
+	if (ParallelPins.IsEmpty())
+		return false; // No pins to navigate to.
+
+	// Because the node's pins are ordered (all inputs first,
+	// then outputs), we can compute the “relative index” as follows:
+	// *For H (TargetDir == EGPD_Input):
+	//     Current pin is output, so subtract total input count.
+	// *For L (TargetDir == EGPD_Output):
+	//     Current pin is input so its index is already relative.
+	int32 RelativeIndex = 0;
+	RelativeIndex = (TargetDir == EGPD_Input)
+		? BasePinIndex - ParallelPins.Num() // Output to Input
+		: BasePinIndex;						// Input to Output
+
+	// if there isn't an exact parallel pin for the currently indexed pin:
+	// Fallback to the last parallel pin.
+	// This is needed only if the current index is above 0.
+	// For 0, it will always return valid and grab the first one because the
+	// array is guaranteed to be not empty.
+	if (!ParallelPins.IsValidIndex(RelativeIndex))
+		RelativeIndex = ParallelPins.Num() - 1;
+
+	OutPinWidget = ParallelPins[RelativeIndex];
+	return true;
 }
 
 bool UVimGraphEditorSubsystem::TryGetNearestLinkedPin(
-	TArray<UEdGraphPin*>& InObjPins, UEdGraphPin*& InPin,
+	const TArray<UEdGraphPin*>& InSortedObjPins, UEdGraphPin*& OutPin,
 	int32 TrackedPinIndex, EEdGraphPinDirection FollowDir)
 {
 	int32 SearchUp{ TrackedPinIndex - 1 }, // Try find upwards
 		SearchDown{ TrackedPinIndex + 1 }, // Try find downwards
-		TimeOut{ (InObjPins.Num() / 2) + 1 };
+		TimeOut{ (InSortedObjPins.Num() / 2) + 1 };
 	auto Pred = [&](int32 Index) {
-		return (InObjPins.IsValidIndex(Index)
-			&& InObjPins[Index]
-			&& !InObjPins[Index]->bAdvancedView
-			&& InObjPins[Index]->Direction == FollowDir
-			&& !InObjPins[Index]->LinkedTo.IsEmpty());
+		return (InSortedObjPins.IsValidIndex(Index)
+			&& InSortedObjPins[Index]
+			&& !InSortedObjPins[Index]->bAdvancedView
+			&& InSortedObjPins[Index]->Direction == FollowDir
+			&& !InSortedObjPins[Index]->LinkedTo.IsEmpty());
 	};
 	while (TimeOut > 0)
 	{
 		if (Pred(SearchUp))
 		{
-			InPin = InObjPins[SearchUp];
+			OutPin = InSortedObjPins[SearchUp];
 			return true;
 		}
 		else if (Pred(SearchDown))
 		{
-			InPin = InObjPins[SearchDown];
+			OutPin = InSortedObjPins[SearchDown];
 			return true;
 		}
 		--SearchUp;

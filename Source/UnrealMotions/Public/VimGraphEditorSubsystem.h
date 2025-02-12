@@ -50,6 +50,8 @@ public:
 
 	void HandleVimNodeNavigation(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	UEdGraphPin* GetFirstOrLastLinkedPinFromPin(const TSharedRef<SGraphPanel> GraphPanel, UEdGraphPin* InPin, EEdGraphPinDirection TargetDir);
+
 	void OnNodeCreationMenuClosed(
 		FSlateApplication& SlateApp,
 		UEdGraphPin* DraggedFromPin, bool bIsAppendingNode);
@@ -123,8 +125,13 @@ public:
 		const TSharedRef<SGraphPanel> GraphPanel);
 
 	bool TryGetNearestLinkedPin(
-		TArray<UEdGraphPin*>& InObjPins, UEdGraphPin*& InPin,
+		const TArray<UEdGraphPin*>& InSortedObjPins, UEdGraphPin*& OutPin,
 		int32 TrackedPinIndex, EEdGraphPinDirection FollowDir);
+
+	bool TryGetParallelPin(
+		const TArray<TSharedRef<SWidget>> InWidgetPins,
+		int32 BasePinIndex, EEdGraphPinDirection TargetDir,
+		TSharedPtr<SGraphPin>& OutPinWidget, bool bShouldMatchExactIndex = false);
 
 	FUMLogger Logger;
 	int32	  NodeCounter;
