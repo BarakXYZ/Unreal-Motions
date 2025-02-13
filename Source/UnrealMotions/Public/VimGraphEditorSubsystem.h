@@ -133,8 +133,12 @@ public:
 		int32 BasePinIndex, EEdGraphPinDirection TargetDir,
 		TSharedPtr<SGraphPin>& OutPinWidget, bool bShouldMatchExactIndex = false);
 
-	FUMLogger Logger;
-	int32	  NodeCounter;
+	void OnVimModeChanged(const EVimMode NewVimMode);
+
+	FUMLogger		  Logger;
+	int32			  NodeCounter;
+	EVimMode		  PreviousVimMode{ EVimMode::Insert }, CurrentVimMode{ EVimMode::Insert };
+	EUMContextBinding CurrentContext{ EUMContextBinding::Generic };
 
 	// We’ll store the original positions of any nodes we shift
 	TMap<UEdGraphNode*, FVector2D> ShiftedNodesOriginalPositions;
@@ -145,9 +149,11 @@ public:
 
 	struct FGraphSelectionTracker
 	{
-		TWeakPtr<SGraphPanel> GraphPanel;
-		TWeakPtr<SGraphNode>  GraphNode;
-		TWeakPtr<SGraphPin>	  GraphPin;
+		TWeakPtr<SGraphPanel>				 GraphPanel;
+		TWeakPtr<SGraphNode>				 GraphNode;
+		TWeakPtr<SGraphPin>					 GraphPin;
+		TArray<TWeakObjectPtr<UEdGraphNode>> VisitedNodesStack;
+		static UVimGraphEditorSubsystem*	 VimGraphOwner;
 
 		FGraphSelectionTracker() = default;
 		FGraphSelectionTracker(
@@ -157,6 +163,7 @@ public:
 
 		bool IsValid();
 		bool IsTrackedNodeSelected();
+		void HandleNodeSelection(UEdGraphNode* NewNode, UEdGraphNode* OldNode, const TSharedRef<SGraphPanel> GraphPanel);
 	};
 
 	FGraphSelectionTracker GraphSelectionTracker;

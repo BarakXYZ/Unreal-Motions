@@ -40,19 +40,20 @@ bool UVimGraphEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 void UVimGraphEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Logger = FUMLogger(&LogVimGraphEditorSubsystem);
+	GraphSelectionTracker.VimGraphOwner = this;
 
 	BindVimCommands();
 
 	// Start listening when Context Binding is changed directly
 	// I wonder about this, it's cute. But is it really needed?
-	// FCoreDelegates::OnPostEngineInit.AddLambda([this]() {
-	// 	if (UUMFocuserEditorSubsystem* Focuser =
-	// 			GEditor->GetEditorSubsystem<UUMFocuserEditorSubsystem>())
-	// 	{
-	// 		Focuser->OnBindingContextChanged.AddUObject(
-	// 			this, &UVimGraphEditorSubsystem::HandleOnContextBindingChanged);
-	// 	}
-	// });
+	FCoreDelegates::OnPostEngineInit.AddLambda([this]() {
+		if (UUMFocuserEditorSubsystem* Focuser =
+				GEditor->GetEditorSubsystem<UUMFocuserEditorSubsystem>())
+		{
+			Focuser->OnBindingContextChanged.AddUObject(
+				this, &UVimGraphEditorSubsystem::HandleOnContextBindingChanged);
+		}
+	});
 
 	Super::Initialize(Collection);
 }
@@ -68,6 +69,9 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	TWeakObjectPtr<UVimGraphEditorSubsystem> WeakGraphSubsystem =
 		MakeWeakObjectPtr(this);
+
+	VimInputProcessor->OnVimModeChanged.AddUObject(
+		this, &UVimGraphEditorSubsystem::OnVimModeChanged);
 
 	/* Append after the last selected node */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -1079,7 +1083,11 @@ TSharedPtr<SGraphEditor> UVimGraphEditorSubsystem::GetGraphEditor(const TSharedR
 void UVimGraphEditorSubsystem::HandleOnContextBindingChanged(
 	EUMContextBinding NewContext, const TSharedRef<SWidget> NewWidget)
 {
-	UnhookFromActiveGraphPanel();
+	CurrentContext = NewContext;
+	return;
+
+	// DEPRECATED
+	UnhookFromActiveGraphPanel(); // Deprecated?
 
 	if (NewContext == EUMContextBinding::GraphEditor
 		&& NewWidget->GetTypeAsString().Equals("SGraphPanel"))
@@ -1250,7 +1258,11 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 			GraphSelectionTracker.GraphPin = NewGraphPin;
 
 			// Select the new node we're moving to // Add to selection if visual?
-			GraphPanel->SelectionManager.SelectSingleNode(NewOwningNode);
+			GraphSelectionTracker.HandleNodeSelection(NewOwningNode, TrackedNodeObj, GraphPanel.ToSharedRef());
+			// if (CurrentVimMode == EVimMode::Visual)
+			// 	GraphPanel->SelectionManager.SetNodeSelection(NewOwningNode, true);
+			// else
+			// 	GraphPanel->SelectionManager.SelectSingleNode(NewOwningNode);
 
 			// Highlight the New Pin we're moving into:
 			FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
@@ -1310,9 +1322,14 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	// Handle Goto First ('gg') & Last Pin (Shift+G) / Node Navigation:
 	else if (InKey == FKey(EKeys::G))
 	{
-		EEdGraphPinDirection FollowDir = InKeyEvent.IsShiftDown() ? EGPD_Output : EGPD_Input;
+		EEdGraphPinDirection TargetDir = InKeyEvent.IsShiftDown() ? EGPD_Output : EGPD_Input;
+		// I thought this method has issues but it seems to work great!
+		if (HandleLeftRightNavigation(TargetDir))
+			HandleVimNodeNavigation(SlateApp, InKeyEvent);
+		return;
 
-		UEdGraphPin* NewPin = GetFirstOrLastLinkedPinFromPin(GraphPanel.ToSharedRef(), PinObj, FollowDir);
+		// DEPRECATED:
+		UEdGraphPin* NewPin = GetFirstOrLastLinkedPinFromPin(GraphPanel.ToSharedRef(), PinObj, TargetDir);
 
 		UEdGraphNode* NewOwningNode = NewPin->GetOwningNode();
 		if (!NewOwningNode)
@@ -1331,6 +1348,9 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 		// Select the new node we're moving into // Add to selection?
 		GraphPanel->SelectionManager.SelectSingleNode(NewOwningNode);
 
+		// We should apply this centering only if out of bounds and in a more
+		// graceful way. For now, no centering.
+		return;
 		ZoomToFit(SlateApp, FKeyEvent(FKey(EKeys::Z), FModifierKeysState(), 0, 0, 0, 0));
 
 		// Highlight the New Pin we're moving into:
@@ -1351,6 +1371,7 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	}
 }
 
+// DEPRECATED?
 UEdGraphPin* UVimGraphEditorSubsystem::GetFirstOrLastLinkedPinFromPin(const TSharedRef<SGraphPanel> GraphPanel, UEdGraphPin* InPin, EEdGraphPinDirection TargetDir)
 {
 	UEdGraphNode* OwningNode = InPin->GetOwningNode();
@@ -1802,9 +1823,69 @@ void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(
 	HighlightPinForSelectedNode(SlateApp, GraphPanel, GraphNode.ToSharedRef());
 }
 
+void UVimGraphEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
+{
+	PreviousVimMode = CurrentVimMode;
+	CurrentVimMode = NewVimMode;
+
+	if (CurrentContext != EUMContextBinding::GraphEditor)
+		return;
+
+	switch (CurrentVimMode)
+	{
+		case EVimMode::Normal:
+		{
+			GraphSelectionTracker.VisitedNodesStack.Empty();
+
+			if (GraphSelectionTracker.IsValid() && GraphSelectionTracker.IsTrackedNodeSelected())
+			{
+				TSharedPtr<SGraphPanel> GraphPanel = GraphSelectionTracker.GraphPanel.Pin();
+				TSharedPtr<SGraphNode>	GraphNode = GraphSelectionTracker.GraphNode.Pin();
+				UEdGraphNode*			NodeObj = GraphNode->GetNodeObj();
+				if (NodeObj)
+					GraphPanel->SelectionManager.SelectSingleNode(NodeObj);
+			}
+			break;
+		}
+		// case EVimMode::Insert:
+		// {
+		// 	break;
+		// }
+		case EVimMode::Visual:
+		{
+			GraphSelectionTracker.VisitedNodesStack.Empty();
+
+			if (GraphSelectionTracker.IsValid() && GraphSelectionTracker.IsTrackedNodeSelected())
+			{
+				TSharedPtr<SGraphNode> GraphNode = GraphSelectionTracker.GraphNode.Pin();
+				UEdGraphNode*		   NodeObj = GraphNode->GetNodeObj();
+				if (NodeObj)
+					GraphSelectionTracker.VisitedNodesStack.Add(NodeObj);
+			}
+			else // Init tracking
+			{
+				FSlateApplication&			  SlateApp = FSlateApplication::Get();
+				const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
+				if (!GraphPanel.IsValid())
+					return;
+
+				TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+				if (SelNodes.IsEmpty() || !SelNodes[0])
+					return;
+
+				GraphSelectionTracker.VisitedNodesStack.Add(SelNodes[0]);
+				HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef());
+			}
+			break;
+		}
+	}
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //				~ FGraphSelectionTracker Implementation ~ //
 //
+UVimGraphEditorSubsystem* UVimGraphEditorSubsystem::FGraphSelectionTracker::VimGraphOwner = nullptr;
+
 UVimGraphEditorSubsystem::FGraphSelectionTracker::FGraphSelectionTracker(
 	TWeakPtr<SGraphPanel> InGraphPanel,
 	TWeakPtr<SGraphNode>  InGraphNode,
@@ -1834,11 +1915,59 @@ bool UVimGraphEditorSubsystem::FGraphSelectionTracker::IsTrackedNodeSelected()
 			if (!SelNodes.IsEmpty())
 			{
 				UEdGraphNode* NodeObj = Node->GetNodeObj();
-				return SelNodes[0] && NodeObj && SelNodes[0] == NodeObj;
+				if (NodeObj)
+				{
+					int32 NodeIndex = SelNodes.Find(NodeObj);
+					if (NodeIndex != INDEX_NONE)
+						return true;
+				}
+				// return SelNodes[0] && NodeObj && SelNodes[0] == NodeObj;
 			}
 		}
 	}
 	return false;
+}
+
+void UVimGraphEditorSubsystem::FGraphSelectionTracker::HandleNodeSelection(UEdGraphNode* NewNode, UEdGraphNode* OldNode, const TSharedRef<SGraphPanel> InGraphPanel)
+{
+	if (!NewNode || !OldNode)
+		return;
+
+	// This is needed for when entering a graph when Visual Mode is already ON
+	if (VisitedNodesStack.IsEmpty())
+		VisitedNodesStack.Add(OldNode);
+
+	if (VimGraphOwner->CurrentVimMode == EVimMode::Visual)
+	{
+		if (VisitedNodesStack.Num() > 1)
+		{
+			// The node that is second-to-last in our path:
+			UEdGraphNode* PotentialBacktrackNode = VisitedNodesStack[VisitedNodesStack.Num() - 2].Get();
+
+			if (NewNode == PotentialBacktrackNode)
+			{
+				// User is going backward
+				// Pop the last node off (which is OldNode), and deselect it:
+				VisitedNodesStack.Pop();
+				InGraphPanel->SelectionManager.SetNodeSelection(OldNode, /*bSelect=*/false);
+			}
+			else
+			{
+				// Forward move
+				VisitedNodesStack.Add(NewNode);
+				InGraphPanel->SelectionManager.SetNodeSelection(NewNode, /*bSelect=*/true);
+			}
+		}
+		else
+		{
+			// If there's only one or zero items, definitely a forward move
+			VisitedNodesStack.Add(NewNode);
+			InGraphPanel->SelectionManager.SetNodeSelection(NewNode, true);
+		}
+	}
+	else
+		// Non-Visual mode - continue as before
+		InGraphPanel->SelectionManager.SelectSingleNode(NewNode);
 }
 
 //
