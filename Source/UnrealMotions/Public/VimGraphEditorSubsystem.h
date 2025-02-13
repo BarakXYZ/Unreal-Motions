@@ -163,7 +163,22 @@ public:
 
 		bool IsValid();
 		bool IsTrackedNodeSelected();
-		void HandleNodeSelection(UEdGraphNode* NewNode, UEdGraphNode* OldNode, const TSharedRef<SGraphPanel> GraphPanel);
+
+		/**
+		 * Handles node selection logic in both Visual and Normal modes.
+		 *
+		 * In Visual mode, we track visited nodes in a stack-like structure:
+		 *   - Forward moves (to a new node) push that node onto the stack and select it.
+		 *   - Backward moves (to the node beneath the top of the stack) pop the old top node and deselect it.
+		 *
+		 * In Normal mode, we simply single-select the new node.
+		 *
+		 * @param NewNode      The node we're moving to.
+		 * @param OldNode      The node we're moving from.
+		 * @param InGraphPanel The active SGraphPanel for selection management.
+		 */
+		void HandleNodeSelection(UEdGraphNode* NewNode, UEdGraphNode* OldNode,
+			const TSharedRef<SGraphPanel> GraphPanel);
 	};
 
 	FGraphSelectionTracker GraphSelectionTracker;

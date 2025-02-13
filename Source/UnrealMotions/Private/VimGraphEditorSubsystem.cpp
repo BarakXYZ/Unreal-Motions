@@ -1928,45 +1928,55 @@ bool UVimGraphEditorSubsystem::FGraphSelectionTracker::IsTrackedNodeSelected()
 	return false;
 }
 
-void UVimGraphEditorSubsystem::FGraphSelectionTracker::HandleNodeSelection(UEdGraphNode* NewNode, UEdGraphNode* OldNode, const TSharedRef<SGraphPanel> InGraphPanel)
+void UVimGraphEditorSubsystem::FGraphSelectionTracker::HandleNodeSelection(
+	UEdGraphNode*				  NewNode,
+	UEdGraphNode*				  OldNode,
+	const TSharedRef<SGraphPanel> InGraphPanel)
 {
 	if (!NewNode || !OldNode)
-		return;
+		return; // Early-out if either node is invalid.
 
-	// This is needed for when entering a graph when Visual Mode is already ON
+	// If Visual Mode was active before we entered the graph;
+	// ensure the current node (OldNode) is on the stack as our starting point.
 	if (VisitedNodesStack.IsEmpty())
 		VisitedNodesStack.Add(OldNode);
 
 	if (VimGraphOwner->CurrentVimMode == EVimMode::Visual)
 	{
+		// If we already have more than one node in the stack;
+		// we can detect backtracking.
 		if (VisitedNodesStack.Num() > 1)
 		{
-			// The node that is second-to-last in our path:
+			// The node that is one below the top of the stack is our potential
+			// "backtrack" target.
 			UEdGraphNode* PotentialBacktrackNode = VisitedNodesStack[VisitedNodesStack.Num() - 2].Get();
 
 			if (NewNode == PotentialBacktrackNode)
 			{
-				// User is going backward
-				// Pop the last node off (which is OldNode), and deselect it:
+				// --- BACKWARD MOVE ---
+				// User is going back to a previously visited node.
+				// Remove the old top node from the stack and deselect it.
 				VisitedNodesStack.Pop();
 				InGraphPanel->SelectionManager.SetNodeSelection(OldNode, /*bSelect=*/false);
 			}
 			else
 			{
-				// Forward move
+				// --- FORWARD MOVE ---
+				// User is moving to a new node, so push it on the stack and select it.
 				VisitedNodesStack.Add(NewNode);
 				InGraphPanel->SelectionManager.SetNodeSelection(NewNode, /*bSelect=*/true);
 			}
 		}
 		else
 		{
-			// If there's only one or zero items, definitely a forward move
+			// Stack is empty or has only one node -> definitely a forward move.
 			VisitedNodesStack.Add(NewNode);
 			InGraphPanel->SelectionManager.SetNodeSelection(NewNode, true);
 		}
 	}
 	else
-		// Non-Visual mode - continue as before
+		// Normal mode (non-Visual):
+		// simply select the new node, ignoring our stack.
 		InGraphPanel->SelectionManager.SelectSingleNode(NewNode);
 }
 
