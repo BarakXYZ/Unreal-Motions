@@ -48,7 +48,7 @@ public:
 
 	void ZoomToFit(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	void HandleVimNodeNavigation(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void HandleVimNodeNavigation(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
 	UEdGraphPin* GetFirstOrLastLinkedPinFromPin(const TSharedRef<SGraphPanel> GraphPanel, UEdGraphPin* InPin, EEdGraphPinDirection TargetDir);
 

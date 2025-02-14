@@ -152,45 +152,107 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// there.
 
 	// Selection + Move HJKL
-	VimInputProcessor->AddKeyBinding_KeyEvent(
+	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::H) },
 		{ EKeys::H },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
-	VimInputProcessor->AddKeyBinding_KeyEvent(
+	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::J) },
 		{ EKeys::J },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
-	VimInputProcessor->AddKeyBinding_KeyEvent(
+	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::K) },
 		{ EKeys::K },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
-	VimInputProcessor->AddKeyBinding_KeyEvent(
+	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::L) },
 		{ EKeys::L },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
+	// 'b':
+	// If currently in an output pin, go to same node's input pin. (1 move)
+	// Else if currently in Input Pin, go to previous node's input pin. (2 moves)
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::B },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	// 'w':
+	// Go to next node's input pin (no matter if currently in In|Out Pin)
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::W },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	// 'e':
+	// If currently in an Input pin, go to same node's Output pin. (1 move)
+	// Else if currently in an Output Pin; go to previous node's Output pin. (2 moves)
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::E },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	// 'ge':
+	// Go to previous node's Output pin (no matter if currently in In|Out Pin)
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::G, EKeys::E },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
 	// gg: Go to first node in chain from pin.
-	VimInputProcessor->AddKeyBinding_KeyEvent(
+	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		{ EKeys::G, EKeys::G },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
 	// Shift+G: Go to last node in chain from pin.
-	VimInputProcessor->AddKeyBinding_KeyEvent(
+	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		{ FInputChord(EModifierKey::Shift, EKeys::G) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	// gh: Go to first Pin in Node.
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::G, EKeys::K },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	// gj: Go to last Pin in Node.
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::G, EKeys::J },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	// Ctrl+u: Go 3 Pins Up.
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Control, EKeys::U) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+
+	// Ctrl+d: Go 3 Pins Down.
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Control, EKeys::D) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
@@ -1161,7 +1223,7 @@ void UVimGraphEditorSubsystem::UnhookFromActiveGraphPanel()
 }
 
 void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
-	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	// if no tracking available try get selected node and init pin highlight
 	if (!GraphSelectionTracker.IsValid()
@@ -1192,7 +1254,8 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	if (!PinObj)
 		return; // Invalid current Pin Object
 
-	TArray<TSharedRef<SWidget>> Pins;
+	TArray<TSharedRef<SWidget>>	  Pins;
+	TArray<TSharedRef<SGraphPin>> CurrentPinGroup;
 	GraphNode->GetPins(Pins);
 
 	// Remove (filter) non‐visible pins as they're not important or useful
@@ -1206,19 +1269,28 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	for (const auto& Pin : Pins)
 	{
 		TSharedRef<SGraphPin> AsGraphPin = StaticCastSharedRef<SGraphPin>(Pin);
+		if (GraphPin->GetDirection() == AsGraphPin->GetDirection())
+			CurrentPinGroup.Add(AsGraphPin); // Collect associated group pins
+
 		if (UEdGraphPin* ObjPin = AsGraphPin->GetPinObj())
 			ObjPins.Add(ObjPin);
 	}
 	if (ObjPins.IsEmpty())
 		return; // No useful obj pins found
 
-	int32 CurrPinIndex = Pins.Find(GraphPin.ToSharedRef());
-	if (CurrPinIndex == INDEX_NONE)
+	const TSharedRef<SGraphPin> GraphPinRef = GraphPin.ToSharedRef();
+	int32						CurrPinIndex = Pins.Find(GraphPinRef);
+	int32						GroupPinIndex = CurrentPinGroup.Find(GraphPinRef);
+	if (CurrPinIndex == INDEX_NONE || GroupPinIndex == INDEX_NONE)
 		return; // Pin not found in the current node's pins array
 
-	const FKey			InKey = InKeyEvent.GetKey();
+	// We should have at most 2 strokes:
+	const int32			SeqNum = InSequence.Num();
+	const FKey			Key1 = InSequence[0].Key;
+	const FKey			Key2 = SeqNum > 1 ? InSequence[1].Key : EKeys::Section;
+	const bool			bIsShiftDown = InSequence[SeqNum - 1].bShift;
+	const bool			bIsCtrlDown = InSequence[SeqNum - 1].bCtrl;
 	TSharedPtr<SWidget> TargetPin;
-	int					Inc{ 0 }, FallbackIndex{ 0 };
 
 	// Lambda to handle the 'H' and 'L' cases:
 	//
@@ -1287,11 +1359,12 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	};
 
 	auto HandleUpDownNavigation =
-		[&]() -> bool {
-		// J and K simply move among the node's pins (regardless of direction)
-		TargetPin = Pins.IsValidIndex(CurrPinIndex + Inc)
-			? Pins[CurrPinIndex + Inc]
-			: Pins[FallbackIndex];
+		[&](int32 Direction) -> bool {
+		if (!CurrentPinGroup.IsValidIndex(GroupPinIndex + Direction))
+			return false; // Can't move: we're at the edge of the pin group.
+
+		// Go the above or below Pin:
+		TargetPin = CurrentPinGroup[GroupPinIndex + Direction];
 
 		FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
 			FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(TargetPin.ToSharedRef())));
@@ -1299,75 +1372,67 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 		return true;
 	};
 
+	TArray<FInputChord> DummyKeySequence;
+
 	// Handle Left & Right Pin / Node Navigation:
-	if (InKey == FKey(EKeys::H))
+	if (Key1 == FKey(EKeys::H))
 		HandleLeftRightNavigation(EGPD_Input);
-	else if (InKey == FKey(EKeys::L))
+	else if (Key1 == FKey(EKeys::L))
 		HandleLeftRightNavigation(EGPD_Output);
 
-	// Handle Up & Down Pin / Node Navigation:
-	else if (InKey == FKey(EKeys::J))
+	// Handle Up & Down Pin Navigation:
+	else if (Key1 == EKeys::J || Key1 == EKeys::K)
 	{
-		Inc = 1;		   // Get Next node.
-		FallbackIndex = 0; // Wrap to first parallel node.
-		HandleUpDownNavigation();
+		HandleUpDownNavigation(Key1 == EKeys::J ? 1 : -1);
 	}
-	else if (InKey == FKey(EKeys::K))
+	else if (Key2 == EKeys::J || Key2 == EKeys::K)
 	{
-		Inc = -1;						// Get Previous node.
-		FallbackIndex = Pins.Num() - 1; // Wrap to last parallel node.
-		HandleUpDownNavigation();
-	}
+		DummyKeySequence.Add(EKeys::G);
+		DummyKeySequence.Add(Key2);
 
+		if (HandleUpDownNavigation(Key2 == EKeys::J ? 1 : -1))
+			HandleVimNodeNavigation(SlateApp, DummyKeySequence);
+		return;
+	}
 	// Handle Goto First ('gg') & Last Pin (Shift+G) / Node Navigation:
-	else if (InKey == FKey(EKeys::G))
+	else if ((Key1 == EKeys::G && bIsShiftDown) || Key2 == EKeys::G)
 	{
-		EEdGraphPinDirection TargetDir = InKeyEvent.IsShiftDown() ? EGPD_Output : EGPD_Input;
+		if (bIsShiftDown) // Simulate Shift+G
+			DummyKeySequence.Add(FInputChord(EModifierKey::Shift, EKeys::G));
+		else // Simulate gg
+		{
+			DummyKeySequence.Add(EKeys::G);
+			DummyKeySequence.Add(EKeys::G);
+		}
+		EEdGraphPinDirection TargetDir = bIsShiftDown ? EGPD_Output : EGPD_Input;
 		// I thought this method has issues but it seems to work great!
 		if (HandleLeftRightNavigation(TargetDir))
-			HandleVimNodeNavigation(SlateApp, InKeyEvent);
+			HandleVimNodeNavigation(SlateApp, DummyKeySequence);
 		return;
-
-		// DEPRECATED:
-		UEdGraphPin* NewPin = GetFirstOrLastLinkedPinFromPin(GraphPanel.ToSharedRef(), PinObj, TargetDir);
-
-		UEdGraphNode* NewOwningNode = NewPin->GetOwningNode();
-		if (!NewOwningNode)
-			return;
-		TSharedPtr<SGraphNode> NewOwningNodeWidget = GraphPanel->GetNodeWidgetFromGuid(NewOwningNode->NodeGuid);
-		if (!NewOwningNodeWidget.IsValid())
-			return;
-		TSharedPtr<SGraphPin> NewPinWidget = NewOwningNodeWidget->FindWidgetForPin(NewPin);
-		if (!NewPinWidget.IsValid())
-			return;
-
-		// Update tracking params
-		GraphSelectionTracker.GraphNode = NewOwningNodeWidget;
-		GraphSelectionTracker.GraphPin = NewPinWidget;
-
-		// Select the new node we're moving into // Add to selection?
-		GraphPanel->SelectionManager.SelectSingleNode(NewOwningNode);
-
-		// We should apply this centering only if out of bounds and in a more
-		// graceful way. For now, no centering.
-		return;
-		ZoomToFit(SlateApp, FKeyEvent(FKey(EKeys::Z), FModifierKeysState(), 0, 0, 0, 0));
-
-		// Highlight the New Pin we're moving into:
-		// In order to simulate this correctly we will need to wait a bit
-		// for the centering to occur:
-		FTimerHandle	  TimerHandle;
-		TWeakPtr<SWidget> WeakPinWidget = NewPinWidget;
-		GEditor->GetTimerManager()->SetTimer(
-			TimerHandle,
-			[&SlateApp, WeakPinWidget]() {
-				if (const TSharedPtr<SWidget> PinWidget = WeakPinWidget.Pin())
-				{
-					FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
-						FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(PinWidget.ToSharedRef())));
-				}
-			},
-			0.02f, false);
+	}
+	else if (Key1 == EKeys::B || Key1 == EKeys::W)
+	{
+		DummyKeySequence.Add(Key1 == EKeys::B ? EKeys::H : EKeys::L);
+		HandleVimNodeNavigation(SlateApp, DummyKeySequence);
+		if (GraphPin->GetDirection() == EGPD_Input) // 2 moves if base is In
+			HandleVimNodeNavigation(SlateApp, DummyKeySequence);
+	}
+	else if (Key1 == EKeys::E || Key2 == EKeys::E)
+	{
+		DummyKeySequence.Add(Key1 == EKeys::E ? EKeys::L : EKeys::H);
+		HandleVimNodeNavigation(SlateApp, DummyKeySequence);
+		if (GraphPin->GetDirection() == EGPD_Output) // 2 moves if base is Out
+			HandleVimNodeNavigation(SlateApp, DummyKeySequence);
+	}
+	else if (bIsCtrlDown) // Ctrl+D & Ctrl+U
+	{
+		const int32 Direction = Key1 == EKeys::D ? 1 : -1;
+		int32		Reps{ 3 };
+		while (Reps > 0 && HandleUpDownNavigation(Direction))
+		{
+			GroupPinIndex += Direction;
+			--Reps;
+		}
 	}
 }
 
