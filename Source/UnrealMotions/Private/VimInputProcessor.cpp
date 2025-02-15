@@ -253,42 +253,12 @@ void FVimInputProcessor::RegisterDefaultKeyBindings()
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		});
-
-	// If you want some distinct context-based binding, e.g. in TextEditing:
-	/*
-	AddKeyBinding_NoParam(
-		EUMContextBinding::TextEditing,
-		{ EKeys::A },
-		[](){
-			// Behavior: "append after current character" in text.
-		}
-	);
-	*/
-}
-
-void FVimInputProcessor::TestLinearInput(FSlateApplication& SlateApp)
-{
-	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
-
-	TimerManager->SetTimer(
-		TimerHandle_LinearPress,
-		[this, &SlateApp]() {
-			Logger.Print("LINEAR INPUT", ELogVerbosity::Warning);
-			// TestLinearInput(SlateApp);
-		},
-		0.02f, true);
 }
 
 bool FVimInputProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// DebugKeyEvent(InKeyEvent);
-
-	// TEST Linear Input:
-	// if (InKeyEvent.GetKey() == EKeys::LeftBracket)
-	// {
-	// 	TestLinearInput(SlateApp);
-	// }
 
 	// NOTE:
 	// When we call SlateApp.ProcessKeyDownEvent(), it will trigger another
@@ -352,13 +322,9 @@ bool FVimInputProcessor::HandleKeyDownEvent(
 // that more. Maybe a specific mode desgined for navigation? TODO WIP OK THANK
 bool FVimInputProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// TEST Linear Input:
-	// if (InKeyEvent.GetKey() == EKeys::LeftBracket)
-	// {
-	// 	GEditor->GetTimerManager()->ClearTimer(TimerHandle_LinearPress);
-	// }
+	OnMouseButtonUpAlertTabForeground.Broadcast(); // Deprecated?
 
-	OnMouseButtonUpAlertTabForeground.Broadcast();
+	Delegate_OnKeyUpEvent.Broadcast(SlateApp, InKeyEvent);
 	// Logger.Print("Key up!");
 	// return true;
 

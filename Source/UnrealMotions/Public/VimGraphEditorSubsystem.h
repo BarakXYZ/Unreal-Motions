@@ -50,6 +50,9 @@ public:
 
 	void HandleVimNodeNavigation(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
+	void HandleGraphPanelPanning(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void StopGraphPanelPanning(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	/**
 	 * Shifts the GraphPanel's view so that the specified Node is within
 	 * a "safe zone" inside the panel. The safe zone is a percentage of
@@ -149,6 +152,10 @@ public:
 	int32			  NodeCounter;
 	EVimMode		  PreviousVimMode{ EVimMode::Insert }, CurrentVimMode{ EVimMode::Insert };
 	EUMContextBinding CurrentContext{ EUMContextBinding::Generic };
+	FDelegateHandle	  DelegateHandle_OnKeyUpEvent;
+	FTimerHandle	  TimerHandle_GraphPanning;
+	FKey			  CurrentActivePanKey;
+	FVector2D		  CurrentPanelOffset;
 
 	// We’ll store the original positions of any nodes we shift
 	TMap<UEdGraphNode*, FVector2D> ShiftedNodesOriginalPositions;

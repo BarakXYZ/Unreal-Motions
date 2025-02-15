@@ -1290,9 +1290,22 @@ bool FUMSlateHelpers::DoesWidgetResidesInRegularWindow(FSlateApplication& SlateA
 TSharedPtr<SGraphPanel> FUMSlateHelpers::TryGetActiveGraphPanel(
 	FSlateApplication& SlateApp)
 {
-	const TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
-	return (FocusedWidget.IsValid()
-			   && FocusedWidget->GetTypeAsString().Equals("SGraphPanel"))
-		? StaticCastSharedPtr<SGraphPanel>(FocusedWidget)
-		: nullptr;
+	static const FString PanelType = "SGraphPanel";
+	TSharedPtr<SDockTab> ActiveMinorTab = GetActiveMinorTab();
+	if (!ActiveMinorTab.IsValid())
+		return nullptr;
+
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid() || !FocusedWidget->GetTypeAsString().Equals(PanelType))
+		return nullptr;
+
+	if (!DoesWidgetResideInTab(ActiveMinorTab.ToSharedRef(), FocusedWidget.ToSharedRef()))
+	{
+		if (!TraverseFindWidget(ActiveMinorTab->GetContent(), FocusedWidget, PanelType))
+			return nullptr;
+
+		SlateApp.SetAllUserFocus(FocusedWidget, EFocusCause::Navigation);
+	}
+
+	return StaticCastSharedPtr<SGraphPanel>(FocusedWidget);
 }

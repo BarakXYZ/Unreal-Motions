@@ -949,7 +949,23 @@ bool UUMFocuserEditorSubsystem::FirstEncounterDefaultInit(
 	}
 
 	Log_FirstEncounterDefaultInit(InTab, nullptr);
-	TryFocusFirstFoundSearchBox(InTab->GetContent()); // Default temp
+
+	// NOTE:
+	// We fallback to the first interactive widget found.
+	// Why is this needed:
+	// We default to SGraphPanel for Event Graph tabs, but we can have many more
+	// tabs with different titles that are indeed blueprints, and should have
+	// SGraphPanel as the first fallback, but won't be recognized because
+	// their names can be different. So we grab the first interactive widget,
+	// which for blueprint tabs works well. Though need to keep an eye on this
+	// method and see if it handles good fallbacks in the future.
+	// Marking this as WIP.
+	TSharedPtr<SWidget> FoundWidget;
+	if (FUMSlateHelpers::TraverseFindWidget(InTab->GetContent(), FoundWidget, FUMSlateHelpers::GetInteractableWidgetTypes()))
+	{
+		FSlateApplication::Get().SetAllUserFocus(FoundWidget, EFocusCause::Navigation);
+		return true;
+	}
 	return false;
 }
 

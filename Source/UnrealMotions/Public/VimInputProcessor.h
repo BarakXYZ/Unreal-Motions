@@ -56,6 +56,9 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnVimModeChanged, const EVimMode);
  */
 DECLARE_MULTICAST_DELEGATE(FUMOnMouseButtonUp);
 
+DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnKeyUpEvent,
+	FSlateApplication& /* SlateApp */, const FKeyEvent& /* InKeyEvent */);
+
 DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnKeyDown, FSlateApplication&, const FKeyEvent&);
 
 class FVimInputProcessor : public IInputProcessor
@@ -530,8 +533,6 @@ public:
 		FSlateApplication& SlateApp, const FKey& SimulatedKey,
 		const FModifierKeysState& ModifierKeys = FModifierKeysState());
 
-	void TestLinearInput(FSlateApplication& SlateApp);
-
 	// Buffer Visualizer:
 	void CheckCreateBufferVisualizer(
 		FSlateApplication& SlateApp, const FKey& InKey);
@@ -598,6 +599,7 @@ public:
 	FUMOnResetSequence OnResetSequence;
 	FUMOnMouseButtonUp OnMouseButtonUpAlertTabForeground;
 	FUMOnKeyDown	   Delegate_OnKeyDown;
+	FUMOnKeyUpEvent	   Delegate_OnKeyUpEvent;
 
 	// Map to track objects and their binding handles
 	TMap<UObject*, FDelegateHandle> PossessedObjects;

@@ -151,7 +151,37 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// then do panning inside the panel via HJKL and see how things feel from
 	// there.
 
-	// Selection + Move HJKL
+	// H: Pan Left in Graph Panel
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Alt, EKeys::H) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleGraphPanelPanning);
+
+	// J: Pan Down in Graph Panel
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Alt, EKeys::J) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleGraphPanelPanning);
+
+	// K: Pan Up in Graph Panel
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Alt, EKeys::K) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleGraphPanelPanning);
+
+	// L: Pan Right in Graph Panel
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Alt, EKeys::L) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::HandleGraphPanelPanning);
+
+	//				~ HJKL Navigate Pins & Nodes ~
+	//
+	// H: Go to Left Pin / Node:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::H) },
@@ -159,6 +189,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
+	// J: Go Down to Next Pin:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::J) },
@@ -166,6 +197,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
+	// K: Go Up to Previous Pin:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::K) },
@@ -173,6 +205,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
+	// L: Go to Right Pin / Node:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::L) },
@@ -255,6 +288,8 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		{ FInputChord(EModifierKey::Control, EKeys::D) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
+	//
+	//				~ HJKL Navigate Pins & Nodes ~
 
 	/** Delete Node */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -1220,6 +1255,75 @@ void UVimGraphEditorSubsystem::UnhookFromActiveGraphPanel()
 	OnSelectionChangedOriginDelegate.Unbind();
 	ActiveGraphPanel.Reset();
 	OnGraphChangedHandler.Reset();
+}
+
+void UVimGraphEditorSubsystem::HandleGraphPanelPanning(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const TMap<FKey, FVector2D> PanOffsetByMotion{
+		{ EKeys::H, FVector2D(-1.0, 0.0) },
+		{ EKeys::J, FVector2D(0.0, 1.0) },
+		{ EKeys::K, FVector2D(0.0, -1.0) },
+		{ EKeys::L, FVector2D(1.0, 0.0) },
+	};
+	// Update to the latest key and panning params
+	CurrentActivePanKey = InKeyEvent.GetKey();
+	if (const FVector2D* PanelOffsetPtr = PanOffsetByMotion.Find(CurrentActivePanKey))
+		CurrentPanelOffset = *PanelOffsetPtr;
+	else
+		return; // Invalid navigation key
+
+	if (DelegateHandle_OnKeyUpEvent.IsValid())
+		return; // We're already bound; shouldn't bind multiple times.
+
+	DelegateHandle_OnKeyUpEvent = // Store handle to unbind on key up.
+		FVimInputProcessor::Get()->Delegate_OnKeyUpEvent.AddUObject(
+			this, &UVimGraphEditorSubsystem::StopGraphPanelPanning);
+
+	// Logger.Print("HandleGraphPanelPanning", ELogVerbosity::Log, true);
+
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle_GraphPanning,
+		[this, &SlateApp, InKeyEvent]() {
+			const TSharedPtr<SGraphPanel> GraphPanel =
+				FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
+			if (GraphPanel.IsValid())
+			{
+				SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
+				UEdGraph* GraphObj = GraphPanel->GetGraphObj();
+				if (GraphObj)
+				{
+					const TSharedPtr<SGraphEditor> GraphEditor =
+						SGraphEditor::FindGraphEditorForGraph(GraphObj);
+					if (GraphEditor.IsValid())
+					{
+						FVector2D Location;
+						float	  ZoomAmount;
+						GraphEditor->GetViewLocation(Location, ZoomAmount);
+						Location += CurrentPanelOffset; // Update location
+						GraphEditor->SetViewLocation(Location, ZoomAmount);
+						return; // Don't stop Panning
+					}
+				}
+			}
+			StopGraphPanelPanning(SlateApp, InKeyEvent);
+		},
+		0.001f, true /* Loop=true */);
+}
+
+void UVimGraphEditorSubsystem::StopGraphPanelPanning(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.GetKey() != CurrentActivePanKey)
+		return;
+
+	if (DelegateHandle_OnKeyUpEvent.IsValid())
+	{
+		GEditor->GetTimerManager()->ClearTimer(TimerHandle_GraphPanning);
+
+		FVimInputProcessor::Get()->Delegate_OnKeyUpEvent.Remove(
+			DelegateHandle_OnKeyUpEvent);
+		DelegateHandle_OnKeyUpEvent.Reset();
+	}
 }
 
 void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
