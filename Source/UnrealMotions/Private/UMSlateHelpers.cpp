@@ -1272,6 +1272,7 @@ const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 		"SGraphSubstrateMaterial",
 		// Misc:
 		"SGraphNodePromotableOperator", // Doesn't have SLevelOfDetailBranchNode
+		"SGraphNodeCreateWidget",		// Appeared in the graph one day *~*
 
 		// ~ SGraphNode types ~  //
 

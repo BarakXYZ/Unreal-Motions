@@ -1329,12 +1329,11 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 			GraphSelectionTracker.GraphNode = NewGraphNode;
 			GraphSelectionTracker.GraphPin = NewGraphPin;
 
+			TSharedRef<SGraphPanel> GraphPanelRef = GraphPanel.ToSharedRef();
 			// Select the new node we're moving to // Add to selection if visual?
-			GraphSelectionTracker.HandleNodeSelection(NewOwningNode, TrackedNodeObj, GraphPanel.ToSharedRef());
-			// if (CurrentVimMode == EVimMode::Visual)
-			// 	GraphPanel->SelectionManager.SetNodeSelection(NewOwningNode, true);
-			// else
-			// 	GraphPanel->SelectionManager.SelectSingleNode(NewOwningNode);
+			GraphSelectionTracker.HandleNodeSelection(NewOwningNode, TrackedNodeObj, GraphPanelRef);
+
+			AdjustViewIfNodeOutOfBounds(GraphPanelRef, NewGraphNode.ToSharedRef());
 
 			// Highlight the New Pin we're moving into:
 			FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
@@ -1433,6 +1432,77 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 			GroupPinIndex += Direction;
 			--Reps;
 		}
+	}
+}
+
+void UVimGraphEditorSubsystem::AdjustViewIfNodeOutOfBounds(
+	const TSharedRef<SGraphPanel> InGraphPanel,
+	const TSharedRef<SGraphNode>  InGraphNode,
+	float						  SafeMarginPercent)
+{
+	UEdGraph* GraphObj = InGraphPanel->GetGraphObj();
+	if (!GraphObj)
+		return;
+
+	TSharedPtr<SGraphEditor> GraphEditor = SGraphEditor::FindGraphEditorForGraph(GraphObj);
+	if (!GraphEditor.IsValid())
+		return;
+
+	// Grab the panel size (in panel / widget space)
+	const FVector2D PanelSize = InGraphPanel->GetCachedGeometry().GetLocalSize();
+	if (PanelSize.X <= 0.f || PanelSize.Y <= 0.f)
+		return; // Panel not fully initialized
+
+	// Zoom + offset in graph space
+	const float		ZoomAmount = InGraphPanel->GetZoomAmount();
+	const FVector2D ViewOffset = InGraphPanel->GetViewOffset();
+
+	// Convert that top-left to panel space:
+	const FVector2D NodeTopLeftInPanel =
+		(InGraphNode->GetPosition() - ViewOffset) * ZoomAmount;
+
+	const FVector2D NodeSizeInPanel = InGraphNode->GetDesiredSize();
+	const FVector2D NodeBottomRightInPanel = NodeTopLeftInPanel + NodeSizeInPanel;
+
+	// Compute the margin in pixels based on the panel size
+	const float MarginX = PanelSize.X * SafeMarginPercent;
+	const float MarginY = PanelSize.Y * SafeMarginPercent;
+
+	// Compute safe region in panel space
+	const FVector2D SafeMin(MarginX, MarginY);
+	const FVector2D SafeMax(PanelSize.X - MarginX, PanelSize.Y - MarginY);
+
+	// Check how far the node is out-of-bounds
+	FVector2D Delta(0.f, 0.f);
+
+	// Check left and right
+	if (NodeTopLeftInPanel.X < SafeMin.X)
+	{
+		Delta.X = NodeTopLeftInPanel.X - SafeMin.X;
+	}
+	else if (NodeBottomRightInPanel.X > SafeMax.X)
+	{
+		Delta.X = NodeBottomRightInPanel.X - SafeMax.X;
+	}
+
+	// Check top and bottom
+	if (NodeTopLeftInPanel.Y < SafeMin.Y)
+	{
+		Delta.Y = NodeTopLeftInPanel.Y - SafeMin.Y;
+	}
+	else if (NodeBottomRightInPanel.Y > SafeMax.Y)
+	{
+		Delta.Y = NodeBottomRightInPanel.Y - SafeMax.Y;
+	}
+
+	// Adjust view if out-of-bounds:
+	if (!Delta.IsNearlyZero())
+	{
+		// Convert panel-space “Delta” into graph-space
+		const FVector2D GraphSpaceDelta = Delta / ZoomAmount;
+
+		// Shift the view offset so the node is back inside the safe zone
+		GraphEditor->SetViewLocation(ViewOffset + GraphSpaceDelta, ZoomAmount);
 	}
 }
 
@@ -1802,13 +1872,16 @@ void UVimGraphEditorSubsystem::ProcessNodeClick(FSlateApplication& SlateApp, con
 	const TSharedPtr<SGraphPanel> GraphPanel = GraphNode->GetOwnerPanel();
 	if (!GraphPanel.IsValid())
 		return;
+	const TSharedRef<SGraphPanel> GraphPanelRef = GraphPanel.ToSharedRef();
 
 	// We wanna focus the Graph first to draw focus to the entire Minor Tab
 	// (just selecting the Node won't be enough if coming from a diff minor tab)
 	SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
 
 	GraphPanel->SelectionManager.SelectSingleNode(AsNodeObj);
-	HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef(), GraphNode);
+	HighlightPinForSelectedNode(SlateApp, GraphPanelRef, GraphNode);
+
+	AdjustViewIfNodeOutOfBounds(GraphPanelRef, GraphNode);
 }
 
 // TODO: Look out to see if we want to also simulate pure Enter key

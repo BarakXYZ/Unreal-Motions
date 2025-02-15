@@ -50,6 +50,16 @@ public:
 
 	void HandleVimNodeNavigation(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
+	/**
+	 * Shifts the GraphPanel's view so that the specified Node is within
+	 * a "safe zone" inside the panel. The safe zone is a percentage of
+	 * the panel’s size (e.g. 0.2f => 20% from each side).
+	 */
+	void AdjustViewIfNodeOutOfBounds(
+		const TSharedRef<SGraphPanel> InGraphPanel,
+		const TSharedRef<SGraphNode>  InGraphNode,
+		float						  SafeMarginPercent = 0.2f);
+
 	UEdGraphPin* GetFirstOrLastLinkedPinFromPin(const TSharedRef<SGraphPanel> GraphPanel, UEdGraphPin* InPin, EEdGraphPinDirection TargetDir);
 
 	void OnNodeCreationMenuClosed(
