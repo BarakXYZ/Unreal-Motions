@@ -1,5 +1,5 @@
 # Unreal-Motions 🖐️✨
-Unreal Engine ergonomic tools that will keep your hands (and soul!) healthy[er] 🧘‍♂️
+This project started with simple motions for tab and window navigation, but it has since evolved into a full-fledged Vim Motions system! I'll be working on another official release in the coming weeks, focusing on stability and proper documentation. Stay tuned! For now the official release contains the tab & window navigation features while main has many of the Vim features already implemented (if you want to try them out) 🧘‍♂️
 
 ## Features 
 
