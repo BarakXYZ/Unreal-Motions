@@ -524,7 +524,12 @@ void UVimEditorSubsystem::BindCommands()
 	Input->AddKeyBinding_KeyEvent(
 		EUMContextBinding::Generic,
 		{ EKeys::U },
-		&FUMEditorCommands::Undo);
+		&FUMEditorCommands::UndoRedo);
+
+	Input->AddKeyBinding_KeyEvent(
+		EUMContextBinding::Generic,
+		{ FInputChord(EModifierKey::Control, EKeys::R) },
+		&FUMEditorCommands::UndoRedo);
 
 	// Delete item - Simulate the Delete key (WIP)
 	Input->AddKeyBinding_KeyEvent(

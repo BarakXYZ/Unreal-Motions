@@ -130,12 +130,12 @@ public:
 
 	void HighlightPinForSelectedNode(
 		FSlateApplication&			  SlateApp,
-		const TSharedRef<SGraphPanel> GraphPanel,
-		const TSharedRef<SGraphNode>  SelectedNode);
+		const TSharedRef<SGraphPanel> GraphPanel);
 
 	void HighlightPinForSelectedNode(
 		FSlateApplication&			  SlateApp,
-		const TSharedRef<SGraphPanel> GraphPanel);
+		const TSharedRef<SGraphPanel> GraphPanel,
+		UEdGraphNode*				  SelectedNode);
 
 	bool TryGetNearestLinkedPin(
 		const TArray<UEdGraphPin*>& InSortedObjPins, UEdGraphPin*& OutPin,
@@ -147,6 +147,26 @@ public:
 		TSharedPtr<SGraphPin>& OutPinWidget, bool bShouldMatchExactIndex = false);
 
 	void OnVimModeChanged(const EVimMode NewVimMode);
+
+	void UndoRedo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	UEdGraphNode* FindFallbackNode(const TArray<UEdGraphNode*>& SelectedNodes);
+
+	void DebugSelectedNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	UEdGraphPin* GetFirstVisiblePinInNode(UEdGraphNode* InNode);
+
+	/**
+	 * This method seems to be more reliable than trying to use
+	 * FindPinWidgetFromObj, then GetFirstVisiblePinInNode.
+	 * I don't exactly know why.
+	 * Prefer using this when in need for Pin Widgets.
+	 */
+	TSharedPtr<SGraphPin> GetFirstVisiblePinWidgetInNode(UEdGraphNode* InNode, const TSharedRef<SGraphPanel> InGraphPanel);
+
+	TSharedPtr<SGraphPin> FindPinWidgetFromObj(UEdGraphPin* InPin, TSharedRef<SGraphPanel> InGraphPanel);
+
+	TSharedPtr<SGraphPin> FindPinWidgetFromObj(UEdGraphPin* InPin, UEdGraphNode* InNode, TSharedRef<SGraphPanel> InGraphPanel);
 
 	FUMLogger					Logger;
 	int32						NodeCounter;
@@ -164,7 +184,7 @@ public:
 	};
 
 	// We’ll store the original positions of any nodes we shift
-	TMap<UEdGraphNode*, FVector2D> ShiftedNodesOriginalPositions;
+	TMap<TWeakObjectPtr<UEdGraphNode>, FVector2D> ShiftedNodesOriginalPositions;
 
 	// We’ll track whether we’re currently in a “shifted” state
 	// so we know whether to revert on menu close.
@@ -173,16 +193,16 @@ public:
 	struct FGraphSelectionTracker
 	{
 		TWeakPtr<SGraphPanel>				 GraphPanel;
-		TWeakPtr<SGraphNode>				 GraphNode;
-		TWeakPtr<SGraphPin>					 GraphPin;
+		TWeakObjectPtr<UEdGraphNode>		 GraphNode;
+		int32								 PinIndex{ INDEX_NONE };
 		TArray<TWeakObjectPtr<UEdGraphNode>> VisitedNodesStack;
 		static UVimGraphEditorSubsystem*	 VimGraphOwner;
 
 		FGraphSelectionTracker() = default;
 		FGraphSelectionTracker(
-			TWeakPtr<SGraphPanel> InGraphPanel,
-			TWeakPtr<SGraphNode>  InGraphNode,
-			TWeakPtr<SGraphPin>	  InGraphPin);
+			TWeakPtr<SGraphPanel>		 InGraphPanel,
+			TWeakObjectPtr<UEdGraphNode> InGraphNode,
+			int32						 InPinIndex);
 
 		bool IsValid();
 		bool IsTrackedNodeSelected();

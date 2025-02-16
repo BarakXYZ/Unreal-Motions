@@ -21,7 +21,7 @@ public:
 	 * @param SlateApp Reference to the Slate application instance
 	 * @param InKeyEvent Original triggering key event
 	 */
-	static void Undo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	static void UndoRedo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	/**
 	 * @brief Opens the Output Log tab.

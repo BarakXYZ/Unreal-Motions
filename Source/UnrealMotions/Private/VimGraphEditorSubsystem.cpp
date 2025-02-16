@@ -4,6 +4,7 @@
 #include "EdGraphNode_Comment.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Kismet2/BlueprintEditorUtils.h"
+#include "ScopedTransaction.h"
 #include "UMConfig.h"
 #include "GraphEditorModule.h"
 #include "UMFocusHelpers.h"
@@ -25,6 +26,7 @@
 #include "GraphEditor.h"
 #include "UMFocuserEditorSubsystem.h"
 #include "VimNavigationEditorSubsystem.h"
+#include "UMEditorCommands.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogVimGraphEditorSubsystem, Log, All); // Dev
@@ -291,10 +293,10 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	//
 	//				~ HJKL Navigate Pins & Nodes ~
 
-	/** Delete Node */
+	// Delete Node while retaining natural selection */
+	//
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		// { FInputChord(EModifierKey::Shift, EKeys::Delete) },
 		{ EKeys::Delete },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DeleteNode);
@@ -305,6 +307,34 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		{ EKeys::X },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DeleteNode);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::D },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::DeleteNode);
+	//
+	// Delete Node while retaining natural selection */
+
+	// ////////////////////////////////////////////////////////////////////////
+	//
+	// A wrapper around Undo & Redo to retain natural selection.
+	// By default they seem to reset node selection (which is unwanted)
+	/** U: Undo Wrapper to retain selection and natural feel */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::U },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::UndoRedo);
+
+	/** Control + R: Redo Wrapper to retain selection and natural feel */
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ FInputChord(EModifierKey::Control, EKeys::R) },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::UndoRedo);
+	//
+	// ////////////////////////////////////////////////////////////////////////
 
 	/** 'Enter': Add a new node to the currently highlighted pin */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -319,6 +349,21 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 		{ FInputChord(EModifierKey::Shift, EKeys::Enter) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ClickOnInteractableWithinPin);
+
+	// ////////////////////////////////////////////////////////////////////////
+	//							~ Utilities ~
+	//
+	/** Shift + 'Enter': Access the clickable within the pin field */
+
+	// [D]ebug [S]elected [N]ode
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::GraphEditor,
+		{ EKeys::SpaceBar, EKeys::D, EKeys::S, EKeys::N },
+		WeakGraphSubsystem,
+		&UVimGraphEditorSubsystem::DebugSelectedNode);
+	//
+	//							~ Utilities ~
+	// ////////////////////////////////////////////////////////////////////////
 
 	// TODO:
 	// 1. gg & G to go to focus first or last node in a chain
@@ -472,8 +517,8 @@ void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
 	TSet<UEdGraphNode*> NodesToShift;
 	for (const auto& Pair : ShiftedNodesOriginalPositions)
 	{
-		if (Pair.Key)
-			NodesToShift.Add(Pair.Key);
+		if (Pair.Key.IsValid())
+			NodesToShift.Add(Pair.Key.Get());
 	}
 
 	// Move all the nodes by the width of the new node
@@ -506,7 +551,7 @@ void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
 	GraphPanel->StraightenConnections();
 	GraphPanel->SelectionManager.SelectSingleNode(SelNodes[0]);
 
-	HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef(), NewNodeRef);
+	HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef(), SelNodes[0]);
 
 	// When inserting we also want to potentially connect the new node to any
 	// existing nodes previous to our origin node (it will be disconnected
@@ -840,8 +885,9 @@ void UVimGraphEditorSubsystem::ShiftNodesForSpace(
 	// Now apply the shift
 	for (const auto& Pair : ShiftedNodesOriginalPositions)
 	{
-		if (UEdGraphNode* GraphNode = Pair.Key)
+		if (Pair.Key.IsValid())
 		{
+			UEdGraphNode*				 GraphNode = Pair.Key.Get();
 			const TSharedPtr<SGraphNode> SNode =
 				GraphPanel->GetNodeWidgetFromGuid(GraphNode->NodeGuid);
 			if (!SNode.IsValid())
@@ -872,8 +918,9 @@ void UVimGraphEditorSubsystem::RevertShiftedNodes(
 	// Move them back
 	for (auto& Pair : ShiftedNodesOriginalPositions)
 	{
-		if (UEdGraphNode* GraphNode = Pair.Key)
+		if (Pair.Key.IsValid())
 		{
+			UEdGraphNode*				 GraphNode = Pair.Key.Get();
 			const TSharedPtr<SGraphNode> SNode =
 				GraphPanel->GetNodeWidgetFromGuid(GraphNode->NodeGuid);
 			if (!SNode.IsValid())
@@ -886,8 +933,9 @@ void UVimGraphEditorSubsystem::RevertShiftedNodes(
 
 	for (auto& Pair : ShiftedNodesOriginalPositions)
 	{
-		if (UEdGraphNode* GraphNode = Pair.Key)
+		if (Pair.Key.IsValid())
 		{
+			UEdGraphNode*				 GraphNode = Pair.Key.Get();
 			const TSharedPtr<SGraphNode> SNode =
 				GraphPanel->GetNodeWidgetFromGuid(GraphNode->NodeGuid);
 			if (!SNode.IsValid())
@@ -1355,15 +1403,15 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 	}
 
 	TSharedPtr<SGraphPanel> GraphPanel = GraphSelectionTracker.GraphPanel.Pin();
-	TSharedPtr<SGraphNode>	GraphNode = GraphSelectionTracker.GraphNode.Pin();
-	UEdGraphNode*			TrackedNodeObj = GraphNode->GetNodeObj();
-	if (!TrackedNodeObj)
+	UEdGraphNode*			TrackedNodeObj = GraphSelectionTracker.GraphNode.Get();
+	TSharedPtr<SGraphNode>	GraphNode = GraphPanel->GetNodeWidgetFromGuid(TrackedNodeObj->NodeGuid);
+	if (!GraphNode.IsValid())
 		return;
 
-	TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
-	UEdGraphPin*		  PinObj = GraphPin->GetPinObj();
-	if (!PinObj)
-		return; // Invalid current Pin Object
+	UEdGraphPin*		  PinObj = TrackedNodeObj->GetPinAt(GraphSelectionTracker.PinIndex);
+	TSharedPtr<SGraphPin> GraphPin = FindPinWidgetFromObj(PinObj, GraphPanel.ToSharedRef());
+	if (!GraphPin.IsValid())
+		return;
 
 	TArray<TSharedRef<SWidget>>	  Pins;
 	TArray<TSharedRef<SGraphPin>> CurrentPinGroup;
@@ -1437,8 +1485,8 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 				return false; // Invalid New Pin Widget
 
 			// Update tracking params
-			GraphSelectionTracker.GraphNode = NewGraphNode;
-			GraphSelectionTracker.GraphPin = NewGraphPin;
+			GraphSelectionTracker.GraphNode = NewOwningNode;
+			GraphSelectionTracker.PinIndex = NewOwningNode->GetPinIndex(NewPin);
 
 			TSharedRef<SGraphPanel> GraphPanelRef = GraphPanel.ToSharedRef();
 			// Select the new node we're moving to // Add to selection if visual?
@@ -1463,8 +1511,12 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 				FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(FoundPin.ToSharedRef())));
 
 			// Update tracking params
-			GraphSelectionTracker.GraphPin = FoundPin;
-			return true;
+			if (UEdGraphPin* NewPinObj = FoundPin->GetPinObj())
+			{
+				GraphSelectionTracker.PinIndex = TrackedNodeObj->GetPinIndex(NewPinObj);
+				return true;
+			}
+			return false;
 		}
 	};
 
@@ -1478,8 +1530,14 @@ void UVimGraphEditorSubsystem::HandleVimNodeNavigation(
 
 		FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
 			FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(TargetPin.ToSharedRef())));
-		GraphSelectionTracker.GraphPin = StaticCastSharedPtr<SGraphPin>(TargetPin);
-		return true;
+
+		TSharedPtr<SGraphPin> PinWidget = StaticCastSharedPtr<SGraphPin>(TargetPin);
+		if (UEdGraphPin* NewPinObj = PinWidget->GetPinObj())
+		{
+			GraphSelectionTracker.PinIndex = TrackedNodeObj->GetPinIndex(NewPinObj);
+			return true;
+		}
+		return false;
 	};
 
 	TArray<FInputChord> DummyKeySequence;
@@ -1937,36 +1995,196 @@ void UVimGraphEditorSubsystem::Log_AddNodeToPin(bool bIsAppendingNode)
 		ELogVerbosity::Log, true);
 }
 
+UEdGraphNode* UVimGraphEditorSubsystem::FindFallbackNode(
+	const TArray<UEdGraphNode*>& SelectedNodes)
+{
+	TSet<UEdGraphNode*> SelectionSet(SelectedNodes);
+
+	for (UEdGraphNode* Node : SelectedNodes)
+	{
+		for (UEdGraphPin* Pin : Node->GetAllPins())
+		{
+			for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
+			{
+				UEdGraphNode* LinkedNode = LinkedPin ? LinkedPin->GetOwningNode() : nullptr;
+				if (LinkedNode && !SelectionSet.Contains(LinkedNode))
+					return LinkedNode;
+			}
+		}
+	}
+	return nullptr;
+}
+
 // TODO: Add Shift+X to delete previous node and keep connection.
 void UVimGraphEditorSubsystem::DeleteNode(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// Get active graph panel & Obj
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+		return;
+	UEdGraph* Graph = GraphPanel->GetGraphObj();
+	if (!Graph)
+		return;
+
+	// Get selected nodes: if no selected nodes; bail.
+	TArray<UEdGraphNode*> SelectedNodes = GraphPanel->GetSelectedGraphNodes();
+	if (SelectedNodes.IsEmpty())
+		return;
+
+	// Begin transaction to support undo/redo
+	const FScopedTransaction Transaction(NSLOCTEXT("VimGraphEditor", "DeleteNodes", "Delete Nodes"));
+	Graph->Modify();
+
+	// Find a fallback node to have a node selected after deletion:
+	UEdGraphNode* FallbackNode = FindFallbackNode(SelectedNodes);
+
+	//-----------------------------------------------------
+	// 1) Gather "global" upstream & downstream pins
+	//    for the entire selection. This ensures that if
+	//    multiple selected nodes formed a chain, we can
+	//    still connect the external nodes on either side
+	//    of that chain directly (e.g. node1->(2,3)->node4).
+	//-----------------------------------------------------
+	TSet<UEdGraphPin*> GlobalUpstreamPins;	 // External pins feeding into the selected set
+	TSet<UEdGraphPin*> GlobalDownstreamPins; // External pins receiving from the selected set
+
+	for (UEdGraphNode* Node : SelectedNodes)
+	{
+		if (!Node)
+			continue;
+
+		// Look at every pin on this node
+		for (UEdGraphPin* Pin : Node->Pins)
+		{
+			if (!Pin)
+				continue;
+
+			// For each pin linked to external nodes (not in the selection)
+			for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
+			{
+				if (!LinkedPin)
+					continue;
+				UEdGraphNode* LinkedNode = LinkedPin->GetOwningNode();
+				if (!LinkedNode || SelectedNodes.Contains(LinkedNode))
+					continue; // Link is internal to the sub-graph we're deleting
+
+				// If the node's pin is an input, that external linked pin is "upstream"
+				if (Pin->Direction == EGPD_Input)
+					GlobalUpstreamPins.Add(LinkedPin);
+				// If the node's pin is an output, that external linked pin is "downstream"
+				else if (Pin->Direction == EGPD_Output)
+					GlobalDownstreamPins.Add(LinkedPin);
+			}
+		}
+	}
+
+	//-----------------------------------------------------
+	// 2) Remove all selected nodes from the graph
+	//-----------------------------------------------------
+	for (UEdGraphNode* Node : SelectedNodes)
+	{
+		Node->Modify();
+		Graph->RemoveNode(Node);
+	}
+
+	if (FallbackNode)
+		GraphPanel->SelectionManager.SelectSingleNode(FallbackNode);
+
+	//-----------------------------------------------------
+	// 3) Rewire: connect each external "upstream" pin to
+	//    each external "downstream" pin, if compatible.
+	//-----------------------------------------------------
+	auto ArePinsCompatible = [&](UEdGraphPin* OutPin, UEdGraphPin* InPin) {
+		if (!OutPin || !InPin)
+			return false;
+		if (OutPin->Direction != EGPD_Output || InPin->Direction != EGPD_Input)
+			return false;
+
+		// Basic pin-type match checks (TODO: might need more work on this)
+		const FEdGraphPinType& OutType = OutPin->PinType;
+		const FEdGraphPinType& InType = InPin->PinType;
+		if (OutType.PinCategory != InType.PinCategory)
+			return false;
+		if (OutType.PinSubCategory != InType.PinSubCategory)
+			return false;
+
+		// We can add more checks here (object types, container types, etc.)
+		return true;
+	};
+
+	TSet<TPair<UEdGraphPin*, UEdGraphPin*>> CreatedLinks; // to avoid duplicates
+
+	for (UEdGraphPin* UpstreamPin : GlobalUpstreamPins)
+	{
+		if (!UpstreamPin || !UpstreamPin->GetOwningNode())
+			continue;
+		for (UEdGraphPin* DownstreamPin : GlobalDownstreamPins)
+		{
+			if (!DownstreamPin || !DownstreamPin->GetOwningNode())
+				continue;
+			if (ArePinsCompatible(UpstreamPin, DownstreamPin))
+			{
+				TPair<UEdGraphPin*, UEdGraphPin*> LinkPair(UpstreamPin, DownstreamPin);
+				if (!CreatedLinks.Contains(LinkPair))
+				{
+					UpstreamPin->MakeLinkTo(DownstreamPin);
+					CreatedLinks.Add(LinkPair);
+				}
+			}
+		}
+	}
+
+	// Mark blueprint as structurally modified if needed
+	// if (UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(Graph))
+	// 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+}
+
+void UVimGraphEditorSubsystem::UndoRedo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
 	if (!GraphPanel.IsValid())
 		return;
 
-	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
-	if (SelNodes.IsEmpty())
-		return;
-
-	TArray<UEdGraphPin*> Pins = SelNodes[0]->GetAllPins();
-	UEdGraphNode*		 FallbackNode = nullptr;
-	for (const auto& Pin : Pins)
+	// Store selected nodes in a TWeakObjectPtr array (as Undo may destroy them)
+	TWeakObjectPtr<UEdGraphNode>		 FallbackNode;
+	TArray<TWeakObjectPtr<UEdGraphNode>> WeakSelectedNodes;
 	{
-		if (Pin->LinkedTo.IsEmpty())
-			continue;
+		TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+		for (UEdGraphNode* Node : SelNodes)
+			WeakSelectedNodes.Add(Node);
 
-		UEdGraphNode* OwningNode = Pin->LinkedTo[0]->GetOwningNode();
-		if (!OwningNode)
-			continue;
-
-		FallbackNode = OwningNode;
-		break;
+		// Also make a fallback in case all the selected nodes won't be valid
+		FallbackNode = FindFallbackNode(SelNodes);
 	}
 
-	SelNodes[0]->DestroyNode();
-	if (FallbackNode)
-		GraphPanel->SelectionManager.SelectSingleNode(FallbackNode);
+	// These operations may destroy current selected nodes
+	FUMEditorCommands::UndoRedo(SlateApp, InKeyEvent);
+
+	// Re‐select anything still valid
+	// Timer seems to be needed to properly retain the selection.
+	FTimerHandle		  TimerHandle;
+	TWeakPtr<SGraphPanel> WeakGraphPanel = GraphPanel;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[this, &SlateApp, WeakGraphPanel, WeakSelectedNodes, FallbackNode]() {
+			if (TSharedPtr<SGraphPanel> GraphPanel = WeakGraphPanel.Pin())
+			{
+				// Re-select valid nodes
+				for (const TWeakObjectPtr<UEdGraphNode>& WeakNode : WeakSelectedNodes)
+				{
+					if (WeakNode.IsValid())
+						GraphPanel->SelectionManager.SetNodeSelection(WeakNode.Get(), true);
+				}
+
+				// If no selection, try fallback
+				if (GraphPanel->GetSelectedGraphNodes().Num() == 0 && FallbackNode.IsValid())
+					GraphPanel->SelectionManager.SelectSingleNode(FallbackNode.Get());
+
+				HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef());
+			}
+		},
+		0.025f, false);
 }
 
 void UVimGraphEditorSubsystem::ProcessNodeClick(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
@@ -1990,7 +2208,7 @@ void UVimGraphEditorSubsystem::ProcessNodeClick(FSlateApplication& SlateApp, con
 	SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
 
 	GraphPanel->SelectionManager.SelectSingleNode(AsNodeObj);
-	HighlightPinForSelectedNode(SlateApp, GraphPanelRef, GraphNode);
+	HighlightPinForSelectedNode(SlateApp, GraphPanelRef, AsNodeObj);
 
 	AdjustViewIfNodeOutOfBounds(GraphPanelRef, GraphNode);
 }
@@ -2003,8 +2221,14 @@ void UVimGraphEditorSubsystem::AddNodeToHighlightedPin(FSlateApplication& SlateA
 	if (!GraphSelectionTracker.IsValid()
 		|| !GraphSelectionTracker.IsTrackedNodeSelected())
 		return;
-	TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
-	AddNodeToPin(SlateApp, GraphPin.ToSharedRef());
+
+	TSharedPtr<SGraphPanel> GraphPanel = GraphSelectionTracker.GraphPanel.Pin();
+	UEdGraphNode*			NodeObj = GraphSelectionTracker.GraphNode.Get();
+	UEdGraphPin*			PinObj = NodeObj->GetPinAt(GraphSelectionTracker.PinIndex);
+
+	if (const TSharedPtr<SGraphPin> PinWidget =
+			FindPinWidgetFromObj(PinObj, GraphPanel.ToSharedRef()))
+		AddNodeToPin(SlateApp, PinWidget.ToSharedRef());
 }
 
 void UVimGraphEditorSubsystem::ClickOnInteractableWithinPin(
@@ -2014,47 +2238,23 @@ void UVimGraphEditorSubsystem::ClickOnInteractableWithinPin(
 		|| !GraphSelectionTracker.IsTrackedNodeSelected())
 		return;
 
-	TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
-	FChildren*			  Children = GraphPin->GetChildren();
-	if (!Children || Children->Num() == 0)
-		return;
-	TSharedRef<SWidget> FirstChild = Children->GetChildAt(0);
-	TSharedPtr<SWidget> FoundWidget;
-	if (!FUMSlateHelpers::TraverseFindWidget(FirstChild, FoundWidget, FUMSlateHelpers::GetInteractableWidgetTypes()))
-		return;
+	TSharedPtr<SGraphPanel> GraphPanel = GraphSelectionTracker.GraphPanel.Pin();
+	UEdGraphNode*			NodeObj = GraphSelectionTracker.GraphNode.Get();
+	UEdGraphPin*			PinObj = NodeObj->GetPinAt(GraphSelectionTracker.PinIndex);
 
-	FUMFocusHelpers::HandleWidgetExecution(SlateApp, FoundWidget.ToSharedRef());
-}
-
-void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(
-	FSlateApplication&			  SlateApp,
-	const TSharedRef<SGraphPanel> GraphPanel,
-	const TSharedRef<SGraphNode>  SelectedNode)
-{
-	// Check if there's a tracked node available and if it's the curr sel one:
-	if (GraphSelectionTracker.IsValid()
-		&& GraphSelectionTracker.IsTrackedNodeSelected())
+	if (const TSharedPtr<SGraphPin> PinWidget =
+			FindPinWidgetFromObj(PinObj, GraphPanel.ToSharedRef()))
 	{
-		// Highlight the previous pin it has tracked for continuity:
-		TSharedPtr<SGraphPin> GraphPin = GraphSelectionTracker.GraphPin.Pin();
-		FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
-			FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPin.ToSharedRef())));
-		return;
+		FChildren* Children = PinWidget->GetChildren();
+		if (!Children || Children->Num() == 0)
+			return;
+		TSharedRef<SWidget> FirstChild = Children->GetChildAt(0);
+		TSharedPtr<SWidget> FoundWidget;
+		if (!FUMSlateHelpers::TraverseFindWidget(FirstChild, FoundWidget, FUMSlateHelpers::GetInteractableWidgetTypes()))
+			return;
+
+		FUMFocusHelpers::HandleWidgetExecution(SlateApp, FoundWidget.ToSharedRef());
 	}
-
-	// Else: Highlight first Pin in currently selected node (Pin Input 0)
-	TArray<TSharedRef<SWidget>> Pins;
-	SelectedNode->GetPins(Pins);
-	if (Pins.IsEmpty())
-		return;
-	TSharedRef<SGraphPin> GraphPin = StaticCastSharedRef<SGraphPin>(Pins[0]);
-
-	// Track Parameters:
-	GraphSelectionTracker = FGraphSelectionTracker(GraphPanel, SelectedNode, GraphPin);
-
-	// Highlight Pin:
-	FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
-		FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(GraphPin)));
 }
 
 void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(
@@ -2065,11 +2265,46 @@ void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(
 	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
 	if (SelNodes.IsEmpty() || !SelNodes[0])
 		return;
-	TSharedPtr<SGraphNode> GraphNode = GraphPanel->GetNodeWidgetFromGuid(SelNodes[0]->NodeGuid);
-	if (!GraphNode.IsValid())
-		return;
 
-	HighlightPinForSelectedNode(SlateApp, GraphPanel, GraphNode.ToSharedRef());
+	HighlightPinForSelectedNode(SlateApp, GraphPanel, SelNodes[0]);
+}
+
+void UVimGraphEditorSubsystem::HighlightPinForSelectedNode(
+	FSlateApplication&			  SlateApp,
+	const TSharedRef<SGraphPanel> GraphPanel,
+	UEdGraphNode*				  SelectedNode)
+{
+	// Check if there's a tracked node available and if it's the curr sel one:
+	if (GraphSelectionTracker.IsValid()
+		&& GraphSelectionTracker.IsTrackedNodeSelected())
+	{
+		Logger.Print("Found & Move to Tracked Pin!", ELogVerbosity::Log, true);
+		// Highlight the previous pin it has tracked for continuity:
+		UEdGraphNode* NodeObj = GraphSelectionTracker.GraphNode.Get();
+		UEdGraphPin*  GraphPin = NodeObj->GetPinAt(GraphSelectionTracker.PinIndex);
+		if (TSharedPtr<SGraphPin> PinWidget = FindPinWidgetFromObj(GraphPin, GraphPanel))
+		{
+			FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+				FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(PinWidget.ToSharedRef())));
+		}
+		return;
+	}
+
+	// Else: Highlight first Pin in currently selected node (Pin Input 0)
+	// if (UEdGraphPin* PinObj = GetFirstVisiblePinInNode(SelectedNode))
+	if (const TSharedPtr<SGraphPin> PinWidget =
+			GetFirstVisiblePinWidgetInNode(SelectedNode, GraphPanel))
+	{
+		if (UEdGraphPin* NewPinObj = PinWidget->GetPinObj())
+		{
+			// Track Parameters:
+			GraphSelectionTracker = FGraphSelectionTracker(GraphPanel, SelectedNode, SelectedNode->GetPinIndex(NewPinObj));
+
+			// Highlight Pin:
+			FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+				FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(PinWidget.ToSharedRef())));
+		}
+	}
 }
 
 void UVimGraphEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
@@ -2089,10 +2324,8 @@ void UVimGraphEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 			if (GraphSelectionTracker.IsValid() && GraphSelectionTracker.IsTrackedNodeSelected())
 			{
 				TSharedPtr<SGraphPanel> GraphPanel = GraphSelectionTracker.GraphPanel.Pin();
-				TSharedPtr<SGraphNode>	GraphNode = GraphSelectionTracker.GraphNode.Pin();
-				UEdGraphNode*			NodeObj = GraphNode->GetNodeObj();
-				if (NodeObj)
-					GraphPanel->SelectionManager.SelectSingleNode(NodeObj);
+				UEdGraphNode*			NodeObj = GraphSelectionTracker.GraphNode.Get();
+				GraphPanel->SelectionManager.SelectSingleNode(NodeObj);
 			}
 			break;
 		}
@@ -2106,10 +2339,8 @@ void UVimGraphEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 
 			if (GraphSelectionTracker.IsValid() && GraphSelectionTracker.IsTrackedNodeSelected())
 			{
-				TSharedPtr<SGraphNode> GraphNode = GraphSelectionTracker.GraphNode.Pin();
-				UEdGraphNode*		   NodeObj = GraphNode->GetNodeObj();
-				if (NodeObj)
-					GraphSelectionTracker.VisitedNodesStack.Add(NodeObj);
+				UEdGraphNode* NodeObj = GraphSelectionTracker.GraphNode.Get();
+				GraphSelectionTracker.VisitedNodesStack.Add(NodeObj);
 			}
 			else // Init tracking
 			{
@@ -2127,6 +2358,8 @@ void UVimGraphEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 			}
 			break;
 		}
+		default:
+			break;
 	}
 }
 
@@ -2136,23 +2369,23 @@ void UVimGraphEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 UVimGraphEditorSubsystem* UVimGraphEditorSubsystem::FGraphSelectionTracker::VimGraphOwner = nullptr;
 
 UVimGraphEditorSubsystem::FGraphSelectionTracker::FGraphSelectionTracker(
-	TWeakPtr<SGraphPanel> InGraphPanel,
-	TWeakPtr<SGraphNode>  InGraphNode,
-	TWeakPtr<SGraphPin>	  InGraphPin)
+	TWeakPtr<SGraphPanel>		 InGraphPanel,
+	TWeakObjectPtr<UEdGraphNode> InGraphNode,
+	int32						 InPinIndex)
 {
 	GraphPanel = InGraphPanel;
 	GraphNode = InGraphNode;
-	GraphPin = InGraphPin;
+	PinIndex = InPinIndex;
 }
 
 bool UVimGraphEditorSubsystem::FGraphSelectionTracker::IsValid()
 {
-	return GraphPanel.IsValid() && GraphNode.IsValid() && GraphPin.IsValid();
+	return GraphPanel.IsValid() && GraphNode.IsValid() && GraphNode.Get()->GetPinAt(PinIndex);
 }
 
 bool UVimGraphEditorSubsystem::FGraphSelectionTracker::IsTrackedNodeSelected()
 {
-	if (TSharedPtr<SGraphNode> Node = GraphNode.Pin())
+	if (UEdGraphNode* TrackedNode = GraphNode.Get())
 	{
 		if (TSharedPtr<SGraphPanel> Panel = GraphPanel.Pin())
 		{
@@ -2163,14 +2396,11 @@ bool UVimGraphEditorSubsystem::FGraphSelectionTracker::IsTrackedNodeSelected()
 			TArray<UEdGraphNode*> SelNodes = Panel->GetSelectedGraphNodes();
 			if (!SelNodes.IsEmpty())
 			{
-				UEdGraphNode* NodeObj = Node->GetNodeObj();
-				if (NodeObj)
-				{
-					int32 NodeIndex = SelNodes.Find(NodeObj);
-					if (NodeIndex != INDEX_NONE)
-						return true;
-				}
-				// return SelNodes[0] && NodeObj && SelNodes[0] == NodeObj;
+				// This isn't amazing because it will only mark if it's part
+				// of the selection. But maybe that's enough?
+				int32 NodeIndex = SelNodes.Find(TrackedNode);
+				if (NodeIndex != INDEX_NONE)
+					return true;
 			}
 		}
 	}
@@ -2231,6 +2461,82 @@ void UVimGraphEditorSubsystem::FGraphSelectionTracker::HandleNodeSelection(
 
 //
 //				~ FGraphSelectionTracker Implementation ~ //
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
+//								~ Utilities ~								 //
+//
+
+void UVimGraphEditorSubsystem::DebugSelectedNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const TSharedPtr<SGraphPanel> GraphPanel = FUMSlateHelpers::TryGetActiveGraphPanel(SlateApp);
+	if (!GraphPanel.IsValid())
+		return;
+
+	TArray<UEdGraphNode*> SelNodes = GraphPanel->GetSelectedGraphNodes();
+	if (SelNodes.IsEmpty() || !SelNodes[0])
+		return;
+
+	FGuid				   NodeGuid = SelNodes[0]->NodeGuid;
+	TSharedPtr<SGraphNode> NodeWidget = GraphPanel->GetNodeWidgetFromGuid(NodeGuid);
+	if (!NodeWidget.IsValid())
+		return;
+
+	Logger.Print(FString::Printf(
+					 TEXT("~ Selected Node ~\nGUID: %s\n Widget ID: %d\n"),
+					 *SelNodes[0]->NodeGuid.ToString(),
+					 NodeWidget->GetId()),
+		ELogVerbosity::Log, true);
+}
+
+TSharedPtr<SGraphPin> UVimGraphEditorSubsystem::FindPinWidgetFromObj(UEdGraphPin* InPin, TSharedRef<SGraphPanel> InGraphPanel)
+{
+	if (UEdGraphNode* OwningNode = InPin->GetOwningNode())
+	{
+		if (TSharedPtr<SGraphNode> NodeWidget =
+				InGraphPanel->GetNodeWidgetFromGuid(OwningNode->NodeGuid))
+			return NodeWidget->FindWidgetForPin(InPin);
+	}
+	return nullptr;
+}
+
+TSharedPtr<SGraphPin> UVimGraphEditorSubsystem::FindPinWidgetFromObj(UEdGraphPin* InPin, UEdGraphNode* InNode, TSharedRef<SGraphPanel> InGraphPanel)
+{
+	if (InNode && InPin)
+	{
+		if (TSharedPtr<SGraphNode> NodeWidget =
+				InGraphPanel->GetNodeWidgetFromGuid(InNode->NodeGuid))
+			return NodeWidget->FindWidgetForPin(InPin);
+	}
+	return nullptr;
+}
+
+UEdGraphPin* UVimGraphEditorSubsystem::GetFirstVisiblePinInNode(UEdGraphNode* InNode)
+{
+	for (const auto& Pin : InNode->GetAllPins())
+		if (!Pin->bAdvancedView)
+			return Pin;
+	return nullptr;
+}
+
+TSharedPtr<SGraphPin> UVimGraphEditorSubsystem::GetFirstVisiblePinWidgetInNode(UEdGraphNode* InNode, const TSharedRef<SGraphPanel> InGraphPanel)
+{
+	TArray<TSharedRef<SWidget>> PinWidgets;
+	if (TSharedPtr<SGraphNode> NodeWidget = InGraphPanel->GetNodeWidgetFromGuid(InNode->NodeGuid))
+	{
+		NodeWidget->GetPins(PinWidgets);
+		for (const auto& Pin : PinWidgets)
+		{
+			TSharedRef<SGraphPin> GraphPin = StaticCastSharedRef<SGraphPin>(Pin);
+			if (GraphPin->IsPinVisibleAsAdvanced().IsVisible())
+				return GraphPin;
+		}
+	}
+	return nullptr;
+}
+
+//
+//								~ Utilities ~								 //
 ///////////////////////////////////////////////////////////////////////////////
 
 #undef LOCTEXT_NAMESPACE

@@ -51,11 +51,11 @@ void FUMEditorCommands::ToggleAllowNotifications()
 	}
 }
 
-void FUMEditorCommands::Undo(
+void FUMEditorCommands::UndoRedo(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	FVimInputProcessor::SimulateKeyPress(SlateApp,
-		FKey(EKeys::Z),
+		FKey(InKeyEvent.GetKey() == EKeys::U ? EKeys::Z : EKeys::Y),
 		FModifierKeysState(
 			false, false,
 			true, true, // Only Ctrl down (Ctrl+Z) TODO: Check on MacOS
