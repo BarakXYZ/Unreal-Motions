@@ -1257,21 +1257,21 @@ void UVimGraphEditorSubsystem::UnhookFromActiveGraphPanel()
 	OnGraphChangedHandler.Reset();
 }
 
+// TODO: Work on diagonal motion support:
+// Potentially an array of currently pressed keys, which will determine the
+// offset.
 void UVimGraphEditorSubsystem::HandleGraphPanelPanning(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	const TMap<FKey, FVector2D> PanOffsetByMotion{
-		{ EKeys::H, FVector2D(-1.0, 0.0) },
-		{ EKeys::J, FVector2D(0.0, 1.0) },
-		{ EKeys::K, FVector2D(0.0, -1.0) },
-		{ EKeys::L, FVector2D(1.0, 0.0) },
-	};
 	// Update to the latest key and panning params
-	CurrentActivePanKey = InKeyEvent.GetKey();
-	if (const FVector2D* PanelOffsetPtr = PanOffsetByMotion.Find(CurrentActivePanKey))
-		CurrentPanelOffset = *PanelOffsetPtr;
+	const FKey NewKey = InKeyEvent.GetKey();
+	if (PressedPanningKeys.Contains(NewKey))
+		return; // No duplicates
+	PressedPanningKeys.Add(NewKey);
+	if (const FVector2D* PanelOffsetPtr = PanOffsetByMotion.Find(NewKey))
+		CurrentPanelOffset += *PanelOffsetPtr;
 	else
-		return; // Invalid navigation key
+		return; // Invalid navigation key (won't ever really get here)
 
 	if (DelegateHandle_OnKeyUpEvent.IsValid())
 		return; // We're already bound; shouldn't bind multiple times.
@@ -1313,7 +1313,14 @@ void UVimGraphEditorSubsystem::HandleGraphPanelPanning(
 
 void UVimGraphEditorSubsystem::StopGraphPanelPanning(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	if (InKeyEvent.GetKey() != CurrentActivePanKey)
+	int32 Pos = PressedPanningKeys.Find(InKeyEvent.GetKey());
+	if (Pos != INDEX_NONE)
+	{
+		if (const FVector2D* PanelOffsetPtr = PanOffsetByMotion.Find(PressedPanningKeys[Pos]))
+			CurrentPanelOffset -= *PanelOffsetPtr;
+		PressedPanningKeys.RemoveAt(Pos);
+	}
+	if (!PressedPanningKeys.IsEmpty())
 		return;
 
 	if (DelegateHandle_OnKeyUpEvent.IsValid())

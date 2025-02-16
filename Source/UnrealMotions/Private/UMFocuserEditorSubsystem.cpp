@@ -966,6 +966,9 @@ bool UUMFocuserEditorSubsystem::FirstEncounterDefaultInit(
 		FSlateApplication::Get().SetAllUserFocus(FoundWidget, EFocusCause::Navigation);
 		return true;
 	}
+	// Last fallback to the content of the tab (which in most cases isn't very
+	// useful, but that's the only thing left?)
+	FSlateApplication::Get().SetAllUserFocus(InTab->GetContent(), EFocusCause::Navigation);
 	return false;
 }
 

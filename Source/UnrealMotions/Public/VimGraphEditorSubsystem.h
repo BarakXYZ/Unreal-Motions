@@ -148,14 +148,20 @@ public:
 
 	void OnVimModeChanged(const EVimMode NewVimMode);
 
-	FUMLogger		  Logger;
-	int32			  NodeCounter;
-	EVimMode		  PreviousVimMode{ EVimMode::Insert }, CurrentVimMode{ EVimMode::Insert };
-	EUMContextBinding CurrentContext{ EUMContextBinding::Generic };
-	FDelegateHandle	  DelegateHandle_OnKeyUpEvent;
-	FTimerHandle	  TimerHandle_GraphPanning;
-	FKey			  CurrentActivePanKey;
-	FVector2D		  CurrentPanelOffset;
+	FUMLogger					Logger;
+	int32						NodeCounter;
+	EVimMode					PreviousVimMode{ EVimMode::Insert }, CurrentVimMode{ EVimMode::Insert };
+	EUMContextBinding			CurrentContext{ EUMContextBinding::Generic };
+	FDelegateHandle				DelegateHandle_OnKeyUpEvent;
+	FTimerHandle				TimerHandle_GraphPanning;
+	TArray<FKey>				PressedPanningKeys;
+	FVector2D					CurrentPanelOffset;
+	const TMap<FKey, FVector2D> PanOffsetByMotion{
+		{ EKeys::H, FVector2D(-1.0, 0.0) },
+		{ EKeys::J, FVector2D(0.0, 1.0) },
+		{ EKeys::K, FVector2D(0.0, -1.0) },
+		{ EKeys::L, FVector2D(1.0, 0.0) },
+	};
 
 	// We’ll store the original positions of any nodes we shift
 	TMap<UEdGraphNode*, FVector2D> ShiftedNodesOriginalPositions;
