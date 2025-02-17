@@ -16,6 +16,25 @@ FUMOnSimulateRightClick FUMInputHelpers::OnSimulateRightClick;
 
 void FUMInputHelpers::SimulateClickOnWidget(
 	FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
+	const FKey& EffectingButton, float Delay, bool bIsDoubleClick,
+	bool bIsShiftDown, bool bIsCtrlDown)
+{
+	TWeakPtr<SWidget> WeakWidget = Widget;
+	FTimerHandle	  TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[&SlateApp, WeakWidget, EffectingButton, bIsDoubleClick, bIsShiftDown, bIsCtrlDown]() {
+			if (TSharedPtr<SWidget> Widget = WeakWidget.Pin())
+				FUMInputHelpers::SimulateClickOnWidget(
+					SlateApp,
+					Widget.ToSharedRef(),
+					EffectingButton, bIsDoubleClick, bIsShiftDown, bIsCtrlDown);
+		},
+		Delay, false);
+}
+
+void FUMInputHelpers::SimulateClickOnWidget(
+	FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
 	const FKey& EffectingButton, bool bIsDoubleClick,
 	bool bIsShiftDown, bool bIsCtrlDown)
 {

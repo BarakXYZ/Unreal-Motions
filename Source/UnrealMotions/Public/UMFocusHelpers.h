@@ -26,6 +26,7 @@ public:
 
 	static void LogWidgetType(const TSharedRef<SWidget> InWidget);
 
+	static void ClickOnWidget(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
 	static void ClickSButton(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
 	static void ClickSCheckBox(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);
 	static void ClickSDockTab(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget);

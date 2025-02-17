@@ -15,7 +15,7 @@ bool UVimTextEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 
 void UVimTextEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	Logger.SetLogCategory(&LogVimTextEditorSubsystem);
+	Logger = FUMLogger(&LogVimTextEditorSubsystem);
 
 	BindCommands();
 	Super::Initialize(Collection);
@@ -85,12 +85,13 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 	Logger.ToggleLogging(false);
 	if (NewWidget.IsValid())
 	{
+		const TSharedRef<SWidget> NewWidgetRef = NewWidget.ToSharedRef();
 		Logger.Print("On Focus Changed -> Editable");
 		// Check if Single-Line Editable Text & Track
 		if (NewWidget->GetType().IsEqual(EditableTextType))
 		{
 			Logger.Print("Found SingleLine");
-			if (IsNewEditableText(NewWidget.ToSharedRef()))
+			if (IsNewEditableText(NewWidgetRef))
 			{
 				Logger.Print("New SingleLine");
 				OnEditableFocusLost();
@@ -113,7 +114,7 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 		// Check if Multi-Line Editable Text & Track
 		else if (NewWidget->GetType().IsEqual(MultiEditableTextType))
 		{
-			if (IsNewEditableText(NewWidget.ToSharedRef()))
+			if (IsNewEditableText(NewWidgetRef))
 			{
 				OnEditableFocusLost();
 
@@ -154,8 +155,8 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 
 		Logger.Print("Climbed to parent");
 
-		// NOTE: We can look up the specific types, as they aren't represented
-		// as Multi & EditableText, but by some other wrappers like "SSearchBox",
+		// NOTE: We can not look up the specific types, as they aren't represented
+		// as Multi/SingleEditText, but by some other wrappers like "SSearchBox",
 		// "SFilterSearchBoxImpl", etc. But they inherit from these Box types.
 
 		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
@@ -173,7 +174,6 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 		else // Multi-Line
 		// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
 		{
-			// if (Parent->GetType().IsEqual(MultiEditableTextBoxType))
 			if (Parent->GetWidgetClass().GetWidgetType().IsEqual("SBorder"))
 			{
 				TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
@@ -212,10 +212,14 @@ void UVimTextEditorSubsystem::ToggleReadOnlySingle()
 	if (const TSharedPtr<SEditableTextBox> TextBox = ActiveEditableTextBox.Pin())
 	{
 		TextBox->SetIsReadOnly(CurrentVimMode == EVimMode::Normal);
-		TextBox->SetTextBoxBackgroundColor(
-			FSlateColor(FLinearColor::Black));
-		TextBox->SetReadOnlyForegroundColor(
-			FSlateColor(FLinearColor::White));
+
+		// This coloring helps to unify the look of the editable text box. Still
+		// WIP. There are some edge cases like Node Titles that still need some
+		// testing.
+		// TextBox->SetTextBoxBackgroundColor(
+		// 	FSlateColor(FLinearColor::Black));
+		// TextBox->SetReadOnlyForegroundColor(
+		// 	FSlateColor(FLinearColor::White));
 
 		// NOTE:
 		// Unlike the MultiLineEditable we don't have GetCursorLocation
@@ -224,7 +228,7 @@ void UVimTextEditorSubsystem::ToggleReadOnlySingle()
 		// cursor not changing upon turnning IsReadOnly ON / OFF is to just
 		// BeginSearch with an empty FText (LOL).
 		// This seems to keep the cursor in the same location while aligning
-		// the blinking cursor with the current mode (Normal vs. Insert) <3
+		// the blinking cursor with the current mode (Normal vs. Insert) :0
 		TextBox->BeginSearch(FText::GetEmpty());
 	}
 }
@@ -235,10 +239,10 @@ void UVimTextEditorSubsystem::ToggleReadOnlyMulti()
 			ActiveMultiLineEditableTextBox.Pin())
 	{
 		MultiTextBox->SetIsReadOnly(CurrentVimMode == EVimMode::Normal);
-		MultiTextBox->SetTextBoxBackgroundColor(
-			FSlateColor(FLinearColor::Black));
-		MultiTextBox->SetReadOnlyForegroundColor(
-			FSlateColor(FLinearColor::White));
+		// MultiTextBox->SetTextBoxBackgroundColor(
+		// 	FSlateColor(FLinearColor::Black));
+		// MultiTextBox->SetReadOnlyForegroundColor(
+		// 	FSlateColor(FLinearColor::White));
 
 		// NOTE:
 		// We set this dummy GoTo to refresh the cursor blinking to ON / OFF
@@ -252,22 +256,22 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 	{
 		const FString& Text = EditTextBox->GetText().ToString();
 
-		// In Insert mode we clear the buffer if default setup ("  ") (1)
-		// or simply just clear any previous selection. (2)
+		// In Insert mode:
+		// 1. We clear the buffer if default setup ("  ")
+		// 2. Or simply just clear any previous selection.
 		if (CurrentVimMode == EVimMode::Insert)
 		{
 			if (IsDefaultEditableBuffer(Text)) // (1) Clear default buffer if any
 			{
 				EditTextBox->SetText(FText::GetEmpty());	 // Clear
-				EditTextBox->BeginSearch(FText::GetEmpty()); // For cursor to blink.
+				EditTextBox->BeginSearch(FText::GetEmpty()); // Retrieve blinking
 			}
 			else
 				EditTextBox->ClearSelection(); // (2) Clear previous selection
 		}
 		else if (CurrentVimMode == EVimMode::Normal || CurrentVimMode == EVimMode::Visual)
 		{
-			// 1)
-			// Set the default dummy buffer ("  ") for visualization and select it
+			// 1) If empty; set default dummy buffer ("  ") for visualization & select it:
 			if (Text.IsEmpty())
 			{
 				EditTextBox->SetText(FText::FromString("  "));
@@ -277,40 +281,36 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 				// There's a slight delay that occurs sometimes when focusing
 				// for example on the finder in the Content Browser.
 				// This delay is important to set the text properly.
-				if (!GEditor)
-					return;
-				FTimerHandle THandle;
+				FTimerHandle TimerHandle;
 				GEditor->GetTimerManager()->SetTimer(
-					THandle, [this, EditTextBox]() {
-						if (!ActiveEditableTextBox.IsValid())
-							return;
-
-						EditTextBox->SelectAllText();
+					TimerHandle, [this]() {
+						if (const TSharedPtr<SEditableTextBox> EditTextBox =
+								ActiveEditableTextBox.Pin())
+							EditTextBox->SelectAllText();
 					},
 					0.025f, false);
 			}
 
-			// 2)
-			// There's 1 custom character selected, so we can just select all.
+			// 2) There's 1 custom CHAR in buffer; so we can just select all.
 			else if (Text.Len() == 1)
 			{
 				EditTextBox->SelectAllText();
 			}
 
-			// 3)
-			// There are multiple custom characters, potentially words, etc.
+			// 3) There are multiple custom CHARS, potentially words, etc.
 			else
 			{
 				// Again delaying the processing as it seems to be needed in order
 				// to process correctly
-				if (!GEditor)
-					return;
-				FTimerHandle THandle;
+				FTimerHandle TimerHandle;
 				GEditor->GetTimerManager()->SetTimer(
-					THandle,
-					[this, EditTextBox]() {
-						if (!ActiveEditableTextBox.IsValid())
+					TimerHandle,
+					[this]() {
+						const TSharedPtr<SEditableTextBox> EditTextBox =
+							ActiveEditableTextBox.Pin();
+						if (!EditTextBox.IsValid())
 							return;
+
 						FSlateApplication& SlateApp = FSlateApplication::Get();
 
 						// This is important in order to mitigate a potential
@@ -403,8 +403,8 @@ bool UVimTextEditorSubsystem::IsNewEditableText(
 	if (const TSharedPtr<SWidget> OldEditableText = ActiveEditableGeneric.Pin())
 	{
 		if (NewEditableText->GetId() == OldEditableText->GetId())
-			return false; // Id match -> same editlabe.
-		return true;	  // Id don't match -> incoming new one.
+			return false; // ID match -> same editable widget.
+		return true;	  // ID don't match -> incoming new one.
 	}
 	else // Invalid old one -> new incoming one.
 		return true;

@@ -3,6 +3,7 @@
 #include "Editor.h"
 #include "Input/Events.h"
 #include "Internationalization/Regex.h"
+#include "UMInputHelpers.h"
 #include "UMSlateHelpers.h"
 // #include "Widgets/Input/SButton.h"
 #include "VimInputProcessor.h"
@@ -31,10 +32,10 @@ void SUMSearch::Construct(const FArguments& InArgs)
 
 void SUMSearch::Open()
 {
-	FSlateApplication& SlateApp = FSlateApplication::Get();
-	// const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
-	// if (!ActiveWindow.IsValid())
-	// 	return;
+	FSlateApplication&		  SlateApp = FSlateApplication::Get();
+	const TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWindow.IsValid())
+		return; // We might be in a weird editor state.
 
 	TSharedPtr<SWindow> Window =
 		SNew(SWindow)
@@ -47,15 +48,16 @@ void SUMSearch::Open()
 
 	TSharedRef<SUMSearch> Search = SNew(SUMSearch);
 	if (!Search->GetAllTextBlocksInActiveTab())
-		return;
+		return; // No text blocks found
 
 	// Optional (WIP)
-	Search->GetAllEditableTextsInActiveTab();
+	if (!Search->GetAllEditableTextsInActiveTab())
+		return; // No Editable Texts too
 
 	Window->SetContent(Search);
 
-	// Not really sure what's the deal with the modals. Going for
-	// regular right now. Modals seems to behave really weird.
+	// Not really sure what's the deal with modals.
+	// Going for regular windows right now. Modals seems to behave really weird.
 	// SlateApp.AddModalWindow(Window.ToSharedRef(), ActiveWindow, true);
 	SlateApp.AddWindow(Window.ToSharedRef(), true);
 
@@ -129,7 +131,8 @@ bool SUMSearch::GetAllEditableTextsInActiveTab()
 
 	TArray<TSharedPtr<SWidget>> FoundEditableTexts;
 	if (FUMSlateHelpers::TraverseFindWidget(
-			ActiveTab->GetContent(), FoundEditableTexts, EditableType))
+			ActiveTab->GetContent(), FoundEditableTexts, EditableType, -1,
+			false /* Search for exact matches instead of partial */))
 	{
 		for (const auto& Editable : FoundEditableTexts)
 		{
@@ -146,17 +149,15 @@ bool SUMSearch::GetAllEditableTextsInActiveTab()
 // NOTE:
 // Where doing some manual text processing because OnTextChanged is a very slow
 // delegate. To get a realtime feel, we're processing some stuff via the KeyDown
-// & CharDown events. We're still relying on OnTextChanged to give as the final
+// & CharDown events. We're still relying on OnTextChanged to give us the final
 // most-true representation of the text as a fallback.
 // The main limitation with OnSearchBoxKeyDown deletion is that we don't know
 // the position (index) of the cursor, thus we can delete incorrect chars.
 // We can potentially mitigate that with some fancy selection mechanism (simulate
 // select to end or start and dechiper what is our current cursor pos).
-
-/** Handling deletion and exiting from the widget */
 FReply SUMSearch::OnSearchBoxKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
-	const FKey& InKey = InKeyEvent.GetKey();
+	const FKey InKey = InKeyEvent.GetKey();
 
 	if (InKey == EKeys::BackSpace)
 	{
@@ -219,14 +220,15 @@ FReply SUMSearch::OnKeyChar(const FGeometry& MyGeometry, const FCharacterEvent& 
 	return FReply::Unhandled();
 }
 
-/** Slow, but useful for getting the valid and reliable text representation */
+/**
+ * Slow, but useful for getting the valid and reliable text representation
+ * Currently using this as the final fallback validation.
+ */
 void SUMSearch::OnSearchBoxTextChanged(const FText& InText)
 {
 	Logger.Print("On Text Changed!", ELogVerbosity::Log, true);
 	SearchText = InText.ToString();
 	VisualizeMatchedTargets();
-
-	// VisualizeMatchedTargets(InText);
 }
 
 void SUMSearch::OnSearchBoxTextCommitted(const FText& InText, ETextCommit::Type CommitType)
@@ -342,35 +344,13 @@ bool SUMSearch::FocusFirstFoundTextBlock(const FRegexPattern& Pattern)
 		{
 			Logger.Print(FString::Printf(TEXT("Match found in: %s"), *Candidate), ELogVerbosity::Verbose, true);
 
-			// This for example solves the Output Log focus issue.
-			// if (const TSharedPtr<SWidget> Button =
-			// 		FUMSlateHelpers::FindNearstWidgetType(
-			// 			TextBlock.ToSharedRef(), "SButton"))
-			// {
-			// 	const TSharedPtr<SButton> AsButton =
-			// 		StaticCastSharedPtr<SButton>(Button);
-
-			// 	AsButton->SimulateClick();
-			// 	return;
-			// }
-
-			// Maybe?
-			// FUMInputHelpers::SimulateClickOnWidget(
-			// 	FSlateApplication::Get(),
-			// 	TextBlock.ToSharedRef(), FKey(EKeys::LeftMouseButton));
-			// return;
-
-			// FUMSlateHelpers::DebugClimbUpFromWidget(TextBlock.ToSharedRef());
-
-			// This can be better to have proper handling for different types:
-			// SButton should be casted and click simulated, DockTab should be
-			// invoked, etc.
-
 			TextBlock->SetHighlightText(FText::FromString(SearchText));
+			FUMInputHelpers::SimulateClickOnWidget(FSlateApplication::Get(), TextBlock.ToSharedRef(), EKeys::LeftMouseButton, 0.1f);
+			return true;
+
+			// Deprecated?
 			if (FUMFocusHelpers::FocusNearestInteractableWidget(TextBlock.ToSharedRef()))
-			{
 				return true;
-			}
 		}
 		else
 		{

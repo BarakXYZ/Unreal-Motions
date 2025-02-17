@@ -54,6 +54,8 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	 */
 	void BindCommands();
 
+	void RegisterConsoleCommands();
+
 	/**
 	 * Processes Vim-style navigation input for list views.
 	 * Handles navigation in both Normal and Visual modes:
@@ -244,6 +246,9 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	 */
 	FKey GetTreeNavigationDirection(
 		const TSharedRef<SListView<TSharedPtr<ISceneOutlinerTreeItem>>> ListView, bool bGetForwardDirection);
+
+	void WriteFiles(bool bSaveAll = false);
+	void CloseActiveMajorTab();
 
 	DECLARE_DELEGATE_RetVal_TwoParams(FReply, FOnKeyDown, const FGeometry&, const FKeyEvent&);
 

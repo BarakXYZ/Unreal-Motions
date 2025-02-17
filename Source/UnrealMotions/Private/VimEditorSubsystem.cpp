@@ -7,12 +7,19 @@
 #include "UMFocuserEditorSubsystem.h"
 #include "UMSlateHelpers.h"
 #include "UMInputHelpers.h"
+#include "UMTabNavigatorEditorSubsystem.h"
+#include "UObject/Object.h"
 #include "VimNavigationEditorSubsystem.h"
 #include "UMEditorCommands.h"
 #include "UMConfig.h"
 #include "LevelEditorActions.h"
 #include "UMFocuserEditorSubsystem.h"
 #include "LevelEditor.h"
+#include "FileHelpers.h"
+#include "Kismet2/KismetEditorUtilities.h"
+#include "UMEditorHelpers.h"
+#include "SVimConsole.h"
+#include "Framework/Docking/TabCommands.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimEditorSubsystem, Log, All);
 
@@ -26,6 +33,7 @@ void UVimEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Logger = FUMLogger(&LogVimEditorSubsystem);
 
 	BindCommands();
+	RegisterConsoleCommands();
 
 	FCoreDelegates::OnPostEngineInit.AddLambda([this]() {
 		WrapAndSetCustomMessageHandler();
@@ -398,6 +406,69 @@ void UVimEditorSubsystem::ScrollHalfPage(
 		ProcessVimNavigationInput(SlateApp, KeyEvent);
 }
 
+void UVimEditorSubsystem::WriteFiles(bool bSaveAll)
+{
+	if (IAssetEditorInstance* LastActiveEditor = FUMEditorHelpers::GetLastActiveEditor())
+	{
+		// Logger.Print()
+		Logger.Print(FString::Printf(TEXT("Editor Name: %s"),
+						 *LastActiveEditor->GetEditorName().ToString()),
+			ELogVerbosity::Log, true);
+		if (LastActiveEditor->GetEditorName().IsEqual("BlueprintEditor"))
+		{
+			FBlueprintEditor* BPEditor =
+				StaticCast<FBlueprintEditor*>(LastActiveEditor);
+			BPEditor->Compile();
+		}
+	}
+
+	if (bSaveAll)
+	{
+		FEditorFileUtils::SaveDirtyPackages(false, true, true, false);
+	}
+	// Save Single:
+	else if (UObject* LastActiveAsset = FUMEditorHelpers::GetLastActiveAsset())
+	{
+		UPackage* Package = LastActiveAsset->GetOutermost();
+		if (Package && Package->IsDirty())
+		{
+			TArray<UPackage*> PackageToSave;
+			PackageToSave.Add(Package);
+			FEditorFileUtils::PromptForCheckoutAndSave(PackageToSave,
+				/*bCheckDirty=*/false, /*bPromptToSave=*/false);
+		}
+	}
+}
+
+void UVimEditorSubsystem::CloseActiveMajorTab()
+{
+	// Using the timer here seems to be more accurate since usually we will be
+	// exiting the ConsoleCommand Pop-up window and timer seems to be more stable.
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[]() {
+			if (TSharedPtr<SDockTab> Tab = FUMSlateHelpers::GetActiveMajorTab())
+			{
+				// Determine if we should cycle to next tab after closing:
+				bool bIsLastTabInTabWell = FUMSlateHelpers::IsLastTabInTabWell(Tab.ToSharedRef());
+
+				Tab->RequestCloseTab();
+				if (bIsLastTabInTabWell)
+					return;
+
+				// Going for the browser closing tab feel where when closing a tab
+				// you'll end up in the next tab instead of the previous one.
+				// Personally, I prefer that UX flow better.
+				// NOTE: Unreal native will go for the previous tab.
+				if (UUMTabNavigatorEditorSubsystem* TabNavSub =
+						GEditor->GetEditorSubsystem<UUMTabNavigatorEditorSubsystem>())
+					TabNavSub->CycleTabs(true /*Major Tab*/, true /*NextTab*/);
+			};
+		},
+		0.025f, false);
+}
+
 void UVimEditorSubsystem::BindCommands()
 {
 	using VimSub = UVimEditorSubsystem;
@@ -621,6 +692,32 @@ void UVimEditorSubsystem::BindCommands()
 		{ EKeys::SpaceBar, EKeys::F, EKeys::W, EKeys::R },
 		&FUMEditorCommands::FocusWindowRoot);
 
+	Input->AddKeyBinding_NoParam(
+		EUMContextBinding::Generic,
+		{ FInputChord(EModifierKey::Shift, EKeys::Semicolon) },
+		&SVimConsole::Open);
+
 	//
 	/////////////////////////////////////////////////////////////////////////
+}
+
+void UVimEditorSubsystem::RegisterConsoleCommands()
+{
+	static FAutoConsoleCommand Cmd_WriteCurrentFile = FAutoConsoleCommand(
+		TEXT("w"),
+		TEXT("Write (Save) Last Active File"),
+		FConsoleCommandDelegate::CreateUObject(
+			this, &UVimEditorSubsystem::WriteFiles, false));
+
+	static FAutoConsoleCommand Cmd_WriteAllFiles = FAutoConsoleCommand(
+		TEXT("wa"),
+		TEXT("Write (Save) All Files"),
+		FConsoleCommandDelegate::CreateUObject(
+			this, &UVimEditorSubsystem::WriteFiles, true));
+
+	static FAutoConsoleCommand Cmd_CloseActiveMajorTab = FAutoConsoleCommand(
+		TEXT("q"),
+		TEXT("Close the currently focused Major Tab"),
+		FConsoleCommandDelegate::CreateUObject(
+			this, &UVimEditorSubsystem::CloseActiveMajorTab));
 }

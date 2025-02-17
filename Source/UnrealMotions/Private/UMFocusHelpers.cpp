@@ -81,6 +81,7 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		{ "SLevelOfDetailBranchNode", &FUMFocusHelpers::ClickSNodeSPin },
 		{ "SGraphNode", &FUMFocusHelpers::ClickSNode },
 		{ "SGraphPin", &FUMFocusHelpers::ClickSPin },
+		{ "SChordEditor", &FUMFocusHelpers::ClickOnWidget }
 	};
 
 	// SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
@@ -254,6 +255,11 @@ void FUMFocusHelpers::ClickSPin(FSlateApplication& SlateApp, const TSharedRef<SW
 			AddNode(SlateApp, InWidget.ToSharedRef());
 		},
 		0.3f, false);
+}
+
+void FUMFocusHelpers::ClickOnWidget(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
+{
+	FUMInputHelpers::SimulateClickOnWidget(SlateApp, InWidget, EKeys::LeftMouseButton);
 }
 
 bool FUMFocusHelpers::TryFocusPopupMenu(FSlateApplication& SlateApp)

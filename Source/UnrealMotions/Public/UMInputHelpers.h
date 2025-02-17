@@ -16,6 +16,11 @@ public:
 		const FKey& EffectingButton, bool bIsDoubleClick = false,
 		bool bIsShiftDown = false, bool bIsCtrlDown = false);
 
+	static void SimulateClickOnWidget(
+		FSlateApplication& SlateApp, const TSharedRef<SWidget> Widget,
+		const FKey& EffectingButton, float Delay, bool bIsDoubleClick = false,
+		bool bIsShiftDown = false, bool bIsCtrlDown = false);
+
 	static void SimulateRightClick(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 

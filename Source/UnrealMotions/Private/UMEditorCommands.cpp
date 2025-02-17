@@ -322,11 +322,10 @@ void FUMEditorCommands::OpenLevelBlueprint()
 
 void FUMEditorCommands::ResetEditorToDefaultLayout()
 {
-	static const FString TitleBarType = "SWindowTitleBar";
-	static const FString TargetEntriesArray[] = {
+	static FString				 TitleBarType = "SWindowTitleBar";
+	static const TArray<FString> MenuEntries{
 		"Window", "Load Layout", "Default Editor Layout"
 	};
-	static const TArrayView<const FString> EntriesView(TargetEntriesArray);
 
 	const TSharedPtr<SWindow> RootWin = FGlobalTabmanager::Get()->GetRootWindow();
 	if (!RootWin.IsValid())
@@ -338,7 +337,7 @@ void FUMEditorCommands::ResetEditorToDefaultLayout()
 		return;
 
 	if (WinBar.IsValid())
-		FUMSlateHelpers::SimulateMenuClicks(WinBar.ToSharedRef(), EntriesView);
+		FUMSlateHelpers::SimulateMenuClicks(WinBar.ToSharedRef(), MenuEntries);
 }
 
 void FUMEditorCommands::RunUtilityWidget()
@@ -374,35 +373,6 @@ void FUMEditorCommands::Search(FSlateApplication& SlateApp, const FKeyEvent& InK
 	// Pop an SEditable text to enter the search
 	FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
 	SUMSearch::Open();
-	return;
-
-	const TSharedPtr<SDockTab> MajorTab = FUMSlateHelpers::GetActiveMajorTab();
-	if (!MajorTab.IsValid())
-		return;
-
-	TArray<TSharedPtr<SWidget>> FoundTexts;
-	if (!FUMSlateHelpers::TraverseFindWidget(
-			MajorTab->GetContent(), FoundTexts, "STextBlock"))
-		return;
-
-	for (const TSharedPtr<SWidget>& Text : FoundTexts)
-	{
-		const TSharedPtr<STextBlock> TB = StaticCastSharedPtr<STextBlock>(Text);
-		if (TB->GetText().ToString().Equals("Run Utility Widget"))
-		{
-			TSharedPtr<SWidget> ButtonAsWidget;
-			if (!FUMSlateHelpers::TraverseFindWidgetUpwards(
-					TB.ToSharedRef(), ButtonAsWidget, "SButton"))
-				return;
-
-			if (!ButtonAsWidget.IsValid())
-				return;
-
-			const TSharedPtr<SButton> AsButton = StaticCastSharedPtr<SButton>(ButtonAsWidget);
-
-			AsButton->SimulateClick();
-		}
-	}
 }
 
 void FUMEditorCommands::FocusWindowRoot(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)

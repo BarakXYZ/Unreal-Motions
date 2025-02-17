@@ -19,6 +19,7 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 {
 	GENERATED_BODY()
 
+public:
 	/**
 	 * Controlled via the Unreal Motions config; should or shouldn't create the
 	 * subsystem at all.
@@ -141,13 +142,13 @@ class UNREALMOTIONS_API UUMTabNavigatorEditorSubsystem : public UEditorSubsystem
 	void MoveActiveMinorTabToPanel(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+private:
 	void BindVimCommands();
 
 	//
 	//
 	/////////////////////////////////////////////////////////////////////////////
 
-public:
 	/**
 	 * Mentioned in editor preferences as "System-wide" category
 	 * Another option is MainFrame

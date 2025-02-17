@@ -52,6 +52,8 @@ public class UnrealMotions : ModuleRules
 				"LevelEditor",
 				"GraphEditor",
 				"BlueprintGraph",
+				"AssetRegistry",
+				"OutputLog",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

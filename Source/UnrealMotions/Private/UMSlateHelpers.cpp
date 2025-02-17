@@ -11,13 +11,15 @@
 
 // DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(LogUMSlateHelpers, Log, All); // Dev
-FUMLogger FUMSlateHelpers::Logger(&LogUMSlateHelpers);
+FUMLogger	  FUMSlateHelpers::Logger(&LogUMSlateHelpers);
+const FString FUMSlateHelpers::TabWellType = "SDockingTabWell";
 
 bool FUMSlateHelpers::TraverseFindWidget(
 	const TSharedRef<SWidget> BaseWidget,
 	TSharedPtr<SWidget>&	  OutWidget,
 	const FString&			  TargetType,
 	const uint64			  IgnoreWidgetId,
+	const bool				  bSearchStartsWith,
 	int32					  Depth)
 {
 	if (!BaseWidget->GetVisibility().IsVisible() || !BaseWidget->IsEnabled())
@@ -25,8 +27,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 
 	// LogTraversalSearch(Depth, BaseWidget);
 
-	if (BaseWidget->GetTypeAsString().StartsWith(TargetType)
-		|| BaseWidget->GetWidgetClass().GetWidgetType().ToString().StartsWith(TargetType))
+	if (IsWidgetTargetType(BaseWidget, TargetType, bSearchStartsWith))
 	{
 		// LogTraverseFoundWidget(Depth, BaseWidget, TargetType);
 		OutWidget = BaseWidget;
@@ -45,7 +46,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 				continue;
 
 			if (TraverseFindWidget(Child, OutWidget, TargetType,
-					IgnoreWidgetId, Depth + 1))
+					IgnoreWidgetId, bSearchStartsWith, Depth + 1))
 				return true;
 		}
 	}
@@ -56,7 +57,9 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	const TSharedRef<SWidget>	 BaseWidget,
 	TArray<TSharedPtr<SWidget>>& OutWidgets,
 	const FString&				 TargetType,
-	int32 SearchCount, int32 Depth)
+	int32						 SearchCount,
+	const bool					 bSearchStartsWith,
+	int32						 Depth)
 {
 	bool bFoundAllRequested = false;
 
@@ -65,8 +68,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 
 	// LogTraversalSearch(Depth, BaseWidget);
 
-	if (BaseWidget->GetTypeAsString().StartsWith(TargetType)
-		|| BaseWidget->GetWidgetClass().GetWidgetType().ToString().StartsWith(TargetType))
+	if (IsWidgetTargetType(BaseWidget, TargetType, bSearchStartsWith))
 	{
 		// LogTraverseFoundWidget(Depth, BaseWidget, TargetType);
 		OutWidgets.Add(BaseWidget);
@@ -88,7 +90,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 		{
 			const TSharedRef<SWidget> Child = Children->GetChildAt(i);
 			bool					  bChildFound = TraverseFindWidget(
-				 Child, OutWidgets, TargetType, SearchCount, Depth + 1);
+				 Child, OutWidgets, TargetType, SearchCount, bSearchStartsWith, Depth + 1);
 
 			// If SearchCount is -1, accumulate the "found" status
 			if (SearchCount == -1)
@@ -677,32 +679,21 @@ TSharedPtr<SDockTab> FUMSlateHelpers::GetOfficialMajorTab()
 	return nullptr;
 }
 
+/**
+ * NOTE:
+ * This method is a bit more expensive but way more robust to pick up all
+ * types of Major Tabs (AFAIK)
+ * Possibly we can fallback to this more expensive method after checking if
+ * our fetched Major Tab doesn't reside in our actual Active Window (which
+ * is a strong sign we haven't picked up the correct Major Tab) but not
+ * sure if it is that more efficient as this isn't too expensive anyway?
+ */
 TSharedPtr<SDockTab> FUMSlateHelpers::GetDefactoMajorTab()
 {
-	// This method is a bit more expensive but way more robust to pick up all
-	// types of Major Tabs (AFAIK)
-	// Possibly we can fallback to this more expensive method after checking if
-	// our fetched Major Tab doesn't reside in our actual Active Window (which
-	// is a strong sign we haven't picked up the correct Major Tab) but not
-	// sure if it is that more efficient as this isn't too expensive anyway?
-
-	static const FString TabWellType = "SDockingTabWell";
-	static const FString TabType = "SDockTab";
-
-	FSlateApplication&		  SlateApp = FSlateApplication::Get();
-	const TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
-	if (!ActiveWin.IsValid())
-		return nullptr;
-
 	// Find the first TabWell in our currently active window.
-	TSharedPtr<SWidget> TargetTabWell;
-	if (!TraverseFindWidget(ActiveWin.ToSharedRef(), TargetTabWell, TabWellType))
-		return nullptr;
-
-	if (!TargetTabWell.IsValid())
-		return nullptr;
-
-	return GetForegroundTabInTabWell(TargetTabWell.ToSharedRef());
+	if (const TSharedPtr<SWidget> TabWell = GetActiveWindowTabWell())
+		return GetForegroundTabInTabWell(TabWell.ToSharedRef());
+	return nullptr;
 }
 
 TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMinorTab()
@@ -713,6 +704,20 @@ TSharedPtr<SDockTab> FUMSlateHelpers::GetActiveMinorTab()
 		return ActiveMinorTab;
 	}
 	return nullptr;
+}
+
+TSharedPtr<SWidget> FUMSlateHelpers::GetActiveWindowTabWell()
+{
+	FSlateApplication&		  SlateApp = FSlateApplication::Get();
+	const TSharedPtr<SWindow> ActiveWin = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWin.IsValid())
+		return nullptr;
+
+	// Find the first TabWell in our currently active window.
+	TSharedPtr<SWidget> TargetTabWell;
+	if (!TraverseFindWidget(ActiveWin.ToSharedRef(), TargetTabWell, TabWellType))
+		return nullptr;
+	return TargetTabWell;
 }
 
 bool FUMSlateHelpers::IsVisualTextSelected(FSlateApplication& SlateApp)
@@ -883,9 +888,9 @@ TSharedPtr<FGenericWindow> FUMSlateHelpers::GetGenericActiveTopLevelWindow()
 }
 
 void FUMSlateHelpers::SimulateMenuClicks(
-	const TSharedRef<SWidget>		ParentWidget,
-	const TArrayView<const FString> TargetEntries,
-	int32							ArrayIndex)
+	const TSharedRef<SWidget> ParentWidget,
+	const TArray<FString>&	  TargetEntries,
+	int32					  ArrayIndex)
 {
 	static const FString TextBlockType = "STextBlock";
 	static const FString ButtonType = "SButton";
@@ -952,7 +957,7 @@ void FUMSlateHelpers::SimulateMenuClicks(
 }
 
 void FUMSlateHelpers::GetActiveMenuWindowAndCallSimulateMenuClicks(
-	const TArrayView<const FString> TargetEntries, const int32 ArrayIndex)
+	const TArray<FString> TargetEntries, const int32 ArrayIndex)
 {
 	const FSlateApplication&  SlateApp = FSlateApplication::Get();
 	const TSharedPtr<SWindow> MenuWindow = SlateApp.GetActiveTopLevelWindow();
@@ -1308,4 +1313,32 @@ TSharedPtr<SGraphPanel> FUMSlateHelpers::TryGetActiveGraphPanel(
 	}
 
 	return StaticCastSharedPtr<SGraphPanel>(FocusedWidget);
+}
+
+bool FUMSlateHelpers::IsWidgetTargetType(
+	const TSharedRef<SWidget> InWidget, const FString& TargetType, bool bSearchStartsWith)
+{
+	return bSearchStartsWith
+		? (InWidget->GetTypeAsString().StartsWith(TargetType)
+			  || InWidget->GetWidgetClass().GetWidgetType().ToString().StartsWith(TargetType))
+
+		: (InWidget->GetTypeAsString().Equals(TargetType)
+			  || InWidget->GetWidgetClass().GetWidgetType().ToString().Equals(TargetType));
+}
+
+bool FUMSlateHelpers::IsLastTabInTabWell(const TSharedRef<SDockTab> InTab)
+{
+	TSharedPtr<SWidget> TabWell = InTab->GetParentWidget();
+	if (!TabWell.IsValid() || !TabWell->GetType().IsEqual("SDockingTabWell"))
+		return false;
+
+	FChildren* Tabs = TabWell->GetChildren();
+	if (!Tabs || Tabs->Num() == 0)
+		return false;
+
+	const int32			 TNum = Tabs->Num();
+	TSharedRef<SDockTab> LastTab =
+		StaticCastSharedRef<SDockTab>(Tabs->GetChildAt(TNum - 1));
+
+	return LastTab->GetId() == InTab->GetId();
 }

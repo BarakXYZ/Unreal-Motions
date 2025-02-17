@@ -22,6 +22,10 @@ public:
 	 * @param BaseWidget The root widget to start traversing from
 	 * @param OutWidget Output parameter that will store the found widget
 	 * @param TargetType Type of widget we're looking for
+	 * @param IgnoreWidgetId Widget Id to ignore when filtering widgets.
+	 * @param bSearchStartsWith Determines if we should filter widgets with the
+	 * StartsWith method or an exact match. Useful for partial matching and base
+	 * widget lookups.
 	 * @param Depth Current depth in the widget tree (used for logging)
 	 * @return true if a widget was found, false otherwise
 	 */
@@ -30,6 +34,7 @@ public:
 		TSharedPtr<SWidget>&	  OutWidget,
 		const FString&			  TargetType,
 		const uint64			  IgnoreWidgetId = INDEX_NONE,
+		const bool				  bSearchStartsWith = true,
 		int32					  Depth = 0);
 
 	/**
@@ -38,6 +43,9 @@ public:
 	 * @param OutWidget Output parameter that will store the found widgets
 	 * @param TargetType Type of widget we're looking for (e.g. "SDockingTabWell")
 	 * @param SearchCount How many instances of this widget type we will try to look for. -1 will result in trying to find all widgets of this type in the widget's tree. 0 will be ignored, 1 will find the first instance, then return.
+	 * @param bSearchStartsWith Determines if we should filter widgets with the
+	 * StartsWith method or an exact match. Useful for partial matching and base
+	 * widget lookups.
 	 * @param Depth Current depth in the widget tree (used for logging)
 	 * @return true if OutWidgets >= SearchCount, or OutWidget > 0 if SearchCount is set to -1, false otherwise
 	 */
@@ -46,6 +54,7 @@ public:
 		TArray<TSharedPtr<SWidget>>& OutWidgets,
 		const FString&				 TargetType,
 		int32						 SearchCount = -1,
+		const bool					 bSearchStartsWith = true,
 		int32						 Depth = 0);
 
 	/**
@@ -207,16 +216,16 @@ public:
 	 * @Note we're passing the array by ref, as this is invoked immediately.
 	 */
 	static void SimulateMenuClicks(
-		const TSharedRef<SWidget>		ParentWidget,
-		const TArrayView<const FString> TargetEntries,
-		int32							ArrayIndex = 0);
+		const TSharedRef<SWidget> ParentWidget,
+		const TArray<FString>&	  TargetEntries,
+		int32					  ArrayIndex = 0);
 
 	/**
 	 * @Note we're passing the array by value cause this is a delegate
 	 *  and our Array will be invalid if passed by ref
 	 */
 	static void GetActiveMenuWindowAndCallSimulateMenuClicks(
-		const TArrayView<const FString> TargetEntries, const int32 ArrayIndex);
+		const TArray<FString> TargetEntries, const int32 ArrayIndex);
 
 	static void LogTab(const TSharedRef<SDockTab> InTab);
 
@@ -266,5 +275,12 @@ public:
 
 	static TSharedPtr<SGraphPanel> TryGetActiveGraphPanel(FSlateApplication& SlateApp);
 
-	static FUMLogger Logger;
+	static bool IsWidgetTargetType(const TSharedRef<SWidget> InWidget, const FString& TargetType, bool bSearchStartsWith);
+
+	static TSharedPtr<SWidget> GetActiveWindowTabWell();
+
+	static bool IsLastTabInTabWell(const TSharedRef<SDockTab> InTab);
+
+	static const FString TabWellType;
+	static FUMLogger	 Logger;
 };

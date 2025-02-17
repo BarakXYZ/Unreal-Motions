@@ -2136,8 +2136,8 @@ void UVimGraphEditorSubsystem::DeleteNode(
 	}
 
 	// Mark blueprint as structurally modified if needed
-	// if (UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(Graph))
-	// 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+	if (UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(Graph))
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
 }
 
 void UVimGraphEditorSubsystem::UndoRedo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)

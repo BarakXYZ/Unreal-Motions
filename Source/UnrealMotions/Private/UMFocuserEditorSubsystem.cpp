@@ -1185,23 +1185,12 @@ void UUMFocuserEditorSubsystem::FListNavigationManager::TrackFocusedWidget(const
 	TWeakPtr<SWidget>		  WeakNewWidget = NewWidget;
 	TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
 	TimerManager->ClearTimer(TimerHandle_TrackFocusedWidget);
-
-	// Not sure if we need a timer if we're using the earlier validator
-	// from OnFocusChanged. Need some testings.
-
-	// TimerManager->SetTimer(
-	// 	TimerHandle_TrackFocusedWidget,
-	// 	[this, WeakNewWidget]() {
-	// 		TSharedPtr<SWidget> NewWidgetPtr = WeakNewWidget.Pin();
-	// 		if (!NewWidgetPtr.IsValid())
-	// 			return;
-
-	// TSharedRef<SWidget> NewWidget = NewWidgetPtr.ToSharedRef();
-
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 
 	// TSharedPtr<SWindow> ParentWindow = SlateApp.FindWidgetWindow(NewWidget);
 	TSharedPtr<SWindow> ParentWindow = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ParentWindow.IsValid())
+		return;
 
 	TSharedRef<FGlobalTabmanager> GTM = FGlobalTabmanager::Get();
 	TSharedPtr<SDockTab>		  ActiveMajorTab = FUMSlateHelpers::GetActiveMajorTab();
