@@ -314,6 +314,14 @@ void UVimEditorSubsystem::HandleArrowKeysNavigation(
 		SlateApp.ProcessKeyDownEvent(OutKeyEvent);
 		SlateApp.ProcessKeyUpEvent(OutKeyEvent);
 	}
+
+	// This is cool to visualize selection but will introduce some issues in
+	// navigating menus (once reached an entry with a sub-menu; will go inside
+	// in a pretty annoying way. So pros & cons until figuring out a balance).
+	// if (TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0))
+	// {
+	// FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp, FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(FocusedWidget.ToSharedRef())));
+	// }
 }
 
 bool UVimEditorSubsystem::HandleListViewNavigation(
