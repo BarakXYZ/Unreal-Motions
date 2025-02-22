@@ -81,6 +81,7 @@ public:
 		bool						 bIsAppendingNode);
 
 	void CollectDownstreamNodes(
+		UEdGraphPin*		 StartPin,
 		UEdGraphNode*		 StartNode,
 		TSet<UEdGraphNode*>& OutNodes,
 		bool				 bIsAppending);
@@ -151,6 +152,7 @@ public:
 	void UndoRedo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	UEdGraphNode* FindFallbackNode(const TArray<UEdGraphNode*>& SelectedNodes);
+	UEdGraphPin*  FindFallbackPin(const TArray<UEdGraphNode*>& SelectedNodes);
 
 	void DebugSelectedNode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 

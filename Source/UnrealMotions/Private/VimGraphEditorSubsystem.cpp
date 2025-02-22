@@ -156,28 +156,32 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// H: Pan Left in Graph Panel
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		{ FInputChord(EModifierKey::Alt, EKeys::H) },
+		// { FInputChord(EModifierKey::Alt, EKeys::H) },
+		{ FInputChord(EModifierKey::Shift, EKeys::H) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleGraphPanelPanning);
 
 	// J: Pan Down in Graph Panel
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		{ FInputChord(EModifierKey::Alt, EKeys::J) },
+		// { FInputChord(EModifierKey::Alt, EKeys::J) },
+		{ FInputChord(EModifierKey::Shift, EKeys::J) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleGraphPanelPanning);
 
 	// K: Pan Up in Graph Panel
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		{ FInputChord(EModifierKey::Alt, EKeys::K) },
+		// { FInputChord(EModifierKey::Alt, EKeys::K) },
+		{ FInputChord(EModifierKey::Shift, EKeys::K) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleGraphPanelPanning);
 
 	// L: Pan Right in Graph Panel
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::GraphEditor,
-		{ FInputChord(EModifierKey::Alt, EKeys::L) },
+		// { FInputChord(EModifierKey::Alt, EKeys::L) },
+		{ FInputChord(EModifierKey::Shift, EKeys::L) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleGraphPanelPanning);
 
@@ -783,19 +787,18 @@ void UVimGraphEditorSubsystem::MoveConnectedNodesToRight(UEdGraphNode* StartNode
 }
 
 // TODO: We want to also collect nodes that are linked to pins other
-// that just the main exec. For example in a for loop macro, we will want to
+// than just the main exec. For example in a for loop macro, we will want to
 // shift the array it is connected to too.
 // We will basically need to check if a certain pin has multiple connections(?)
 // and collect them all(?)
 void UVimGraphEditorSubsystem::CollectDownstreamNodes(
+	UEdGraphPin*		 StartPin,
 	UEdGraphNode*		 StartNode,
 	TSet<UEdGraphNode*>& OutNodes,
 	bool				 bIsAppending)
 {
-	if (!StartNode)
-	{
+	if (!(StartPin && StartNode))
 		return;
-	}
 
 	// A simple BFS or DFS approach
 	TQueue<UEdGraphNode*> Queue;
@@ -807,9 +810,7 @@ void UVimGraphEditorSubsystem::CollectDownstreamNodes(
 		Queue.Dequeue(Current);
 
 		if (!Current || OutNodes.Contains(Current))
-		{
 			continue;
-		}
 
 		// Mark visited
 		OutNodes.Add(Current);
@@ -857,8 +858,16 @@ void UVimGraphEditorSubsystem::ShiftNodesForSpace(
 {
 	ShiftedNodesOriginalPositions.Empty(); // Clear from previous usage
 
+	if (NodesToMove.IsEmpty())
+	{
+		bNodesWereShifted = false;
+		return;
+	}
+
+	// Support undo for all shifted nodes
+	const FScopedTransaction Transaction(NSLOCTEXT("VimGraphEditor", "ShiftNodesForSpace", "Shift Nodes for Space"));
+
 	// We'll collect them into an SNodePanel::SNode::FNodeSet
-	// which MoveTo() uses for collision checks, etc.
 	SNodePanel::SNode::FNodeSet NodeFilter;
 
 	for (UEdGraphNode* GraphNode : NodesToMove)
@@ -877,8 +886,10 @@ void UVimGraphEditorSubsystem::ShiftNodesForSpace(
 		const FVector2D OriginalPos = SNode->GetPosition();
 		ShiftedNodesOriginalPositions.Add(GraphNode, OriginalPos);
 
-		// lol this is not how you use the filter :)
-		// We add it to the filter so we can move them as a group
+		// Ensure the node is marked for modification
+		GraphNode->Modify();
+
+		// Add to filter (optional, if you plan to use it)
 		// NodeFilter.Add(SNode);
 	}
 
@@ -900,7 +911,6 @@ void UVimGraphEditorSubsystem::ShiftNodesForSpace(
 
 			// SNodePanel::SNode interface
 			SNode->MoveTo(NewPos, NodeFilter, /*bMarkDirty=*/true);
-			// Logger.Print("Try move node!", ELogVerbosity::Verbose, true);
 		}
 	}
 
@@ -1852,7 +1862,7 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 	// Log_AddNodeToPin(bIsAppendingNode);
 
 	// Reset both tracking parameters for a clean start (these are also cleaned
-	// in other places, but for safety, we want to clean here too)
+	// in other places, but for safety, we want to reset here too)
 	ShiftedNodesOriginalPositions.Empty();
 	bNodesWereShifted = false;
 
@@ -1869,14 +1879,14 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 		{
 			if (LinkedPin && LinkedPin->GetOwningNode())
 			{
-				CollectDownstreamNodes(LinkedPin->GetOwningNode(), NodesToShift, /*bIsAppending=*/true);
+				CollectDownstreamNodes(InPin, LinkedPin->GetOwningNode(), NodesToShift, /*bIsAppending=*/true);
 			}
 		}
 	}
 	else
 	{
 		// For inserting, we shift the "current" node plus anything downstream.
-		CollectDownstreamNodes(ParentNode, NodesToShift, /*bIsAppending=*/false);
+		CollectDownstreamNodes(InPin, ParentNode, NodesToShift, /*bIsAppending=*/false);
 	}
 
 	// Shift nodes if there are any
@@ -2015,6 +2025,25 @@ UEdGraphNode* UVimGraphEditorSubsystem::FindFallbackNode(
 	return nullptr;
 }
 
+UEdGraphPin* UVimGraphEditorSubsystem::FindFallbackPin(const TArray<UEdGraphNode*>& SelectedNodes)
+{
+	TSet<UEdGraphNode*> SelectionSet(SelectedNodes);
+
+	for (UEdGraphNode* Node : SelectedNodes)
+	{
+		for (UEdGraphPin* Pin : Node->GetAllPins())
+		{
+			for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
+			{
+				UEdGraphNode* LinkedNode = LinkedPin ? LinkedPin->GetOwningNode() : nullptr;
+				if (LinkedNode && !SelectionSet.Contains(LinkedNode))
+					return LinkedPin;
+			}
+		}
+	}
+	return nullptr;
+}
+
 // TODO: Add Shift+X to delete previous node and keep connection.
 void UVimGraphEditorSubsystem::DeleteNode(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -2038,6 +2067,7 @@ void UVimGraphEditorSubsystem::DeleteNode(
 
 	// Find a fallback node to have a node selected after deletion:
 	UEdGraphNode* FallbackNode = FindFallbackNode(SelectedNodes);
+	UEdGraphPin*  FallbackPin = FindFallbackPin(SelectedNodes);
 
 	//-----------------------------------------------------
 	// 1) Gather "global" upstream & downstream pins
@@ -2088,9 +2118,6 @@ void UVimGraphEditorSubsystem::DeleteNode(
 		Graph->RemoveNode(Node);
 	}
 
-	if (FallbackNode)
-		GraphPanel->SelectionManager.SelectSingleNode(FallbackNode);
-
 	//-----------------------------------------------------
 	// 3) Rewire: connect each external "upstream" pin to
 	//    each external "downstream" pin, if compatible.
@@ -2135,9 +2162,63 @@ void UVimGraphEditorSubsystem::DeleteNode(
 		}
 	}
 
-	// Mark blueprint as structurally modified if needed
-	if (UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(Graph))
-		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+	//-----------------------------------------------------
+	// 4) Fallback selection to a linked node + highlight pin.
+	// A small delay is needed to ensure proper highlighting.
+	//-----------------------------------------------------
+	if (!(FallbackNode && FallbackPin))
+		return;
+
+	// Get node widget (to get the pin widget)
+	TSharedPtr<SGraphNode> FallbackNodeWidget =
+		GraphPanel->GetNodeWidgetFromGuid(FallbackNode->NodeGuid);
+	if (!FallbackNodeWidget.IsValid())
+		return;
+	// Get pin widget (to highlight its pin)
+	TSharedPtr<SGraphPin> FallbackPinWidget =
+		FallbackNodeWidget->FindWidgetForPin(FallbackPin);
+	if (!FallbackPinWidget.IsValid())
+		return;
+	// Store as weak to not own / access invalid widgets.
+	TWeakPtr<SGraphPin>			 WeakPinWidget = FallbackPinWidget;
+	TWeakObjectPtr<UEdGraphNode> WeakFallbackNode = FallbackNode;
+	TWeakPtr<SGraphPanel>		 WeakGraphPanel = GraphPanel;
+
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[this, &SlateApp, WeakFallbackNode, WeakGraphPanel, WeakPinWidget]() {
+			TSharedPtr<SGraphPanel> GraphPanel = WeakGraphPanel.Pin();
+			if (!GraphPanel.IsValid())
+				return;
+
+			TSharedPtr<SGraphPin> PinWidget = WeakPinWidget.Pin();
+			if (!PinWidget.IsValid())
+				return;
+
+			if (UEdGraphNode* FallbackNode = WeakFallbackNode.Get())
+			{
+				GraphPanel->SelectionManager.SelectSingleNode(FallbackNode);
+				HighlightPinForSelectedNode(SlateApp, GraphPanel.ToSharedRef(), FallbackNode);
+				GraphSelectionTracker.GraphNode = FallbackNode;
+
+				FUMInputHelpers::SimulateMouseMoveToPosition(SlateApp,
+					FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(PinWidget.ToSharedRef())));
+
+				if (UEdGraphPin* NewPinObj = PinWidget->GetPinObj())
+				{
+					GraphSelectionTracker.PinIndex = FallbackNode->GetPinIndex(NewPinObj);
+				}
+			}
+		},
+		0.025f, false);
+
+	//-----------------------------------------------------
+	// 5) Mark blueprint as structurally modified
+	// This seems to make problems for highlighting, so keeping it off for now.
+	//-----------------------------------------------------
+	// if (UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(Graph))
+	// 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
 }
 
 void UVimGraphEditorSubsystem::UndoRedo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
