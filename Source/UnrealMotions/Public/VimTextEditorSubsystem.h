@@ -64,6 +64,11 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool IsNewEditableText(const TSharedRef<SWidget> NewEditableText);
 	bool IsDefaultEditableBuffer(const FString& InBuffer);
 
+	void HandleVimTextNavigation(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
+	void ClearTextSelection();
+
 	FUMLogger Logger;
 	EVimMode  CurrentVimMode{ EVimMode::Insert };
 	EVimMode  PreviousVimMode{ EVimMode::Insert };

@@ -387,7 +387,9 @@ void UUMFocuserEditorSubsystem::UpdateBindingContext(const TSharedRef<SWidget> N
 {
 	static TMap<FString, EUMContextBinding> ContextByWidgetType = {
 		{ "SGraphPanel", EUMContextBinding::GraphEditor },
-		// { "SEditableText", EUMContextBinding::TextEditing },
+
+		{ "SEditableText", EUMContextBinding::TextEditing },
+		{ "SMultiLineEditableText", EUMContextBinding::TextEditing },
 	};
 
 	const FString SpecificType = NewWidget->GetTypeAsString();

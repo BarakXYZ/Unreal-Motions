@@ -29,14 +29,6 @@ void UVimTextEditorSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UVimTextEditorSubsystem::BindCommands()
-{
-	using VimTextSub = UVimTextEditorSubsystem;
-	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
-	Input->OnVimModeChanged.AddUObject(
-		this, &VimTextSub::OnVimModeChanged);
-}
-
 void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
 	PreviousVimMode = CurrentVimMode;
@@ -293,9 +285,7 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 
 			// 2) There's 1 custom CHAR in buffer; so we can just select all.
 			else if (Text.Len() == 1)
-			{
 				EditTextBox->SelectAllText();
-			}
 
 			// 3) There are multiple custom CHARS, potentially words, etc.
 			else
@@ -321,21 +311,38 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 
 						EditTextBox->ClearSelection();
 
-						FModifierKeysState ModKeys(
+						FModifierKeysState ModKeysNone(false, false, false, false, false, false, false, false, false);
+						FModifierKeysState ModKeysShiftDown(
 							true, true, /* Shift Down */
 							false, false, false, false, false, false, false);
 
-						// Default: try to select to the left.
-						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeys);
+						// TODO: in visual mode we must track our cursor location
+						// manually and understand if we're to the right or to
+						// the left of the selection to know which keys we should
+						// simulate.
 
-						// If not text selected: Select to the right.
+						// if any text selected; break from the selection and end
+						// up in the same place by simulating 1 arrow key in the
+						// direction of our cursor relative to the selection
+						// if (EditTextBox->AnyTextSelected())
+						// 	FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeysNone); // temp left
+
+						// // Continue in both cases to simulate 1 arrow key to the
+						// // opposite direction & another 1 arrow key (shift-down)
+						// // to the same direction.
+						// FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeysNone); // Temp right
+
+						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeysShiftDown); // temp left
+
+						// DEPRECATED?
+						// If no text selected: Select to the right.
 						// We're deducing our location by checking if any text
 						// was selected, as there will be no text selected only
 						// if we're at the beginning of the line. If so, we can
 						// simply simulate to the right to select the first char.
 						if (!EditTextBox->AnyTextSelected())
 						{
-							FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeys);
+							FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeysShiftDown);
 						}
 					},
 					0.025f, false);
@@ -413,4 +420,88 @@ bool UVimTextEditorSubsystem::IsNewEditableText(
 bool UVimTextEditorSubsystem::IsDefaultEditableBuffer(const FString& InBuffer)
 {
 	return (InBuffer.Len() == 2 && InBuffer == "  ");
+}
+
+void UVimTextEditorSubsystem::HandleVimTextNavigation(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	if (CurrentVimMode == EVimMode::Normal)
+	{
+		ClearTextSelection();
+		TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
+		// Input->SimulateKeyPress(SlateApp);
+	}
+}
+
+void UVimTextEditorSubsystem::ClearTextSelection()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+		{
+			break;
+		}
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+		{
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+				EditTextBox->ClearSelection();
+
+			break;
+		}
+		case EUMEditableWidgetsFocusState::MultiLine:
+		{
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+				MultiTextBox->ClearSelection();
+
+			break;
+		}
+	}
+}
+
+void UVimTextEditorSubsystem::BindCommands()
+{
+	TSharedRef<FVimInputProcessor> VimInputProcessor = FVimInputProcessor::Get();
+	VimInputProcessor->OnVimModeChanged.AddUObject(
+		this, &UVimTextEditorSubsystem::OnVimModeChanged);
+
+	TWeakObjectPtr<UVimTextEditorSubsystem> WeakTextSubsystem =
+		MakeWeakObjectPtr(this);
+
+	//				~ HJKL Navigate Pins & Nodes ~
+	//
+	// H: Go to Left Pin / Node:
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::TextEditing,
+		// { FInputChord(EModifierKey::Shift, EKeys::H) },
+		{ EKeys::H },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::HandleVimTextNavigation);
+
+	// J: Go Down to Next Pin:
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::TextEditing,
+		// { FInputChord(EModifierKey::Shift, EKeys::J) },
+		{ EKeys::J },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::HandleVimTextNavigation);
+
+	// K: Go Up to Previous Pin:
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::TextEditing,
+		// { FInputChord(EModifierKey::Shift, EKeys::K) },
+		{ EKeys::K },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::HandleVimTextNavigation);
+
+	// L: Go to Right Pin / Node:
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMContextBinding::TextEditing,
+		// { FInputChord(EModifierKey::Shift, EKeys::L) },
+		{ EKeys::L },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::HandleVimTextNavigation);
+	//
+	//				~ HJKL Navigate Pins & Nodes ~
 }
