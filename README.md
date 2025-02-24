@@ -1,7 +1,21 @@
 # Unreal-Motions 🖐️✨
 This project started with simple motions for tab and window navigation, but it has since evolved into a full-fledged Vim Motions system! I'll be working on another official release in the coming weeks, focusing on stability and proper documentation. Stay tuned! For now the official release contains the tab & window navigation features while main has many of the Vim features already implemented (if you want to try them out) 🧘‍♂️
 
-## Features 
+### Things left until Vim features release:
+- [x] Vimium generic UI navigation (via Hint Markers).
+- [x] General UI Vim Motions-like navigation between panels and Minor Tabs.
+- [x] Blueprint Nodes Vim-Motions (HJKL, w, b, e, ge, gg, G, d, x)
+- [x] Blueprint panel navigation (panning) via Shift + HJKL.
+- [x] Command-Line like pop-up for basic commands like :w, :q, etc.
+- [x] Search-Box like pop-up menu for Shift + / like free search.
+- [ ] Editable Text Vim-Motions (Single & MultiLine).
+- [ ] Basic Level-Viewport Vim-inspired navigation (for rotation and moving around without the mouse).
+- [ ] Basic config setup for enabling // disabling Vim features and some preferences.
+- [ ] UI, Highlighting cleanup and fine-tuning.
+
+- Estimated Vim-Features Release Date: May-June 2025.
+
+## Features Present in latest release:
 
 ### Windows Navigation 🪟
 Navigate between editor windows effortlessly using keyboard shortcuts!<br>
@@ -43,9 +57,6 @@ git clone https://github.com/BarakXYZ/Unreal-Motions.git
 ```
 3. Restart the Unreal Editor
 4. The plugin should now be available in your project!
-
-## Roadmap 🗺️
-This plugin is inspired by Vim Motions and the core principle of keeping your hands on the keyboard. As someone who understands the impact of repetitive mouse movements on wrist health, I'm committed to expanding this plugin with more ergonomic tools that enhance Unreal Editor navigation. Each new feature will focus on reducing mouse dependency and improving workflow efficiency. Stay tuned for more keyboard-centric improvements! 🚀
 
 ## Contributing 🤝
 Bug reports, PR's and feature suggestions are welcome!
