@@ -6,7 +6,7 @@ This project started with simple motions for tab and window navigation, but it h
 
 - [x] Vimium generic UI navigation (via Hint Markers).
 - [x] General UI Vim Motions-like navigation between panels and Minor Tabs.
-- [x] Go-In "i" go-Out "o" to quickly move in/out of previous/next widgets (supports widgets that live inside different tabs and windows too!)
+- [x] Go-In "ctrl + i" Go-Out "ctrl + o" to quickly move in/out of previous/next widgets (supports widgets that live inside different tabs and windows too!)
 - [x] Fallback mechanisms to retain focus on last selected widgets inside tabs (Nomad & Panel).
 - [x] Blueprint Nodes Vim-Motions (HJKL, w, b, e, ge, gg, G, d, x)
 - [x] Blueprint panel navigation (panning) via Shift + HJKL.
