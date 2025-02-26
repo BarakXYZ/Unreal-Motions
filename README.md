@@ -4,10 +4,12 @@ This project started with simple motions for tab and window navigation, but it h
 
 ### Things left until Vim features release:
 
+- [x] Customizable Vim like bindings (\<leader> + n [num of keys]) to call any type of functionality.
+- [x] Normal, Visual and Insert mode: custom Input Processor and Message Handler.
+- [x] Fallback mechanisms to retain focus on last selected widgets inside tabs (Nomad, Panel, etc.)
 - [x] Vimium generic UI navigation (via Hint Markers).
 - [x] General UI Vim Motions-like navigation between panels and Minor Tabs.
 - [x] Go-In "ctrl + i" Go-Out "ctrl + o" to quickly move in/out of previous/next widgets (supports widgets that live inside different tabs and windows too!)
-- [x] Fallback mechanisms to retain focus on last selected widgets inside tabs (Nomad & Panel).
 - [x] Blueprint Nodes Vim-Motions (HJKL, w, b, e, ge, gg, G, d, x)
 - [x] Blueprint panel navigation (panning) via Shift + HJKL.
 - [x] Command-Line like pop-up for basic commands like :w, :q, etc.
