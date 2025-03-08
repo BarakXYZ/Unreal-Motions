@@ -392,26 +392,32 @@ void UUMFocuserEditorSubsystem::UpdateBindingContext(const TSharedRef<SWidget> N
 		{ "SMultiLineEditableText", EUMContextBinding::TextEditing },
 	};
 
+	// Cover both specific and base type as a fallback
 	const FString SpecificType = NewWidget->GetTypeAsString();
 	const FString BaseType = NewWidget->GetWidgetClass().GetWidgetType().ToString();
 
+	// Firstly search by specific type
 	if (EUMContextBinding* Context = ContextByWidgetType.Find(SpecificType))
 	{
 		if (CurrentContext != *Context)
 		{
-			FVimInputProcessor::Get()->SetCurrentContext(*Context);
+			Logger.Print(FString::Printf(TEXT("New Context found for type: %s"),
+							 *SpecificType),
+				ELogVerbosity::Verbose, true);
 			CurrentContext = *Context;
+			FVimInputProcessor::Get()->SetCurrentContext(CurrentContext);
 			OnBindingContextChanged.Broadcast(CurrentContext, NewWidget);
 		}
-		return;
+		return; // Early return instead of elseif to not hide prev var dec Cntxt
 	}
 
+	// Then by base type
 	if (EUMContextBinding* Context = ContextByWidgetType.Find(BaseType))
 	{
 		if (CurrentContext != *Context)
 		{
-			FVimInputProcessor::Get()->SetCurrentContext(*Context);
 			CurrentContext = *Context;
+			FVimInputProcessor::Get()->SetCurrentContext(CurrentContext);
 			OnBindingContextChanged.Broadcast(CurrentContext, NewWidget);
 		}
 	}

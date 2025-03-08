@@ -1,5 +1,6 @@
 #include "VimTextEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
+#include "UMSlateHelpers.h"
 #include "Widgets/InvalidateWidgetReason.h"
 #include "UMInputHelpers.h"
 #include "Editor.h"
@@ -74,7 +75,7 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 
 	// TODO: Might wanna do an early return if we're on Insert mode.
 
-	Logger.ToggleLogging(false);
+	// Logger.ToggleLogging(true);
 	if (NewWidget.IsValid())
 	{
 		const TSharedRef<SWidget> NewWidgetRef = NewWidget.ToSharedRef();
@@ -425,8 +426,19 @@ bool UVimTextEditorSubsystem::IsDefaultEditableBuffer(const FString& InBuffer)
 void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
+	Logger.Print("Handle Vim Text Navigation", ELogVerbosity::Verbose, true);
 	if (CurrentVimMode == EVimMode::Normal)
 	{
+		// It looks like we can clear text selection to always end up in the
+		// expected cursor position (left or right to the selection).
+		// The flow should be as follows if in Normal mode for the clear to
+		// actually take place:
+		// FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
+		// EditTextBox->ClearSelection();
+		// FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Normal);
+		// If not switching first to insert, it seems like the clear won't take
+		// place. Figure this out.
+
 		ClearTextSelection();
 		TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
 		// Input->SimulateKeyPress(SlateApp);
@@ -439,13 +451,16 @@ void UVimTextEditorSubsystem::ClearTextSelection()
 	{
 		case EUMEditableWidgetsFocusState::None:
 		{
+			Logger.Print("NONE", ELogVerbosity::Log, true);
 			break;
 		}
 
 		case EUMEditableWidgetsFocusState::SingleLine:
 		{
 			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
 				EditTextBox->ClearSelection();
+			}
 
 			break;
 		}
@@ -504,4 +519,12 @@ void UVimTextEditorSubsystem::BindCommands()
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
 	//
 	//				~ HJKL Navigate Pins & Nodes ~
+
+	// Simulate clear selection to check where our cursor is at:
+	VimInputProcessor->AddKeyBinding_NoParam(
+		EUMContextBinding::TextEditing,
+		// { FInputChord(EModifierKey::Alt, EKeys::M) },
+		{ EKeys::SpaceBar, EKeys::M, EKeys::M, EKeys::M },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ClearTextSelection);
 }
