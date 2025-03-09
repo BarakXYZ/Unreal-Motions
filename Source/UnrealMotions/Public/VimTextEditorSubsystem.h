@@ -69,6 +69,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void ClearTextSelection();
 
+	void ToggleCursorBlinkingOff(TSharedRef<SEditableTextBox> InEditableTextBox);
+	bool IsEditableTextWithDefaultBuffer();
+
 	FUMLogger Logger;
 	EVimMode  CurrentVimMode{ EVimMode::Insert };
 	EVimMode  PreviousVimMode{ EVimMode::Insert };

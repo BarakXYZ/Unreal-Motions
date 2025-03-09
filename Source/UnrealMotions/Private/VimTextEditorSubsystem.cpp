@@ -317,22 +317,13 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 							true, true, /* Shift Down */
 							false, false, false, false, false, false, false);
 
-						// TODO: in visual mode we must track our cursor location
-						// manually and understand if we're to the right or to
-						// the left of the selection to know which keys we should
-						// simulate.
+						// New method -> always keep cursor to the right of the
+						// selection.
+						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left));
+						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeysShiftDown);
+						return;
 
-						// if any text selected; break from the selection and end
-						// up in the same place by simulating 1 arrow key in the
-						// direction of our cursor relative to the selection
-						// if (EditTextBox->AnyTextSelected())
-						// 	FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeysNone); // temp left
-
-						// // Continue in both cases to simulate 1 arrow key to the
-						// // opposite direction & another 1 arrow key (shift-down)
-						// // to the same direction.
-						// FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeysNone); // Temp right
-
+						// Old method
 						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeysShiftDown); // temp left
 
 						// DEPRECATED?
@@ -341,6 +332,7 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 						// was selected, as there will be no text selected only
 						// if we're at the beginning of the line. If so, we can
 						// simply simulate to the right to select the first char.
+						// Old method
 						if (!EditTextBox->AnyTextSelected())
 						{
 							FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeysShiftDown);
@@ -429,19 +421,49 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	Logger.Print("Handle Vim Text Navigation", ELogVerbosity::Verbose, true);
 	if (CurrentVimMode == EVimMode::Normal)
 	{
-		// It looks like we can clear text selection to always end up in the
-		// expected cursor position (left or right to the selection).
-		// The flow should be as follows if in Normal mode for the clear to
-		// actually take place:
-		// FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
-		// EditTextBox->ClearSelection();
-		// FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Normal);
-		// If not switching first to insert, it seems like the clear won't take
-		// place. Figure this out.
+		if (IsEditableTextWithDefaultBuffer())
+			return; // Early return to preserve the default buffer selection.
 
 		ClearTextSelection();
+
 		TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
-		// Input->SimulateKeyPress(SlateApp);
+		FKey						   ArrowKeyToSimulate;
+		FUMInputHelpers::GetArrowKeyFromVimKey(InSequence.Last().Key, ArrowKeyToSimulate);
+		FModifierKeysState ModKeysShiftDown(
+			true, true, /* Shift Down */
+			false, false, false, false, false, false, false);
+		FKey Left = EKeys::Left;
+		FKey Right = EKeys::Right;
+
+		// NOTE:
+		// We're processing and simulating in a very specifc order because we need
+		// to have a determinstic placement for our cursor at any given time.
+		// We want to keep our cursor essentially always to the right of each
+		// character so we can handle beginning & end of line properly to maintain
+		// correct selection.
+		// Another small note is that simulating keys seems a bit loosy-goosy
+		// sometimes (for example, it seems like if we had another simulate left
+		// when going left, it won't really effect the selection?) But this combo
+		// below seems to work well for all tested cases.
+		if (ArrowKeyToSimulate == Left)
+		{
+			Input->SimulateKeyPress(SlateApp, Left);
+			Input->SimulateKeyPress(SlateApp, Left);
+			Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
+		}
+		else if (ArrowKeyToSimulate == Right)
+		{
+			Input->SimulateKeyPress(SlateApp, Right);
+			Input->SimulateKeyPress(SlateApp, Left);
+			Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
+		}
+
+		// Up & Down: for now we can process them although maybe we
+		// souldn't in Single-Line Editable? Not sure what's a better UX.
+		else
+		{
+			FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, ArrowKeyToSimulate, ModKeysShiftDown);
+		}
 	}
 }
 
@@ -459,7 +481,26 @@ void UVimTextEditorSubsystem::ClearTextSelection()
 		{
 			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
 			{
+				FTimerHandle			  TimerHandle;
+				TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
+
+				// Magic sequence - I've tried other combinations but this seems
+				// to be the only combo to properly clears the selection from
+				// Normal Mode (read-only)
 				EditTextBox->ClearSelection();
+				EditTextBox->SetIsReadOnly(false);
+				EditTextBox->BeginSearch(FText::GetEmpty()); // Retrieve blinking
+				EditTextBox->SetIsReadOnly(true);
+
+				ToggleCursorBlinkingOff(EditTextBox.ToSharedRef());
+
+				// To remove blinking again:
+				// TimerManager->SetTimer(
+				// 	TimerHandle,
+				// 	[]() {
+				// 		FVimInputProcessor::Get()->SimulateKeyPress(FSlateApplication::Get(), EKeys::Left);
+				// 	},
+				// 	0.25f, false);
 			}
 
 			break;
@@ -473,6 +514,56 @@ void UVimTextEditorSubsystem::ClearTextSelection()
 			break;
 		}
 	}
+}
+
+void UVimTextEditorSubsystem::ToggleCursorBlinkingOff(TSharedRef<SEditableTextBox> InEditableTextBox)
+{
+	FModifierKeysState ModKeysNone(false, false, false, false, false, false, false, false, false);
+	FModifierKeysState ModKeysShiftDown(
+		true, true, /* Shift Down */
+		false, false, false, false, false, false, false);
+
+	TSharedRef<FVimInputProcessor> Processor = FVimInputProcessor::Get();
+	FSlateApplication&			   SlateApp = FSlateApplication::Get();
+
+	Processor->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
+	if (InEditableTextBox->AnyTextSelected())
+	{
+		// Logger.Print("Has Text Selected", ELogVerbosity::Log, true);
+		// Simply compensate by moving one time to the right (opposite direction)
+		Processor->SimulateKeyPress(SlateApp, EKeys::Right /*No Shift Down*/);
+	}
+	// else we're at the beginning of the input, and we can simply do nothing
+	// as the blinking stopped by this point.
+
+	// Keeping this for fast access in case we need some timers going
+	// FTimerHandle				   TimerHandle;
+	// TSharedRef<FTimerManager>	   TimerManager = GEditor->GetTimerManager();
+	// TimerManager->SetTimer(
+	// 	TimerHandle,
+	// 	[]() {
+
+	// 	},
+	// 	0.025f, false);
+}
+
+bool UVimTextEditorSubsystem::IsEditableTextWithDefaultBuffer()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+				return IsDefaultEditableBuffer(EditTextBox->GetText().ToString());
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+				return IsDefaultEditableBuffer(MultiTextBox->GetText().ToString());
+	}
+	return false;
 }
 
 void UVimTextEditorSubsystem::BindCommands()
@@ -528,3 +619,9 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ClearTextSelection);
 }
+
+// NOTE:
+// To properly exit visual mode, we have to know if we're left or right to the
+// initial selection to decide which character should be highlighted. Thus, when
+// we start a visual selection, we have to track the user's strokes (navigation)
+// and determine if he is left or right to the anchor (initial) selection.
