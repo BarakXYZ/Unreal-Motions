@@ -620,8 +620,9 @@ void UVimTextEditorSubsystem::BindCommands()
 		&UVimTextEditorSubsystem::ClearTextSelection);
 }
 
-// NOTE:
-// To properly exit visual mode, we have to know if we're left or right to the
-// initial selection to decide which character should be highlighted. Thus, when
-// we start a visual selection, we have to track the user's strokes (navigation)
-// and determine if he is left or right to the anchor (initial) selection.
+// TODO:
+// Vim Navigation in Single-Line Editable Text - V
+// Proper handling for [i]nsert and [a]ppend -
+// Go to end and start of input Single-Line -
+// Go to end and start of input Multi-Line -
+// Vim Navigation in Multi-Line Editable Text -
