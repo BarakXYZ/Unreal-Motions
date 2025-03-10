@@ -1,6 +1,7 @@
 #include "VimTextEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
 #include "UMSlateHelpers.h"
+#include "VimInputProcessor.h"
 #include "Widgets/InvalidateWidgetReason.h"
 #include "UMInputHelpers.h"
 #include "Editor.h"
@@ -204,7 +205,7 @@ void UVimTextEditorSubsystem::ToggleReadOnlySingle()
 {
 	if (const TSharedPtr<SEditableTextBox> TextBox = ActiveEditableTextBox.Pin())
 	{
-		TextBox->SetIsReadOnly(CurrentVimMode == EVimMode::Normal);
+		TextBox->SetIsReadOnly(CurrentVimMode != EVimMode::Insert);
 
 		// This coloring helps to unify the look of the editable text box. Still
 		// WIP. There are some edge cases like Node Titles that still need some
@@ -312,37 +313,12 @@ void UVimTextEditorSubsystem::SetCursorSingle()
 
 						EditTextBox->ClearSelection();
 
-						FModifierKeysState ModKeysNone(false, false, false, false, false, false, false, false, false);
-						FModifierKeysState ModKeysShiftDown(
-							true, true, /* Shift Down */
-							false, false, false, false, false, false, false);
-
 						// New method -> always keep cursor to the right of the
 						// selection.
 						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left));
-						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeysShiftDown);
-						return;
-
-						// Old method
-						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left), ModKeysShiftDown); // temp left
-
-						// DEPRECATED?
-						// If no text selected: Select to the right.
-						// We're deducing our location by checking if any text
-						// was selected, as there will be no text selected only
-						// if we're at the beginning of the line. If so, we can
-						// simply simulate to the right to select the first char.
-						// Old method
-						if (!EditTextBox->AnyTextSelected())
-						{
-							FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), ModKeysShiftDown);
-						}
+						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), FUMInputHelpers::GetShiftDownModKeys());
 					},
 					0.025f, false);
-
-				// EditTextBox->BeginSearch(FText::FromString(" "), ESearchCase::IgnoreCase, true);
-				// EditTextBox->GoTo(ETextLocation::EndOfLine);
-				// EditTextBox->AdvanceSearch();
 			}
 		}
 	}
@@ -419,21 +395,19 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	Logger.Print("Handle Vim Text Navigation", ELogVerbosity::Verbose, true);
-	if (CurrentVimMode == EVimMode::Normal)
+	if (CurrentVimMode != EVimMode::Insert)
 	{
+		const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
+
 		if (IsEditableTextWithDefaultBuffer())
 			return; // Early return to preserve the default buffer selection.
-
-		ClearTextSelection();
 
 		TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
 		FKey						   ArrowKeyToSimulate;
 		FUMInputHelpers::GetArrowKeyFromVimKey(InSequence.Last().Key, ArrowKeyToSimulate);
-		FModifierKeysState ModKeysShiftDown(
-			true, true, /* Shift Down */
-			false, false, false, false, false, false, false);
-		FKey Left = EKeys::Left;
-		FKey Right = EKeys::Right;
+		FModifierKeysState ModKeysShiftDown = FUMInputHelpers::GetShiftDownModKeys();
+		FKey			   Left = EKeys::Left;
+		FKey			   Right = EKeys::Right;
 
 		// NOTE:
 		// We're processing and simulating in a very specifc order because we need
@@ -447,14 +421,26 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 		// below seems to work well for all tested cases.
 		if (ArrowKeyToSimulate == Left)
 		{
-			Input->SimulateKeyPress(SlateApp, Left);
-			Input->SimulateKeyPress(SlateApp, Left);
-			Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
+			if (!bIsVisualMode)
+			{
+				ClearTextSelection();
+				Input->SimulateKeyPress(SlateApp, Left);
+				Input->SimulateKeyPress(SlateApp, Left);
+				Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
+			}
+			else
+			{
+				Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
+			}
 		}
 		else if (ArrowKeyToSimulate == Right)
 		{
-			Input->SimulateKeyPress(SlateApp, Right);
-			Input->SimulateKeyPress(SlateApp, Left);
+			if (!bIsVisualMode)
+			{
+				ClearTextSelection();
+				Input->SimulateKeyPress(SlateApp, Right);
+				Input->SimulateKeyPress(SlateApp, Left);
+			}
 			Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
 		}
 
@@ -467,7 +453,7 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	}
 }
 
-void UVimTextEditorSubsystem::ClearTextSelection()
+void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
 {
 	switch (EditableWidgetsFocusState)
 	{
@@ -490,9 +476,11 @@ void UVimTextEditorSubsystem::ClearTextSelection()
 				EditTextBox->ClearSelection();
 				EditTextBox->SetIsReadOnly(false);
 				EditTextBox->BeginSearch(FText::GetEmpty()); // Retrieve blinking
-				EditTextBox->SetIsReadOnly(true);
-
-				ToggleCursorBlinkingOff(EditTextBox.ToSharedRef());
+				if (bKeepInputInNormalMode)
+				{
+					EditTextBox->SetIsReadOnly(true);
+					ToggleCursorBlinkingOff(EditTextBox.ToSharedRef());
+				}
 
 				// To remove blinking again:
 				// TimerManager->SetTimer(
@@ -566,6 +554,99 @@ bool UVimTextEditorSubsystem::IsEditableTextWithDefaultBuffer()
 	return false;
 }
 
+void UVimTextEditorSubsystem::InsertAndAppend(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const FKey					   InKey = InKeyEvent.GetKey();
+	const bool					   bIsShiftDown = InKeyEvent.IsShiftDown();
+	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
+	const bool					   bIsVisualMode = CurrentVimMode == EVimMode::Visual;
+
+	if (InKey == EKeys::I)
+	{
+		if (bIsShiftDown)
+		{
+			if (bIsVisualMode)
+				ClearTextSelection(false); // Simply clear and insert
+			else
+			{
+				// Go to the beginning of the line.
+				GotoStartOrEnd(SlateApp, FUMInputHelpers::GetKeyEventFromKey(EKeys::G, false /*ShiftDown*/));
+
+				// See explanation below ("By default...")
+				InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
+			}
+		}
+		else
+		{
+			if (bIsVisualMode)
+				return; // Do nothing. AFAIK that's Vim behavior.
+
+			// By default we're keeping the cursor to the right of the currently
+			// selected character. So we need to simulate one time to the left to
+			// mimic insert behavior (which puts the cursor *before* the currently
+			// selected character).
+			InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
+		}
+	}
+	else // [a/A]ppend
+	{
+		if (bIsShiftDown)
+		{
+			if (bIsVisualMode)
+				ClearTextSelection(false); // Simply clear and insert
+			else
+			{
+				// Go to the end of the line.
+				GotoStartOrEnd(SlateApp, FUMInputHelpers::GetKeyEventFromKey(EKeys::G, true /*ShiftDown*/));
+			}
+		}
+		else
+		{
+			if (bIsVisualMode)
+				return; // Do nothing. AFAIK that's Vim behavior.
+
+			// Else, just goto Insert Mode:
+			// Default behavior is in the correct cursor location already.
+		}
+	}
+	InputProcessor->SetVimMode(SlateApp, EVimMode::Insert);
+}
+
+void UVimTextEditorSubsystem::GotoStartOrEnd(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	if (IsEditableTextWithDefaultBuffer())
+		return;
+
+	const FKey					   InKey = InKeyEvent.GetKey();
+	const bool					   bIsShiftDown = InKeyEvent.IsShiftDown();
+	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
+	const bool					   bIsVisualMode = CurrentVimMode == EVimMode::Visual;
+
+	// TODO: Add some more logic for Multi-Line Editable Text
+
+	if (bIsShiftDown)
+	{
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::End,
+			bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
+	}
+	else
+	{
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Home,
+			bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
+	}
+	if (!bIsVisualMode)
+		SetCursorSelectionToDefaultLocation(SlateApp);
+}
+
+void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp)
+{
+	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
+	InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
+	InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+}
+
 void UVimTextEditorSubsystem::BindCommands()
 {
 	TSharedRef<FVimInputProcessor> VimInputProcessor = FVimInputProcessor::Get();
@@ -611,18 +692,51 @@ void UVimTextEditorSubsystem::BindCommands()
 	//
 	//				~ HJKL Navigate Pins & Nodes ~
 
-	// Simulate clear selection to check where our cursor is at:
-	VimInputProcessor->AddKeyBinding_NoParam(
+	// [i]nsert & [a]ppend + [I]nsert & [A]ppend (start / end of line)
+	//
+	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMContextBinding::TextEditing,
-		// { FInputChord(EModifierKey::Alt, EKeys::M) },
-		{ EKeys::SpaceBar, EKeys::M, EKeys::M, EKeys::M },
+		{ EKeys::I },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::ClearTextSelection);
+		&UVimTextEditorSubsystem::InsertAndAppend);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::TextEditing,
+		{ EKeys::A },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::InsertAndAppend);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::I) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::InsertAndAppend);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::A) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::InsertAndAppend);
+	//
+	// [i]nsert & [a]ppend + [I]nsert & [A]ppend (start / end of line)
+
+	// gg & Shift+g -> Goto to End & Start of line
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::TextEditing,
+		{ EKeys::G, EKeys::G },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::GotoStartOrEnd);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMContextBinding::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::G) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::GotoStartOrEnd);
 }
 
 // TODO:
 // Vim Navigation in Single-Line Editable Text - V
-// Proper handling for [i]nsert and [a]ppend -
-// Go to end and start of input Single-Line -
+// Proper handling for [i]nsert and [a]ppend - V
+// Go to end and start of input Single-Line - V
 // Go to end and start of input Multi-Line -
 // Vim Navigation in Multi-Line Editable Text -

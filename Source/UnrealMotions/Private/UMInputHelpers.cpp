@@ -697,3 +697,24 @@ void FUMInputHelpers::SimulateScrollWidget(
 
 	Widget->OnMouseWheel(Widget->GetCachedGeometry(), PointerEvent);
 }
+
+FModifierKeysState FUMInputHelpers::GetShiftDownModKeys()
+{
+	return FModifierKeysState(true, true, false, false, false, false, false, false, false);
+}
+FModifierKeysState FUMInputHelpers::GetCtrlDownModKeys()
+{
+	return FModifierKeysState(false, false, true, true, false, false, false, false, false);
+}
+
+FKeyEvent FUMInputHelpers::GetKeyEventFromKey(
+	const FKey& InKey, bool bIsShiftDown)
+{
+	const FModifierKeysState ModKeys(bIsShiftDown, bIsShiftDown,
+		false, false, false, false, false, false, false);
+
+	return FKeyEvent(
+		InKey,
+		ModKeys,
+		0, false, 0, 0);
+}

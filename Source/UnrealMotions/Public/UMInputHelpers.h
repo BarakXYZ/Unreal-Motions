@@ -132,6 +132,11 @@ public:
 
 	static void TriggerDragInPlace();
 
+	static FModifierKeysState GetShiftDownModKeys();
+	static FModifierKeysState GetCtrlDownModKeys();
+
+	static FKeyEvent GetKeyEventFromKey(const FKey& InKey, bool bIsShiftDown);
+
 	static FUMLogger			   Logger;
 	static FUMOnSimulateRightClick OnSimulateRightClick;
 };

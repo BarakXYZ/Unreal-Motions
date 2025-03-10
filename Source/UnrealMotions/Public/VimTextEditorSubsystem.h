@@ -67,10 +67,18 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleVimTextNavigation(
 		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
-	void ClearTextSelection();
+	void ClearTextSelection(bool bKeepInputInNormalMode = true);
 
 	void ToggleCursorBlinkingOff(TSharedRef<SEditableTextBox> InEditableTextBox);
 	bool IsEditableTextWithDefaultBuffer();
+
+	void InsertAndAppend(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void GotoStartOrEnd(
+		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp);
 
 	FUMLogger Logger;
 	EVimMode  CurrentVimMode{ EVimMode::Insert };
