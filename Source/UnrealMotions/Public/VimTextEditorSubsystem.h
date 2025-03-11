@@ -56,8 +56,15 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void ToggleReadOnlySingle();
 	void ToggleReadOnlyMulti();
 
-	void SetCursorSingle();
-	void SetCursorMulti();
+	void SetNormalModeCursor();
+
+	bool GetActiveEditableTextContent(FString& OutText);
+
+	bool SetActiveEditableTextContent(const FText& InText);
+
+	bool RetrieveActiveEditableCursorBlinking();
+
+	bool SelectAllActiveEditableText();
 
 	void OnEditableFocusLost();
 
@@ -69,7 +76,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void ClearTextSelection(bool bKeepInputInNormalMode = true);
 
-	void ToggleCursorBlinkingOff(TSharedRef<SEditableTextBox> InEditableTextBox);
+	void ToggleCursorBlinkingOff();
 	bool IsEditableTextWithDefaultBuffer();
 
 	void InsertAndAppend(
@@ -79,6 +86,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp);
+
+	bool DoesActiveEditableHasAnyTextSelected();
+
+	bool IsCurrentLineInMultiEmpty();
 
 	FUMLogger Logger;
 	EVimMode  CurrentVimMode{ EVimMode::Insert };

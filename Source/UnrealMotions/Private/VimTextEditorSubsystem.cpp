@@ -189,13 +189,15 @@ void UVimTextEditorSubsystem::UpdateEditables()
 			break;
 
 		case EUMEditableWidgetsFocusState::SingleLine:
-			SetCursorSingle();
+			// SetCursorSingle();
+			SetNormalModeCursor();
 			ToggleReadOnlySingle();
 			Logger.Print("Handle Single-Line");
 			break;
 
 		case EUMEditableWidgetsFocusState::MultiLine:
-			SetCursorMulti();
+			// SetCursorMulti();
+			SetNormalModeCursor();
 			ToggleReadOnlyMulti();
 			break;
 	}
@@ -243,92 +245,74 @@ void UVimTextEditorSubsystem::ToggleReadOnlyMulti()
 		MultiTextBox->GoTo(MultiTextBox->GetCursorLocation());
 	}
 }
-
-void UVimTextEditorSubsystem::SetCursorSingle()
+void UVimTextEditorSubsystem::SetNormalModeCursor()
 {
-	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+	FString TextContent;
+	if (!GetActiveEditableTextContent(TextContent))
+		return;
+
+	// In Insert mode:
+	// 1. We clear the buffer if default setup ("  ")
+	// 2. Or simply just clear any previous selection.
+	if (CurrentVimMode == EVimMode::Insert)
 	{
-		const FString& Text = EditTextBox->GetText().ToString();
-
-		// In Insert mode:
-		// 1. We clear the buffer if default setup ("  ")
-		// 2. Or simply just clear any previous selection.
-		if (CurrentVimMode == EVimMode::Insert)
+		if (IsDefaultEditableBuffer(TextContent)) // Clear default buffer if any
 		{
-			if (IsDefaultEditableBuffer(Text)) // (1) Clear default buffer if any
-			{
-				EditTextBox->SetText(FText::GetEmpty());	 // Clear
-				EditTextBox->BeginSearch(FText::GetEmpty()); // Retrieve blinking
-			}
-			else
-				EditTextBox->ClearSelection(); // (2) Clear previous selection
+			SetActiveEditableTextContent(FText::GetEmpty()); // Clear
+			RetrieveActiveEditableCursorBlinking();
 		}
-		else if (CurrentVimMode == EVimMode::Normal || CurrentVimMode == EVimMode::Visual)
-		{
-			// 1) If empty; set default dummy buffer ("  ") for visualization & select it:
-			if (Text.IsEmpty())
-			{
-				EditTextBox->SetText(FText::FromString("  "));
-
-				EditTextBox->SelectAllText();
-				// NOTE:
-				// There's a slight delay that occurs sometimes when focusing
-				// for example on the finder in the Content Browser.
-				// This delay is important to set the text properly.
-				FTimerHandle TimerHandle;
-				GEditor->GetTimerManager()->SetTimer(
-					TimerHandle, [this]() {
-						if (const TSharedPtr<SEditableTextBox> EditTextBox =
-								ActiveEditableTextBox.Pin())
-							EditTextBox->SelectAllText();
-					},
-					0.025f, false);
-			}
-
-			// 2) There's 1 custom CHAR in buffer; so we can just select all.
-			else if (Text.Len() == 1)
-				EditTextBox->SelectAllText();
-
-			// 3) There are multiple custom CHARS, potentially words, etc.
-			else
-			{
-				// Again delaying the processing as it seems to be needed in order
-				// to process correctly
-				FTimerHandle TimerHandle;
-				GEditor->GetTimerManager()->SetTimer(
-					TimerHandle,
-					[this]() {
-						const TSharedPtr<SEditableTextBox> EditTextBox =
-							ActiveEditableTextBox.Pin();
-						if (!EditTextBox.IsValid())
-							return;
-
-						FSlateApplication& SlateApp = FSlateApplication::Get();
-
-						// This is important in order to mitigate a potential
-						// Stack Overflow that seems to occur in Preferences
-						// SearchBox
-						if (SlateApp.IsProcessingInput())
-							return;
-
-						EditTextBox->ClearSelection();
-
-						// New method -> always keep cursor to the right of the
-						// selection.
-						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Left));
-						FVimInputProcessor::SimulateKeyPress(SlateApp, FKey(EKeys::Right), FUMInputHelpers::GetShiftDownModKeys());
-					},
-					0.025f, false);
-			}
-		}
+		else
+			ClearTextSelection(); // (2) Clear previous selection
 	}
-}
-
-void UVimTextEditorSubsystem::SetCursorMulti()
-{
-	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-			ActiveMultiLineEditableTextBox.Pin())
+	else if (CurrentVimMode == EVimMode::Normal || CurrentVimMode == EVimMode::Visual)
 	{
+		// 1) If empty; set default dummy buffer ("  ") for visualization & select it:
+		if (TextContent.IsEmpty())
+		{
+			SetActiveEditableTextContent(FText::FromString("  "));
+
+			SelectAllActiveEditableText();
+			// NOTE:
+			// There's a slight delay that occurs sometimes when focusing
+			// for example on the finder in the Content Browser.
+			// This delay is important to set the text properly.
+			FTimerHandle TimerHandle;
+			GEditor->GetTimerManager()->SetTimer(
+				TimerHandle, [this]() {
+					SelectAllActiveEditableText();
+				},
+				0.025f, false);
+		}
+
+		// 2) There's 1 custom CHAR in buffer; so we can just select all.
+		else if (TextContent.Len() == 1)
+			SelectAllActiveEditableText();
+
+		// 3) There are multiple custom CHARS, potentially words, etc.
+		else
+		{
+			// Again delaying the processing as it seems to be needed in order
+			// to process correctly
+			FTimerHandle TimerHandle;
+			GEditor->GetTimerManager()->SetTimer(
+				TimerHandle,
+				[this]() {
+					FSlateApplication& SlateApp = FSlateApplication::Get();
+
+					// This is important in order to mitigate a potential
+					// Stack Overflow that seems to occur in Preferences
+					// SearchBox
+					if (SlateApp.IsProcessingInput())
+						return;
+
+					ClearTextSelection();
+
+					// New method -> always keep cursor to the right of the
+					// selection.
+					SetCursorSelectionToDefaultLocation(SlateApp);
+				},
+				0.025f, false);
+		}
 	}
 }
 
@@ -421,6 +405,9 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 		// below seems to work well for all tested cases.
 		if (ArrowKeyToSimulate == Left)
 		{
+			if (IsCurrentLineInMultiEmpty())
+				return;
+
 			if (!bIsVisualMode)
 			{
 				ClearTextSelection();
@@ -435,6 +422,9 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 		}
 		else if (ArrowKeyToSimulate == Right)
 		{
+			if (IsCurrentLineInMultiEmpty())
+				return;
+
 			if (!bIsVisualMode)
 			{
 				ClearTextSelection();
@@ -452,8 +442,26 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 				Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate, ModKeysShiftDown);
 			else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine) // Multi-Line Normal Mode
 			{
-				ClearTextSelection();
+				Logger.Print("Non-Empty Multi-Line Navigation", ELogVerbosity::Log, true);
+				// ClearTextSelection();  // In this case, seems to not work well.
+
+				if (!IsCurrentLineInMultiEmpty())
+					// Break/Clear selection
+					Input->SimulateKeyPress(SlateApp, Right);
+
 				Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
+
+				// NOTE:
+				// We need to check if a line is empty in Multi-Line Editable Text:
+				// This is important because the default UE behavior is unlike Vim
+				// navigation-wise; When trying to go left or right, it will go down
+				// a line when there's an empty line, while in Vim it will stay in the
+				// same line.
+				// Also, when going Up & Down with empty lines in-between - it will
+				// mess-up navigation since we're doing some left & right simulations!
+				if (IsCurrentLineInMultiEmpty())
+					return;
+
 				Input->SimulateKeyPress(SlateApp, Left);
 				Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
 			}
@@ -477,9 +485,7 @@ void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
 		{
 			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
 			{
-				FTimerHandle			  TimerHandle;
-				TSharedRef<FTimerManager> TimerManager = GEditor->GetTimerManager();
-
+				// NOTE:
 				// Magic sequence - I've tried other combinations but this seems
 				// to be the only combo to properly clears the selection from
 				// Normal Mode (read-only)
@@ -489,16 +495,8 @@ void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
 				if (bKeepInputInNormalMode)
 				{
 					EditTextBox->SetIsReadOnly(true);
-					ToggleCursorBlinkingOff(EditTextBox.ToSharedRef());
+					ToggleCursorBlinkingOff();
 				}
-
-				// To remove blinking again:
-				// TimerManager->SetTimer(
-				// 	TimerHandle,
-				// 	[]() {
-				// 		FVimInputProcessor::Get()->SimulateKeyPress(FSlateApplication::Get(), EKeys::Left);
-				// 	},
-				// 	0.25f, false);
 			}
 
 			break;
@@ -507,25 +505,28 @@ void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
 		{
 			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 					ActiveMultiLineEditableTextBox.Pin())
+			{
 				MultiTextBox->ClearSelection();
-
+				MultiTextBox->SetIsReadOnly(false);
+				MultiTextBox->BeginSearch(FText::GetEmpty()); // Retrieve blinking
+				if (bKeepInputInNormalMode)
+				{
+					MultiTextBox->SetIsReadOnly(true);
+					ToggleCursorBlinkingOff();
+				}
+			}
 			break;
 		}
 	}
 }
 
-void UVimTextEditorSubsystem::ToggleCursorBlinkingOff(TSharedRef<SEditableTextBox> InEditableTextBox)
+void UVimTextEditorSubsystem::ToggleCursorBlinkingOff()
 {
-	FModifierKeysState ModKeysNone(false, false, false, false, false, false, false, false, false);
-	FModifierKeysState ModKeysShiftDown(
-		true, true, /* Shift Down */
-		false, false, false, false, false, false, false);
-
 	TSharedRef<FVimInputProcessor> Processor = FVimInputProcessor::Get();
 	FSlateApplication&			   SlateApp = FSlateApplication::Get();
 
-	Processor->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
-	if (InEditableTextBox->AnyTextSelected())
+	Processor->SimulateKeyPress(SlateApp, EKeys::Left, FUMInputHelpers::GetShiftDownModKeys());
+	if (DoesActiveEditableHasAnyTextSelected())
 	{
 		// Logger.Print("Has Text Selected", ELogVerbosity::Log, true);
 		// Simply compensate by moving one time to the right (opposite direction)
@@ -533,16 +534,6 @@ void UVimTextEditorSubsystem::ToggleCursorBlinkingOff(TSharedRef<SEditableTextBo
 	}
 	// else we're at the beginning of the input, and we can simply do nothing
 	// as the blinking stopped by this point.
-
-	// Keeping this for fast access in case we need some timers going
-	// FTimerHandle				   TimerHandle;
-	// TSharedRef<FTimerManager>	   TimerManager = GEditor->GetTimerManager();
-	// TimerManager->SetTimer(
-	// 	TimerHandle,
-	// 	[]() {
-
-	// 	},
-	// 	0.025f, false);
 }
 
 bool UVimTextEditorSubsystem::IsEditableTextWithDefaultBuffer()
@@ -576,7 +567,7 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 	{
 		if (bIsShiftDown)
 		{
-			if (bIsVisualMode)
+			if (bIsVisualMode || IsCurrentLineInMultiEmpty())
 				ClearTextSelection(false); // Simply clear and insert
 			else
 			{
@@ -591,12 +582,14 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 		{
 			if (bIsVisualMode)
 				return; // Do nothing. AFAIK that's Vim behavior.
-
-			// By default we're keeping the cursor to the right of the currently
-			// selected character. So we need to simulate one time to the left to
-			// mimic insert behavior (which puts the cursor *before* the currently
-			// selected character).
-			InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
+			else if (IsCurrentLineInMultiEmpty())
+				ClearTextSelection(false); // Simply clear and insert in place.
+			else
+				// By default we're keeping the cursor to the right of the curr
+				// selected character. So we need to simulate one time left to
+				// mimic insert behavior (which puts the cursor *before* the
+				// currently selected character).
+				InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
 		}
 	}
 	else // [a/A]ppend
@@ -640,14 +633,15 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 	{
 		InputProcessor->SimulateKeyPress(SlateApp, EKeys::End,
 			bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
 	}
 	else
 	{
 		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Home,
 			bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
 	}
-	if (!bIsVisualMode)
-		SetCursorSelectionToDefaultLocation(SlateApp);
 }
 
 void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp)
@@ -655,6 +649,140 @@ void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplicat
 	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
 	InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
 	InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+}
+
+bool UVimTextEditorSubsystem::DoesActiveEditableHasAnyTextSelected()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+				return EditTextBox->AnyTextSelected();
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+				return MultiTextBox->AnyTextSelected();
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::GetActiveEditableTextContent(FString& OutText)
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
+				OutText = EditTextBox->GetText().ToString();
+				return true;
+			}
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				OutText = MultiTextBox->GetText().ToString();
+				return true;
+			}
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::SetActiveEditableTextContent(const FText& InText)
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
+				EditTextBox->SetText(InText);
+				return true;
+			}
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				MultiTextBox->SetText(InText);
+				return true;
+			}
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::RetrieveActiveEditableCursorBlinking()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
+				EditTextBox->BeginSearch(FText::GetEmpty());
+				return true;
+			}
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				MultiTextBox->BeginSearch(FText::GetEmpty());
+				return true;
+			}
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::SelectAllActiveEditableText()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
+				EditTextBox->SelectAllText();
+				return true;
+			}
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				MultiTextBox->SelectAllText();
+				return true;
+			}
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::IsCurrentLineInMultiEmpty()
+{
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	{
+		if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+				ActiveMultiLineEditableTextBox.Pin())
+		{
+			FString CurrTextLine;
+			MultiTextBox->GetCurrentTextLine(CurrTextLine);
+			return CurrTextLine.IsEmpty();
+		}
+	}
+	return false;
 }
 
 void UVimTextEditorSubsystem::BindCommands()
