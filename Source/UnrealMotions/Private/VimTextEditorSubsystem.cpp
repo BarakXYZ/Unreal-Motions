@@ -448,7 +448,17 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 		// souldn't in Single-Line Editable? Not sure what's a better UX.
 		else
 		{
-			FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, ArrowKeyToSimulate, ModKeysShiftDown);
+			if (bIsVisualMode)
+				Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate, ModKeysShiftDown);
+			else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine) // Multi-Line Normal Mode
+			{
+				ClearTextSelection();
+				Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
+				Input->SimulateKeyPress(SlateApp, Left);
+				Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
+			}
+			else // Single-line -> Just go up or down
+				Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
 		}
 	}
 }
