@@ -55,8 +55,6 @@ void SVimConsole::Open()
 
 	FTimerHandle TimerHandle;
 	FUMFocusHelpers::SetWidgetFocusWithDelay(FoundEditable.ToSharedRef(), TimerHandle, 0.025f, false);
-	// FUMFocusHelpers::SetWidgetFocusWithDelay(FoundEditable.ToSharedRef(), TimerHandle, 2.25f, false);
-	// FUMFocusHelpers::SetWidgetFocusWithDelay(FoundEditable.ToSharedRef(), TimerHandle, 5.25f, false);
 }
 
 void SVimConsole::Construct(const FArguments& InArgs)
