@@ -1,5 +1,6 @@
 #include "VimTextEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Framework/Views/ITypedTableView.h"
 #include "UMSlateHelpers.h"
 #include "VimInputProcessor.h"
 #include "Widgets/InvalidateWidgetReason.h"
@@ -262,7 +263,7 @@ void UVimTextEditorSubsystem::SetNormalModeCursor()
 			RetrieveActiveEditableCursorBlinking();
 		}
 		else
-			ClearTextSelection(); // (2) Clear previous selection
+			ClearTextSelection(false /*Insert*/); // (2) Clear previous selection
 	}
 	else if (CurrentVimMode == EVimMode::Normal || CurrentVimMode == EVimMode::Visual)
 	{
@@ -378,36 +379,35 @@ bool UVimTextEditorSubsystem::IsDefaultEditableBuffer(const FString& InBuffer)
 void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
-	Logger.Print("Handle Vim Text Navigation", ELogVerbosity::Verbose, true);
-	if (CurrentVimMode != EVimMode::Insert)
+	if (CurrentVimMode == EVimMode::Insert
+		|| IsEditableTextWithDefaultBuffer()) // Preserve default buffer sel
+		return;
+
+	DebugMultiLineCursorLocation(true);
+
+	const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
+
+	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
+	FKey						   ArrowKeyToSimulate;
+	FUMInputHelpers::GetArrowKeyFromVimKey(InSequence.Last().Key, ArrowKeyToSimulate);
+	FModifierKeysState ModKeysShiftDown = FUMInputHelpers::GetShiftDownModKeys();
+	FKey			   Left = EKeys::Left;
+	FKey			   Right = EKeys::Right;
+
+	// NOTE:
+	// We're processing and simulating in a very specifc order because we need
+	// to have a determinstic placement for our cursor at any given time.
+	// We want to keep our cursor essentially always to the right of each
+	// character so we can handle beginning & end of line properly to maintain
+	// correct selection.
+	// Another small note is that simulating keys seems a bit loosy-goosy
+	// sometimes (for example, it seems like if we had another simulate left
+	// when going left, it won't really effect the selection?) But this combo
+	// below seems to work well for all tested cases.
+	if (ArrowKeyToSimulate == Left)
 	{
-		const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
-
-		if (IsEditableTextWithDefaultBuffer())
-			return; // Early return to preserve the default buffer selection.
-
-		TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
-		FKey						   ArrowKeyToSimulate;
-		FUMInputHelpers::GetArrowKeyFromVimKey(InSequence.Last().Key, ArrowKeyToSimulate);
-		FModifierKeysState ModKeysShiftDown = FUMInputHelpers::GetShiftDownModKeys();
-		FKey			   Left = EKeys::Left;
-		FKey			   Right = EKeys::Right;
-
-		// NOTE:
-		// We're processing and simulating in a very specifc order because we need
-		// to have a determinstic placement for our cursor at any given time.
-		// We want to keep our cursor essentially always to the right of each
-		// character so we can handle beginning & end of line properly to maintain
-		// correct selection.
-		// Another small note is that simulating keys seems a bit loosy-goosy
-		// sometimes (for example, it seems like if we had another simulate left
-		// when going left, it won't really effect the selection?) But this combo
-		// below seems to work well for all tested cases.
-		if (ArrowKeyToSimulate == Left)
+		if (!IsCurrentLineInMultiEmpty())
 		{
-			if (IsCurrentLineInMultiEmpty())
-				return;
-
 			if (!bIsVisualMode)
 			{
 				ClearTextSelection();
@@ -420,11 +420,11 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 				Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
 			}
 		}
-		else if (ArrowKeyToSimulate == Right)
+	}
+	else if (ArrowKeyToSimulate == Right)
+	{
+		if (!IsCurrentLineInMultiEmpty())
 		{
-			if (IsCurrentLineInMultiEmpty())
-				return;
-
 			if (!bIsVisualMode)
 			{
 				ClearTextSelection();
@@ -433,42 +433,23 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 			}
 			Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
 		}
-
-		// Up & Down: for now we can process them although maybe we
-		// souldn't in Single-Line Editable? Not sure what's a better UX.
-		else
-		{
-			if (bIsVisualMode)
-				Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate, ModKeysShiftDown);
-			else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine) // Multi-Line Normal Mode
-			{
-				Logger.Print("Non-Empty Multi-Line Navigation", ELogVerbosity::Log, true);
-				// ClearTextSelection();  // In this case, seems to not work well.
-
-				if (!IsCurrentLineInMultiEmpty())
-					// Break/Clear selection
-					Input->SimulateKeyPress(SlateApp, Right);
-
-				Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
-
-				// NOTE:
-				// We need to check if a line is empty in Multi-Line Editable Text:
-				// This is important because the default UE behavior is unlike Vim
-				// navigation-wise; When trying to go left or right, it will go down
-				// a line when there's an empty line, while in Vim it will stay in the
-				// same line.
-				// Also, when going Up & Down with empty lines in-between - it will
-				// mess-up navigation since we're doing some left & right simulations!
-				if (IsCurrentLineInMultiEmpty())
-					return;
-
-				Input->SimulateKeyPress(SlateApp, Left);
-				Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
-			}
-			else // Single-line -> Just go up or down
-				Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
-		}
 	}
+
+	// Up & Down: for now we can process them although maybe we
+	// souldn't in Single-Line Editable? Not sure what's a better UX.
+	else
+	{
+		if (bIsVisualMode)
+			Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate, ModKeysShiftDown);
+		else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine) // Multi-Line Normal Mode
+		{
+			NavigateUpDownMultiLine(SlateApp, ArrowKeyToSimulate);
+		}
+		else // Single-line -> Just go up or down
+			Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
+	}
+
+	DebugMultiLineCursorLocation(false);
 }
 
 void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
@@ -627,20 +608,67 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
 	const bool					   bIsVisualMode = CurrentVimMode == EVimMode::Visual;
 
-	// TODO: Add some more logic for Multi-Line Editable Text
-
-	if (bIsShiftDown)
+	if (bIsShiftDown) // Shift Down (i.e. Shift + G) ((i.e. Go to End))
 	{
-		InputProcessor->SimulateKeyPress(SlateApp, EKeys::End,
-			bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
-		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
-		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+		// MultiLine
+		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+		{
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				if (bIsVisualMode)
+				{
+					// TODO
+				}
+				else
+				{
+					MultiTextBox->GoTo(ETextLocation::EndOfDocument);
+					SetCursorSelectionToDefaultLocation(SlateApp);
+				}
+			}
+		}
+		else
+		{
+			InputProcessor->SimulateKeyPress(SlateApp, EKeys::End,
+				// If Visual Mode, we should simulate shift down to append
+				// to selection new text to the current selection
+				bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
+			SetCursorSelectionToDefaultLocation(SlateApp);
+		}
 	}
 	else
 	{
-		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Home,
-			bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
-		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+		// MultiLine
+		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+		{
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				if (bIsVisualMode)
+				{
+					// TODO
+				}
+				else
+				{
+					MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
+					FString CurrTextLine;
+					MultiTextBox->GetCurrentTextLine(CurrTextLine);
+					// if (!CurrTextLine.IsEmpty())
+					InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+				}
+			}
+		}
+		else // Single-Line
+		{
+			InputProcessor->SimulateKeyPress(SlateApp, EKeys::Home,
+				// If Visual Mode, we should simulate shift down to append
+				// to selection new text to the current selection
+				bIsVisualMode
+					? FUMInputHelpers::GetShiftDownModKeys()
+					: FModifierKeysState());
+			InputProcessor->SimulateKeyPress(
+				SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+		}
 	}
 }
 
@@ -764,6 +792,15 @@ bool UVimTextEditorSubsystem::SelectAllActiveEditableText()
 					ActiveMultiLineEditableTextBox.Pin())
 			{
 				MultiTextBox->SelectAllText();
+
+				// Useful functions
+				// MultiTextBox->InsertTextAtCursor();
+				// MultiTextBox->Refresh();
+				// MultiTextBox->ScrollTo();
+
+				// If no visual mode
+				// MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
+				// MultiTextBox->GoTo(ETextLocation::EndOfDocument);
 				return true;
 			}
 	}
@@ -780,6 +817,99 @@ bool UVimTextEditorSubsystem::IsCurrentLineInMultiEmpty()
 			FString CurrTextLine;
 			MultiTextBox->GetCurrentTextLine(CurrTextLine);
 			return CurrTextLine.IsEmpty();
+		}
+	}
+	return false;
+}
+
+void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
+{
+	if (EditableWidgetsFocusState != EUMEditableWidgetsFocusState::MultiLine)
+		return;
+
+	// Test if delay helps to get better info about empty lines
+	// **Seems to not help!
+	// if (!bIsPreNavigation && !bIgnoreDelay)
+	// {
+	// 	FTimerHandle TimerHandle;
+	// 	GEditor->GetTimerManager()->SetTimer(
+	// 		TimerHandle,
+	// 		[this]() {
+	// 			DebugMultiLineCursorLocation(false /*Pre*/, true /*IgnoreDelay*/);
+	// 		},
+	// 		0.25f, false);
+	// }
+
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+		const FString NavigationContext = bIsPreNavigation
+			? "Pre-Navigation"
+			: "Post-Navigation";
+
+		FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
+		if (!TextLocation.IsValid())
+			return;
+		int32 LineIndex = TextLocation.GetLineIndex();
+		int32 CharOffset = TextLocation.GetOffset();
+
+		// Debug if current line is empty
+		FString CurrLineText;
+		MultiTextBox->GetCurrentTextLine(CurrLineText);
+		FString CurrLineEmptyDebug = CurrLineText.IsEmpty() ? "TRUE" : "FALSE";
+
+		Logger.Print(FString::Printf(TEXT("MultiLine %s Location:\nLine Index: %d\nChar Offset: %d\nis Empty Line: %s Content: %s"),
+						 *NavigationContext, LineIndex,
+						 CharOffset, *CurrLineEmptyDebug, *CurrLineText),
+			ELogVerbosity::Log, true);
+	}
+}
+
+bool UVimTextEditorSubsystem::NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir)
+{
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	{
+		if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+				ActiveMultiLineEditableTextBox.Pin())
+		{
+			TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+			const bool					   bMoveUp = InKeyDir == EKeys::Up;
+
+			// Get current cursor location to determine how we should navigate
+			FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
+			if (!TextLocation.IsValid())
+				return false;
+
+			int32	CurrLineIndex = TextLocation.GetLineIndex();
+			int32	CharOffset = TextLocation.GetOffset();
+			FString StartLineText;
+			MultiTextBox->GetCurrentTextLine(StartLineText);
+
+			// if (CharOffset > 0) // Check if empty line
+			if (!StartLineText.IsEmpty()) // Check if empty line
+			{
+				// If there's any selection, break from it by simulating right
+				if (MultiTextBox->AnyTextSelected())
+					// ClearTextSelection();
+					InputProc->SimulateKeyPress(SlateApp, EKeys::Right);
+				InputProc->SimulateKeyPress(SlateApp, InKeyDir);
+				FString CurrLineText;
+
+				MultiTextBox->GetCurrentTextLine(CurrLineText);
+				if (!CurrLineText.IsEmpty())
+					InputProc->SimulateKeyPress(SlateApp, EKeys::Left);
+			}
+			else // Empty line handling
+			{
+				ClearTextSelection();
+				int32 NewLineIndex = bMoveUp
+					? CurrLineIndex - 1	 // Previous line index
+					: CurrLineIndex + 1; // Next line index
+				MultiTextBox->GoTo(FTextLocation(NewLineIndex, 1));
+			}
+
+			InputProc->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+			return true;
 		}
 	}
 	return false;
@@ -878,3 +1008,16 @@ void UVimTextEditorSubsystem::BindCommands()
 // Go to end and start of input Single-Line - V
 // Go to end and start of input Multi-Line -
 // Vim Navigation in Multi-Line Editable Text -
+/**
+ * Known issues:
+ * 1) Given the following rows of text:
+ * "I'm a short tex(t)"
+ * "I'm actually a longer t(e)xt"
+ * When trying to navigate between the (e) surrounded with parenthesis to the (t)
+ * above it, in Vim, when we try to go down again we expect our cursor to
+ * highlight (e), but without some custom tracking, in Unreal this is not what
+ * we'll get. The cursor will highlight the closest bottom character instead of
+ * smartly knowing from where we came.
+ *
+ * 2)
+ */

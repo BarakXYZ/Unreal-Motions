@@ -91,6 +91,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool IsCurrentLineInMultiEmpty();
 
+	void DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay = false);
+
+	bool NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir);
+
 	FUMLogger Logger;
 	EVimMode  CurrentVimMode{ EVimMode::Insert };
 	EVimMode  PreviousVimMode{ EVimMode::Insert };
