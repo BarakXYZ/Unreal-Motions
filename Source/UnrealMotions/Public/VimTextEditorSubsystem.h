@@ -100,6 +100,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool IsMultiLineCursorAtBeginningOfDocument();
 
+	bool IsMultiLineCursorAtEndOrBeginningOfLine();
+	bool IsMultiLineCursorAtEndOfLine();
+	bool IsMultiLineCursorAtBeginningOfLine();
+
 	FUMLogger Logger;
 	EVimMode  CurrentVimMode{ EVimMode::Insert };
 	EVimMode  PreviousVimMode{ EVimMode::Insert };

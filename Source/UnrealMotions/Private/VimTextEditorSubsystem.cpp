@@ -370,7 +370,7 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 		|| IsEditableTextWithDefaultBuffer()) // Preserve default buffer sel
 		return;
 
-	DebugMultiLineCursorLocation(true);
+	DebugMultiLineCursorLocation(true /*Pre-Navigation*/);
 
 	const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
 
@@ -395,6 +395,9 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	{
 		if (!IsCurrentLineInMultiEmpty())
 		{
+			if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine && IsMultiLineCursorAtBeginningOfLine())
+				return; // Shouldn't continue navigation per Vim rules
+
 			if (!bIsVisualMode)
 			{
 				ClearTextSelection();
@@ -410,6 +413,9 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	}
 	else if (ArrowKeyToSimulate == Right)
 	{
+		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine && IsMultiLineCursorAtEndOfLine())
+			return; // Shouldn't continue navigation per Vim rules
+
 		if (!IsCurrentLineInMultiEmpty())
 		{
 			if (!bIsVisualMode)
@@ -436,7 +442,7 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 			Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
 	}
 
-	DebugMultiLineCursorLocation(false);
+	DebugMultiLineCursorLocation(false /*Post-Navigation*/);
 }
 
 void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
@@ -791,10 +797,6 @@ bool UVimTextEditorSubsystem::SelectAllActiveEditableText()
 				// MultiTextBox->InsertTextAtCursor();
 				// MultiTextBox->Refresh();
 				// MultiTextBox->ScrollTo();
-
-				// If no visual mode
-				// MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
-				// MultiTextBox->GoTo(ETextLocation::EndOfDocument);
 				return true;
 			}
 	}
@@ -821,102 +823,90 @@ void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation
 	if (EditableWidgetsFocusState != EUMEditableWidgetsFocusState::MultiLine)
 		return;
 
-	// Test if delay helps to get better info about empty lines
-	// **Seems to not help!
-	// if (!bIsPreNavigation && !bIgnoreDelay)
-	// {
-	// 	FTimerHandle TimerHandle;
-	// 	GEditor->GetTimerManager()->SetTimer(
-	// 		TimerHandle,
-	// 		[this]() {
-	// 			DebugMultiLineCursorLocation(false /*Pre*/, true /*IgnoreDelay*/);
-	// 		},
-	// 		0.25f, false);
-	// }
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return;
 
-	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-			ActiveMultiLineEditableTextBox.Pin())
-	{
-		const FString NavigationContext = bIsPreNavigation
-			? "Pre-Navigation"
-			: "Post-Navigation";
+	const FString NavigationContext = bIsPreNavigation
+		? "Pre-Navigation"
+		: "Post-Navigation";
 
-		FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
-		if (!TextLocation.IsValid())
-			return;
-		int32 LineIndex = TextLocation.GetLineIndex();
-		int32 CharOffset = TextLocation.GetOffset();
+	FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
+	if (!TextLocation.IsValid())
+		return;
+	int32 LineIndex = TextLocation.GetLineIndex();
+	int32 CharOffset = TextLocation.GetOffset();
 
-		// Debug if current line is empty
-		FString CurrLineText;
-		MultiTextBox->GetCurrentTextLine(CurrLineText);
-		FString CurrLineEmptyDebug = CurrLineText.IsEmpty() ? "TRUE" : "FALSE";
+	// Debug if current line is empty
+	FString CurrLineText;
+	MultiTextBox->GetCurrentTextLine(CurrLineText);
+	FString CurrLineEmptyDebug = CurrLineText.IsEmpty() ? "TRUE" : "FALSE";
 
-		Logger.Print(FString::Printf(TEXT("MultiLine %s Location:\nLine Index: %d\nChar Offset: %d\nis Empty Line: %s Content: %s"),
-						 *NavigationContext, LineIndex,
-						 CharOffset, *CurrLineEmptyDebug, *CurrLineText),
-			ELogVerbosity::Log, true);
-	}
+	Logger.Print(FString::Printf(TEXT("MultiLine %s Location:\nLine Index: %d\nChar Offset: %d\nis Empty Line: %s Content: %s"),
+					 *NavigationContext, LineIndex,
+					 CharOffset, *CurrLineEmptyDebug, *CurrLineText),
+		ELogVerbosity::Log, true);
 }
 
 bool UVimTextEditorSubsystem::NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir)
 {
-	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-			ActiveMultiLineEditableTextBox.Pin())
-	{
-		TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-		const bool					   bMoveUp = InKeyDir == EKeys::Up;
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return false;
 
-		// Get current cursor location to determine how we should navigate
-		FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
-		if (!TextLocation.IsValid())
-			return false;
-		const int32 CurrLineIndex = TextLocation.GetLineIndex();
-		const int32 StartCharOffset = TextLocation.GetOffset();
-		FString		StartLineText;
-		MultiTextBox->GetCurrentTextLine(StartLineText);
-		const bool bStartLineEmpty = StartLineText.IsEmpty();
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+	const bool					   bMoveUp = InKeyDir == EKeys::Up;
 
-		ClearTextSelection();
-		const int32 NewLineIndex = bMoveUp
-			? CurrLineIndex - 1	 // Previous line index
-			: CurrLineIndex + 1; // Next line index
-		MultiTextBox->GoTo(FTextLocation(NewLineIndex, 0));
+	// Get current cursor location to determine how we should navigate
+	FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
+	if (!TextLocation.IsValid())
+		return false;
+	const int32 CurrLineIndex = TextLocation.GetLineIndex();
+	const int32 StartCharOffset = TextLocation.GetOffset();
+	FString		StartLineText;
+	MultiTextBox->GetCurrentTextLine(StartLineText);
+	const bool bStartLineEmpty = StartLineText.IsEmpty();
 
-		// Check if we've entered an empty line to determine proper movement
-		FString NewLineText;
-		MultiTextBox->GetCurrentTextLine(NewLineText);
-		if (NewLineText.IsEmpty())
-		{ // Empty Line Flow:
-			// This sequence of right then left+Shift here is important
-			// to both highlight the cursor yet stay in the empty line itself
-			// for further navigation
-			if (IsMultiLineCursorAtEndOfDocument(SlateApp, MultiTextBox.ToSharedRef()))
-				SetCursorSelectionToDefaultLocation(SlateApp,
-					true /*Right Align*/);
-			else
-				SetCursorSelectionToDefaultLocation(SlateApp,
-					false /*Left Align*/);
-		}
-		else // Non-empty lines
-		{
-			if (StartCharOffset > NewLineText.Len())
-			{
-				InputProc->SimulateKeyPress(SlateApp, EKeys::End);
-				SetCursorSelectionToDefaultLocation(SlateApp);
-			}
-			else
-			{
-				MultiTextBox->GoTo(FTextLocation(NewLineIndex, StartCharOffset));
-				if (bStartLineEmpty)
-					InputProc->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
-				else
-					SetCursorSelectionToDefaultLocation(SlateApp);
-			}
-		}
-		return true;
+	ClearTextSelection();
+	const int32 NewLineIndex = bMoveUp
+		? CurrLineIndex - 1	 // Previous line index
+		: CurrLineIndex + 1; // Next line index
+	MultiTextBox->GoTo(FTextLocation(NewLineIndex, 0));
+
+	// Check if we've entered an empty line to determine proper movement
+	FString NewLineText;
+	MultiTextBox->GetCurrentTextLine(NewLineText);
+	if (NewLineText.IsEmpty())
+	{ // Empty Line Flow:
+		// This sequence of right then left+Shift here is important
+		// to both highlight the cursor yet stay in the empty line itself
+		// for further navigation
+		if (IsMultiLineCursorAtEndOfDocument(SlateApp, MultiTextBox.ToSharedRef()))
+			SetCursorSelectionToDefaultLocation(SlateApp,
+				true /*Right Align*/);
+		else
+			SetCursorSelectionToDefaultLocation(SlateApp,
+				false /*Left Align*/);
 	}
-	return false;
+	else // Non-empty lines
+	{
+		if (StartCharOffset > NewLineText.Len())
+		{
+			InputProc->SimulateKeyPress(SlateApp, EKeys::End);
+			SetCursorSelectionToDefaultLocation(SlateApp);
+		}
+		else
+		{
+			MultiTextBox->GoTo(FTextLocation(NewLineIndex, StartCharOffset));
+			if (bStartLineEmpty)
+				InputProc->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+			else
+				SetCursorSelectionToDefaultLocation(SlateApp);
+		}
+	}
+	return true;
 }
 
 bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument()
@@ -951,27 +941,85 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(FSlateApplication
 
 bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfDocument()
 {
-	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-			ActiveMultiLineEditableTextBox.Pin())
-	{
-		// Get current text location
-		FTextLocation StartTextLocation = MultiTextBox->GetCursorLocation();
-		if (!StartTextLocation.IsValid())
-			return false;
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return false;
 
-		// Get beginning of document text location
-		MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
-		FTextLocation BeginningOfDocLocation = MultiTextBox->GetCursorLocation();
-		if (!BeginningOfDocLocation.IsValid())
-			return false;
+	// Get current text location
+	FTextLocation StartTextLocation = MultiTextBox->GetCursorLocation();
+	if (!StartTextLocation.IsValid())
+		return false;
 
-		// Return to the original cursor location
-		MultiTextBox->GoTo(StartTextLocation);
+	// Get beginning of document text location
+	MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
+	FTextLocation BeginningOfDocLocation = MultiTextBox->GetCursorLocation();
+	if (!BeginningOfDocLocation.IsValid())
+		return false;
 
-		// Check if start location == Beginning location
-		return StartTextLocation == BeginningOfDocLocation;
-	}
-	return false;
+	// Return to the original cursor location
+	MultiTextBox->GoTo(StartTextLocation);
+
+	// Check if start location == Beginning location
+	return StartTextLocation == BeginningOfDocLocation;
+}
+
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOrBeginningOfLine()
+{
+	return IsMultiLineCursorAtBeginningOfLine()
+		|| IsMultiLineCursorAtEndOfLine();
+}
+
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfLine()
+{
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return false;
+
+	if (IsCurrentLineInMultiEmpty())
+		return true;
+
+	// Get current text location
+	FTextLocation StartTextLocation = MultiTextBox->GetCursorLocation();
+	if (!StartTextLocation.IsValid())
+		return false;
+	const bool bWasAnyTextSelected = MultiTextBox->AnyTextSelected();
+	ClearTextSelection();
+
+	// Get End of Line text location
+	MultiTextBox->GoTo(ETextLocation::EndOfLine);
+	FTextLocation EndOfLineLocation = MultiTextBox->GetCursorLocation();
+	if (!EndOfLineLocation.IsValid())
+		return false;
+
+	// Return to the original cursor location
+	MultiTextBox->GoTo(StartTextLocation);
+	if (bWasAnyTextSelected)
+		SetCursorSelectionToDefaultLocation(FSlateApplication::Get());
+
+	// Check if start location == End of line location
+	return StartTextLocation == EndOfLineLocation;
+}
+
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfLine()
+{
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return false;
+
+	// Get current text location
+	FTextLocation StartTextLocation = MultiTextBox->GetCursorLocation();
+	if (!StartTextLocation.IsValid())
+		return false;
+	const int32 CursorOffset = StartTextLocation.GetOffset();
+
+	// NOTE:
+	// Because (in most cases) we align the cursor to the right,
+	// we should compensate (i.e. offset) by +1 to properly check if
+	// we're at the beginning of the line (as we will always be +1 of it)
+	return CursorOffset == 1 || CursorOffset == 0 /*Check 0 for safety too*/;
 }
 
 void UVimTextEditorSubsystem::BindCommands()
