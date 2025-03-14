@@ -36,25 +36,7 @@ void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
 	PreviousVimMode = CurrentVimMode;
 	CurrentVimMode = NewVimMode;
-
-	switch (CurrentVimMode)
-	{
-		case EVimMode::Insert:
-		{
-			UpdateEditables();
-			break;
-		}
-		case EVimMode::Normal:
-		{
-			UpdateEditables();
-			break;
-		}
-		case EVimMode::Visual:
-		{
-			UpdateEditables();
-			break;
-		}
-	}
+	UpdateEditables();
 }
 
 void UVimTextEditorSubsystem::RegisterSlateEvents()
@@ -190,14 +172,11 @@ void UVimTextEditorSubsystem::UpdateEditables()
 			break;
 
 		case EUMEditableWidgetsFocusState::SingleLine:
-			// SetCursorSingle();
 			SetNormalModeCursor();
 			ToggleReadOnlySingle();
-			Logger.Print("Handle Single-Line");
 			break;
 
 		case EUMEditableWidgetsFocusState::MultiLine:
-			// SetCursorMulti();
 			SetNormalModeCursor();
 			ToggleReadOnlyMulti();
 			break;
@@ -308,9 +287,15 @@ void UVimTextEditorSubsystem::SetNormalModeCursor()
 
 					ClearTextSelection();
 
-					// New method -> always keep cursor to the right of the
-					// selection.
-					SetCursorSelectionToDefaultLocation(SlateApp);
+					// Align cursor left or right depending on it's location
+					if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine
+						&& IsMultiLineCursorAtBeginningOfDocument())
+					{
+						SetCursorSelectionToDefaultLocation(SlateApp,
+							false /*Must Align Cursor to the Left*/);
+					}
+					else // Align cursor to the right in all other scenarios
+						SetCursorSelectionToDefaultLocation(SlateApp);
 				},
 				0.025f, false);
 		}
@@ -376,6 +361,8 @@ bool UVimTextEditorSubsystem::IsDefaultEditableBuffer(const FString& InBuffer)
 	return (InBuffer.Len() == 2 && InBuffer == "  ");
 }
 
+// TODO: In vim we should block navigation if reaching the end of the line
+// and trying to go left or right.
 void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
@@ -597,6 +584,7 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 	InputProcessor->SetVimMode(SlateApp, EVimMode::Insert);
 }
 
+// TODO: Update practice to conform with new methods for Multiline
 void UVimTextEditorSubsystem::GotoStartOrEnd(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
@@ -623,7 +611,7 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 				else
 				{
 					MultiTextBox->GoTo(ETextLocation::EndOfDocument);
-					SetCursorSelectionToDefaultLocation(SlateApp);
+					SetCursorSelectionToDefaultLocation(SlateApp /*RightAlign*/);
 				}
 			}
 		}
@@ -636,7 +624,7 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 			SetCursorSelectionToDefaultLocation(SlateApp);
 		}
 	}
-	else
+	else // gg -> Start of Document
 	{
 		// MultiLine
 		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
@@ -652,9 +640,7 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 				{
 					MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
 					FString CurrTextLine;
-					MultiTextBox->GetCurrentTextLine(CurrTextLine);
-					// if (!CurrTextLine.IsEmpty())
-					InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+					SetCursorSelectionToDefaultLocation(SlateApp, false /*Left Align*/);
 				}
 			}
 		}
@@ -672,11 +658,19 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 	}
 }
 
-void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp)
+void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight)
 {
 	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
-	InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
-	InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+	if (bAlignCursorRight)
+	{ // Right Align: for most cases
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+	}
+	else // Left Align: for end of document scenarios
+	{
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right);
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left, FUMInputHelpers::GetShiftDownModKeys());
+	}
 }
 
 bool UVimTextEditorSubsystem::DoesActiveEditableHasAnyTextSelected()
@@ -867,50 +861,115 @@ void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation
 
 bool UVimTextEditorSubsystem::NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir)
 {
-	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
 	{
-		if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-				ActiveMultiLineEditableTextBox.Pin())
-		{
-			TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-			const bool					   bMoveUp = InKeyDir == EKeys::Up;
+		TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+		const bool					   bMoveUp = InKeyDir == EKeys::Up;
 
-			// Get current cursor location to determine how we should navigate
-			FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
-			if (!TextLocation.IsValid())
-				return false;
+		// Get current cursor location to determine how we should navigate
+		FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
+		if (!TextLocation.IsValid())
+			return false;
+		const int32 CurrLineIndex = TextLocation.GetLineIndex();
+		const int32 StartCharOffset = TextLocation.GetOffset();
+		FString		StartLineText;
+		MultiTextBox->GetCurrentTextLine(StartLineText);
+		const bool bStartLineEmpty = StartLineText.IsEmpty();
 
-			int32	CurrLineIndex = TextLocation.GetLineIndex();
-			int32	CharOffset = TextLocation.GetOffset();
-			FString StartLineText;
-			MultiTextBox->GetCurrentTextLine(StartLineText);
+		ClearTextSelection();
+		const int32 NewLineIndex = bMoveUp
+			? CurrLineIndex - 1	 // Previous line index
+			: CurrLineIndex + 1; // Next line index
+		MultiTextBox->GoTo(FTextLocation(NewLineIndex, 0));
 
-			// if (CharOffset > 0) // Check if empty line
-			if (!StartLineText.IsEmpty()) // Check if empty line
-			{
-				// If there's any selection, break from it by simulating right
-				if (MultiTextBox->AnyTextSelected())
-					// ClearTextSelection();
-					InputProc->SimulateKeyPress(SlateApp, EKeys::Right);
-				InputProc->SimulateKeyPress(SlateApp, InKeyDir);
-				FString CurrLineText;
-
-				MultiTextBox->GetCurrentTextLine(CurrLineText);
-				if (!CurrLineText.IsEmpty())
-					InputProc->SimulateKeyPress(SlateApp, EKeys::Left);
-			}
-			else // Empty line handling
-			{
-				ClearTextSelection();
-				int32 NewLineIndex = bMoveUp
-					? CurrLineIndex - 1	 // Previous line index
-					: CurrLineIndex + 1; // Next line index
-				MultiTextBox->GoTo(FTextLocation(NewLineIndex, 1));
-			}
-
-			InputProc->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
-			return true;
+		// Check if we've entered an empty line to determine proper movement
+		FString NewLineText;
+		MultiTextBox->GetCurrentTextLine(NewLineText);
+		if (NewLineText.IsEmpty())
+		{ // Empty Line Flow:
+			// This sequence of right then left+Shift here is important
+			// to both highlight the cursor yet stay in the empty line itself
+			// for further navigation
+			if (IsMultiLineCursorAtEndOfDocument(SlateApp, MultiTextBox.ToSharedRef()))
+				SetCursorSelectionToDefaultLocation(SlateApp,
+					true /*Right Align*/);
+			else
+				SetCursorSelectionToDefaultLocation(SlateApp,
+					false /*Left Align*/);
 		}
+		else // Non-empty lines
+		{
+			if (StartCharOffset > NewLineText.Len())
+			{
+				InputProc->SimulateKeyPress(SlateApp, EKeys::End);
+				SetCursorSelectionToDefaultLocation(SlateApp);
+			}
+			else
+			{
+				MultiTextBox->GoTo(FTextLocation(NewLineIndex, StartCharOffset));
+				if (bStartLineEmpty)
+					InputProc->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+				else
+					SetCursorSelectionToDefaultLocation(SlateApp);
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument()
+{
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+		return IsMultiLineCursorAtEndOfDocument(FSlateApplication::Get(), MultiTextBox.ToSharedRef());
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(FSlateApplication& SlateApp, const TSharedRef<SMultiLineEditableTextBox> InMultiLine)
+{
+	// Get current text location
+	FTextLocation StartTextLocation = InMultiLine->GetCursorLocation();
+	if (!StartTextLocation.IsValid())
+		return false;
+
+	// Get end of document text location
+	InMultiLine->GoTo(ETextLocation::EndOfDocument);
+	FTextLocation EndOfDocLocation = InMultiLine->GetCursorLocation();
+	if (!EndOfDocLocation.IsValid())
+		return false;
+
+	// Return to the original cursor location
+	InMultiLine->GoTo(StartTextLocation);
+
+	// Check if start location == end location
+	return StartTextLocation == EndOfDocLocation;
+}
+
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfDocument()
+{
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+		// Get current text location
+		FTextLocation StartTextLocation = MultiTextBox->GetCursorLocation();
+		if (!StartTextLocation.IsValid())
+			return false;
+
+		// Get beginning of document text location
+		MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
+		FTextLocation BeginningOfDocLocation = MultiTextBox->GetCursorLocation();
+		if (!BeginningOfDocLocation.IsValid())
+			return false;
+
+		// Return to the original cursor location
+		MultiTextBox->GoTo(StartTextLocation);
+
+		// Check if start location == Beginning location
+		return StartTextLocation == BeginningOfDocLocation;
 	}
 	return false;
 }
@@ -929,7 +988,6 @@ void UVimTextEditorSubsystem::BindCommands()
 	// H: Go to Left Pin / Node:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::TextEditing,
-		// { FInputChord(EModifierKey::Shift, EKeys::H) },
 		{ EKeys::H },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
@@ -937,7 +995,6 @@ void UVimTextEditorSubsystem::BindCommands()
 	// J: Go Down to Next Pin:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::TextEditing,
-		// { FInputChord(EModifierKey::Shift, EKeys::J) },
 		{ EKeys::J },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
@@ -945,7 +1002,6 @@ void UVimTextEditorSubsystem::BindCommands()
 	// K: Go Up to Previous Pin:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::TextEditing,
-		// { FInputChord(EModifierKey::Shift, EKeys::K) },
 		{ EKeys::K },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
@@ -953,7 +1009,6 @@ void UVimTextEditorSubsystem::BindCommands()
 	// L: Go to Right Pin / Node:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMContextBinding::TextEditing,
-		// { FInputChord(EModifierKey::Shift, EKeys::L) },
 		{ EKeys::L },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);

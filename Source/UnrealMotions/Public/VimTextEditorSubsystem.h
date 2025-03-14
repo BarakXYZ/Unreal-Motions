@@ -85,7 +85,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void GotoStartOrEnd(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	void SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp);
+	void SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight = true);
 
 	bool DoesActiveEditableHasAnyTextSelected();
 
@@ -94,6 +94,11 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay = false);
 
 	bool NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir);
+
+	bool IsMultiLineCursorAtEndOfDocument();
+	bool IsMultiLineCursorAtEndOfDocument(FSlateApplication& SlateApp, const TSharedRef<SMultiLineEditableTextBox> InMultiLine);
+
+	bool IsMultiLineCursorAtBeginningOfDocument();
 
 	FUMLogger Logger;
 	EVimMode  CurrentVimMode{ EVimMode::Insert };
