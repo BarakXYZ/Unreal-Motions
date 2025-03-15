@@ -59,6 +59,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void SetNormalModeCursor();
 
 	bool GetActiveEditableTextContent(FString& OutText);
+	bool GetSelectedText(FString& OutText);
+
+	bool IsCursorAlignedRight(FSlateApplication& SlateApp);
 
 	bool SetActiveEditableTextContent(const FText& InText);
 
@@ -82,8 +85,20 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void InsertAndAppend(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	//////////////////////////////////////////////////////////////////////////
+	// ~			GoTo Start or End (gg + Shift + G)				~
+	//
 	void GotoStartOrEnd(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void HandleGoToStartMultiLine(FSlateApplication& SlateApp);
+	void HandleGoToEndMultiLine(FSlateApplication& SlateApp);
+
+	void HandleGoToStartSingleLine(FSlateApplication& SlateApp);
+	void HandleGoToEndSingleLine(FSlateApplication& SlateApp);
+	//
+	//
+	//////////////////////////////////////////////////////////////////////////
 
 	void SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight = true);
 
