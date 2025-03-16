@@ -101,6 +101,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void HandleGoToStartMultiLine(FSlateApplication& SlateApp);
 	void HandleGoToEndMultiLine(FSlateApplication& SlateApp);
+	void HandleVisualModeGoToStartOrEndMultiLine(FSlateApplication& SlateApp, bool bGoToStart);
 
 	void HandleGoToStartSingleLine(FSlateApplication& SlateApp);
 	void HandleGoToEndSingleLine(FSlateApplication& SlateApp);

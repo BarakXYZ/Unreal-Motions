@@ -701,9 +701,11 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 	if (IsEditableTextWithDefaultBuffer())
 		return;
 
+	const bool bIsMultiline = EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine;
+
 	if (InKeyEvent.IsShiftDown()) // Shift Down (i.e. Shift + G -> aka GoTo End)
 	{
-		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+		if (bIsMultiline)
 			HandleGoToEndMultiLine(SlateApp);
 
 		else // Single-Line
@@ -711,7 +713,7 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 	}
 	else // gg -> GoTo Start
 	{
-		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+		if (bIsMultiline)
 			HandleGoToStartMultiLine(SlateApp);
 
 		else // Single-Line
@@ -724,36 +726,21 @@ void UVimTextEditorSubsystem::HandleGoToEndMultiLine(FSlateApplication& SlateApp
 	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 		ActiveMultiLineEditableTextBox.Pin();
 	if (!MultiTextBox.IsValid())
-		return;
+		return; // Bail if invalid Multiline Widget
 
 	if (CurrentVimMode == EVimMode::Visual)
-	{
-		FTextLocation StartCursorLocation = MultiTextBox->GetCursorLocation();
-		if (!StartCursorLocation.IsValid())
-			return;
+		HandleVisualModeGoToStartOrEndMultiLine(SlateApp, false /*Go-To-End*/);
 
-		MultiTextBox->GoTo(ETextLocation::EndOfDocument);
-		FTextLocation EndCursorLocation = MultiTextBox->GetCursorLocation();
-		MultiTextBox->GoTo(StartCursorLocation);
-		SetCursorSelectionToDefaultLocation(SlateApp);
-
-		if (!EndCursorLocation.IsValid()) // Bail
-			return;
-
-		TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-		FModifierKeysState			   ShiftDownMod = FUMInputHelpers::GetShiftDownModKeys();
-		const int32					   StartToEndLineDelta =
-			EndCursorLocation.GetLineIndex() - StartCursorLocation.GetLineIndex()
-			+ 1; // Going one extra to cover the last line when it's not empty
-
-		for (int32 i{ 0 }; i < StartToEndLineDelta; ++i)
-			InputProc->SimulateKeyPress(SlateApp, EKeys::Down, ShiftDownMod);
-	}
-	else
+	else // Normal Mode
 	{
 		MultiTextBox->GoTo(ETextLocation::EndOfDocument);
 		SetCursorSelectionToDefaultLocation(SlateApp /*RightAlign*/);
 	}
+
+	// TODO:
+	// There are a few bugs that we should take care of:
+	// 1. In Normal & Visual Mode, when trying to go up after going to end, we're
+	// skipping the one before last line.
 }
 
 void UVimTextEditorSubsystem::HandleGoToStartMultiLine(FSlateApplication& SlateApp)
@@ -764,9 +751,8 @@ void UVimTextEditorSubsystem::HandleGoToStartMultiLine(FSlateApplication& SlateA
 		return;
 
 	if (CurrentVimMode == EVimMode::Visual)
-	{
-		// TODO
-	}
+		HandleVisualModeGoToStartOrEndMultiLine(SlateApp, true /*Go-To-Start*/);
+
 	else
 	{
 		MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
@@ -775,26 +761,55 @@ void UVimTextEditorSubsystem::HandleGoToStartMultiLine(FSlateApplication& SlateA
 	}
 }
 
+void UVimTextEditorSubsystem::HandleVisualModeGoToStartOrEndMultiLine(FSlateApplication& SlateApp, bool bGoToStart)
+{
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+	const FModifierKeysState	   ShiftDownMod = FUMInputHelpers::GetShiftDownModKeys();
+	const FKey					   NavDir = bGoToStart ? EKeys::Up : EKeys::Down;
+
+	// We should stop when the selection isn't changing anymore, which is
+	// an indication that we've reached the end of the document.
+	// Until then, we can Shift + Down to continue selecting lines downwards.
+	FString SelectedText = "";
+	GetSelectedText(SelectedText);
+	int32 SelectionSize = 0;
+	do
+	{
+		SelectionSize = SelectedText.Len();
+		InputProc->SimulateKeyPress(SlateApp, NavDir, ShiftDownMod);
+		GetSelectedText(SelectedText);
+	}
+	while (SelectionSize != SelectedText.Len());
+}
+
 void UVimTextEditorSubsystem::HandleGoToEndSingleLine(FSlateApplication& SlateApp)
 {
+	const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
+
 	FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::End,
 		// If Visual Mode, we should simulate shift down to append
 		// to selection new text to the current selection
-		CurrentVimMode == EVimMode::Visual ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
-	SetCursorSelectionToDefaultLocation(SlateApp);
+		bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
+
+	if (!bIsVisualMode)
+		SetCursorSelectionToDefaultLocation(SlateApp);
 }
 
 void UVimTextEditorSubsystem::HandleGoToStartSingleLine(FSlateApplication& SlateApp)
 {
+	const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
+
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
 	InputProc->SimulateKeyPress(SlateApp, EKeys::Home,
 		// If Visual Mode, we should simulate shift down to append
 		// to selection new text to the current selection
-		CurrentVimMode == EVimMode::Visual
+		bIsVisualMode
 			? FUMInputHelpers::GetShiftDownModKeys()
 			: FModifierKeysState());
-	InputProc->SimulateKeyPress(
-		SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+
+	if (!bIsVisualMode)
+		InputProc->SimulateKeyPress(
+			SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
 }
 
 void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight)
@@ -1010,6 +1025,8 @@ void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation
 		ELogVerbosity::Log, true);
 }
 
+// TODO: Refactor this function (i.e. break it down to smaller functions) and
+// fix bugs when navigating to and from end of document.
 bool UVimTextEditorSubsystem::NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir)
 {
 	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
