@@ -401,23 +401,32 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 
 			if (bIsVisualMode)
 			{
+				switch (GetSelectionState())
+				{
+					case (EUMSelectionState::None):
+					{
+						SetCursorSelectionToDefaultLocation(SlateApp);
+						break;
+					}
+					case (EUMSelectionState::OneChar):
+					{
+						// We will need to align left to retain the anchor
+						// selection and also highlight the next left char.
+						// Thus, we're breaking, then aligning left, then
+						// moving to the next char.
+						if (IsCursorAlignedRight(SlateApp))
+						{
+							ClearTextSelection();
+							Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
+						}
+						break;
+					}
+					default:
+						break;
+				}
 				Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
-				// FString SelectedText;
-				// if (!GetSelectedText(SelectedText))
-				// 	return;
-				// if (SelectedText.Len() > 1)
-				// {
-				// 	Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
-				// }
-				// else
-				// {
-				// 	ClearTextSelection(); // Break from current selection
-				// 	Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
-				// 	if (!IsMultiLineCursorAtBeginningOfLine())
-				// 		Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
-				// }
 			}
-			else
+			else // Normal Mode
 			{
 				ClearTextSelection(); // Break from current selection
 
@@ -445,6 +454,32 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 				ClearTextSelection();					  // Break from curr sel
 				Input->SimulateKeyPress(SlateApp, Right); // GoTo next char
 				Input->SimulateKeyPress(SlateApp, Left);  // Prep right alignment
+			}
+			else
+			{
+				switch (GetSelectionState())
+				{
+					case (EUMSelectionState::None):
+					{
+						SetCursorSelectionToDefaultLocation(SlateApp);
+						break;
+					}
+					case (EUMSelectionState::OneChar):
+					{
+						// We will need to align right to retain the anchor
+						// selection and also highlight the next left right.
+						// Thus, we're breaking, then aligning right, then
+						// moving to the next char.
+						if (!IsCursorAlignedRight(SlateApp))
+						{
+							ClearTextSelection();
+							Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
+						}
+						break;
+					}
+					default:
+						break;
+				}
 			}
 			Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown); // Sel
 		}
@@ -1116,6 +1151,21 @@ bool UVimTextEditorSubsystem::IsCursorAlignedRight(FSlateApplication& SlateApp)
 	VimProc->SimulateKeyPress(SlateApp, EKeys::Left, FUMInputHelpers::GetShiftDownModKeys());
 
 	return NewSelText.Len() > OriginSelText.Len();
+}
+
+EUMSelectionState UVimTextEditorSubsystem::GetSelectionState()
+{
+	FString SelectedText;
+	if (!GetSelectedText(SelectedText))
+		return EUMSelectionState::None;
+
+	else if (SelectedText.IsEmpty())
+		return EUMSelectionState::None;
+
+	else if (SelectedText.Len() == 1)
+		return EUMSelectionState::OneChar;
+
+	return EUMSelectionState::ManyChars;
 }
 
 void UVimTextEditorSubsystem::BindCommands()

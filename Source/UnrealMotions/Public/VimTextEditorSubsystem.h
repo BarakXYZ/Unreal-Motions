@@ -15,6 +15,13 @@ enum class EUMEditableWidgetsFocusState : uint8
 	MultiLine
 };
 
+enum class EUMSelectionState : uint8
+{
+	None,
+	OneChar,
+	ManyChars
+};
+
 /**
  *
  */
@@ -118,6 +125,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool IsMultiLineCursorAtEndOrBeginningOfLine();
 	bool IsMultiLineCursorAtEndOfLine();
 	bool IsMultiLineCursorAtBeginningOfLine();
+
+	EUMSelectionState GetSelectionState();
 
 	FUMLogger Logger;
 	EVimMode  CurrentVimMode{ EVimMode::Insert };
