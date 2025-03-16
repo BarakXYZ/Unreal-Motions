@@ -96,9 +96,6 @@ void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 		case EVimMode::Normal:
 		{
 			// Logger.Print("Vim Mode Changed: Normal Mode", ELogVerbosity::Verbose, true);
-			if (PreviousVimMode == EVimMode::Visual
-				&& FUMSlateHelpers::IsVisualTextSelected(SlateApp))
-				FVimInputProcessor::SimulateKeyPress(SlateApp, EKeys::Escape);
 
 			UMGenericAppMessageHandler->ToggleBlockAllCharInput(true);
 			FUMSlateHelpers::UpdateTreeViewSelectionOnExitVisualMode(

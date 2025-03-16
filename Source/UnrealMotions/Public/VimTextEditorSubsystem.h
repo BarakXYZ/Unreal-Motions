@@ -60,6 +60,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void UpdateEditables();
 
+	void ToggleReadOnly();
 	void ToggleReadOnlySingle();
 	void ToggleReadOnlyMulti();
 

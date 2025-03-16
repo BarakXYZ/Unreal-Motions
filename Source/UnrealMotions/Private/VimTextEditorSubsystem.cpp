@@ -173,11 +173,26 @@ void UVimTextEditorSubsystem::UpdateEditables()
 
 		case EUMEditableWidgetsFocusState::SingleLine:
 			SetNormalModeCursor();
-			ToggleReadOnlySingle();
 			break;
 
 		case EUMEditableWidgetsFocusState::MultiLine:
 			SetNormalModeCursor();
+			break;
+	}
+}
+
+void UVimTextEditorSubsystem::ToggleReadOnly()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break;
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			ToggleReadOnlySingle();
+			break;
+
+		case EUMEditableWidgetsFocusState::MultiLine:
 			ToggleReadOnlyMulti();
 			break;
 	}
@@ -214,7 +229,7 @@ void UVimTextEditorSubsystem::ToggleReadOnlyMulti()
 	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 			ActiveMultiLineEditableTextBox.Pin())
 	{
-		MultiTextBox->SetIsReadOnly(CurrentVimMode == EVimMode::Normal);
+		MultiTextBox->SetIsReadOnly(CurrentVimMode != EVimMode::Insert);
 		// MultiTextBox->SetTextBoxBackgroundColor(
 		// 	FSlateColor(FLinearColor::Black));
 		// MultiTextBox->SetReadOnlyForegroundColor(
@@ -243,62 +258,94 @@ void UVimTextEditorSubsystem::SetNormalModeCursor()
 		}
 		else
 			ClearTextSelection(false /*Insert*/); // (2) Clear previous selection
+
+		ToggleReadOnly();
+		return;
 	}
-	else if (CurrentVimMode == EVimMode::Normal || CurrentVimMode == EVimMode::Visual)
+
+	// Normal & Visual Mode:
+
+	// 1) If empty; set default dummy buffer ("  ") for visualization & select it:
+	if (TextContent.IsEmpty())
 	{
-		// 1) If empty; set default dummy buffer ("  ") for visualization & select it:
-		if (TextContent.IsEmpty())
-		{
-			SetActiveEditableTextContent(FText::FromString("  "));
+		SetActiveEditableTextContent(FText::FromString("  "));
 
-			SelectAllActiveEditableText();
-			// NOTE:
-			// There's a slight delay that occurs sometimes when focusing
-			// for example on the finder in the Content Browser.
-			// This delay is important to set the text properly.
-			FTimerHandle TimerHandle;
-			GEditor->GetTimerManager()->SetTimer(
-				TimerHandle, [this]() {
-					SelectAllActiveEditableText();
-				},
-				0.025f, false);
-		}
+		SelectAllActiveEditableText();
+		// NOTE:
+		// There's a slight delay that occurs sometimes when focusing
+		// for example on the finder in the Content Browser.
+		// This delay is important to set the text properly.
+		FTimerHandle TimerHandle;
+		GEditor->GetTimerManager()->SetTimer(
+			TimerHandle, [this]() {
+				ToggleReadOnly();
+				SelectAllActiveEditableText();
+			},
+			0.025f, false);
+	}
 
-		// 2) There's 1 custom CHAR in buffer; so we can just select all.
-		else if (TextContent.Len() == 1)
-			SelectAllActiveEditableText();
+	// 2) There's 1 custom CHAR in buffer; so we can just select all.
+	else if (TextContent.Len() == 1)
+	{
+		ToggleReadOnly();
+		SelectAllActiveEditableText();
+	}
 
-		// 3) There are multiple custom CHARS, potentially words, etc.
-		else
-		{
-			// Again delaying the processing as it seems to be needed in order
-			// to process correctly
-			FTimerHandle TimerHandle;
-			GEditor->GetTimerManager()->SetTimer(
-				TimerHandle,
-				[this]() {
-					FSlateApplication& SlateApp = FSlateApplication::Get();
+	// 3) There are multiple custom chars, potentially words, etc.
+	else
+	{
+		// Again delaying the processing as it seems to be needed in order
+		// to process correctly
+		FTimerHandle TimerHandle;
+		GEditor->GetTimerManager()->SetTimer(
+			TimerHandle,
+			[this]() {
+				FSlateApplication& SlateApp = FSlateApplication::Get();
 
-					// This is important in order to mitigate a potential
-					// Stack Overflow that seems to occur in Preferences
-					// SearchBox
-					if (SlateApp.IsProcessingInput())
-						return;
+				// This is important in order to mitigate a potential
+				// Stack Overflow that seems to occur in Preferences
+				// SearchBox
+				if (SlateApp.IsProcessingInput())
+					return;
 
-					ClearTextSelection();
+				switch (GetSelectionState())
+				{
+					case (EUMSelectionState::None):
+						break;
 
-					// Align cursor left or right depending on it's location
-					if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine
-						&& IsMultiLineCursorAtBeginningOfDocument())
+					case (EUMSelectionState::OneChar):
+						return; // No need to do anything
+					//
+					case (EUMSelectionState::ManyChars):
 					{
-						SetCursorSelectionToDefaultLocation(SlateApp,
-							false /*Must Align Cursor to the Left*/);
+						if ((!IsCurrentLineInMultiEmpty()
+								|| EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
+							&& !IsCursorAlignedRight(SlateApp))
+						{
+							ClearTextSelection();
+							ToggleReadOnly();
+
+							FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+
+							return;
+						}
 					}
-					else // Align cursor to the right in all other scenarios
-						SetCursorSelectionToDefaultLocation(SlateApp);
-				},
-				0.025f, false);
-		}
+				}
+
+				ClearTextSelection();
+				ToggleReadOnly();
+
+				// Align cursor left or right depending on it's location
+				if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine
+					&& IsMultiLineCursorAtBeginningOfDocument())
+				{
+					SetCursorSelectionToDefaultLocation(SlateApp,
+						false /*Must Align Cursor to the Left*/);
+				}
+				else // Align cursor to the right in all other scenarios
+					SetCursorSelectionToDefaultLocation(SlateApp);
+			},
+			0.025f, false);
 	}
 }
 
