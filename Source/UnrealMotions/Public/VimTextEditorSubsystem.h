@@ -119,14 +119,20 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir);
 
+	bool IsMultiLineCursorAtBeginningOfDocument();
+
 	bool IsMultiLineCursorAtEndOfDocument();
 	bool IsMultiLineCursorAtEndOfDocument(FSlateApplication& SlateApp, const TSharedRef<SMultiLineEditableTextBox> InMultiLine);
-
-	bool IsMultiLineCursorAtBeginningOfDocument();
 
 	bool IsMultiLineCursorAtEndOrBeginningOfLine();
 	bool IsMultiLineCursorAtEndOfLine();
 	bool IsMultiLineCursorAtBeginningOfLine();
+
+	bool IsCursorAtEndOfLine(FSlateApplication& SlateApp);
+	bool IsCursorAtEndOfLineSingle(FSlateApplication& SlateApp);
+	bool IsCursorAtEndOfLineMulti(FSlateApplication& SlateApp);
+
+	void SwitchInsertToNormalMultiLine(FSlateApplication& SlateApp);
 
 	EUMSelectionState GetSelectionState();
 

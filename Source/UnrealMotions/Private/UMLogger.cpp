@@ -70,6 +70,13 @@ void FUMLogger::ToggleNotifications(
 }
 
 void FUMLogger::Print(
+	const FString& Message,
+	bool		   bPushNotify)
+{
+	Print(Message, ELogVerbosity::Log, bPushNotify);
+}
+
+void FUMLogger::Print(
 	const FString&			  Message,
 	const ELogVerbosity::Type Verbosity,
 	bool					  bPushNotify,

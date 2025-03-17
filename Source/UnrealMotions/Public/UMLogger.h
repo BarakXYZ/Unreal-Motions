@@ -36,6 +36,10 @@ public:
 		float					  Size = 1.5f,
 		const int32				  Id = -1);
 
+	void Print(
+		const FString& Message,
+		bool		   bPushNotify);
+
 	FColor GetVerbosityColor(ELogVerbosity::Type Verbosity);
 
 	void ConstructDivider();
