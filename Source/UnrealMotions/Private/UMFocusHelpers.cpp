@@ -140,7 +140,7 @@ void FUMFocusHelpers::HandleWidgetExecutionWithDelay(FSlateApplication& SlateApp
 
 void FUMFocusHelpers::ClickSButton(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
-	if (UUMFocuserEditorSubsystem::CurrentContext == EUMContextBinding::Generic)
+	if (UUMFocuserEditorSubsystem::CurrentContext == EUMBindingContext::Generic)
 		// Pulling focus first to trigger widget registration
 		SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
 	TSharedRef<SButton> AsButton = StaticCastSharedRef<SButton>(InWidget);

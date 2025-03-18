@@ -11,7 +11,7 @@
 
 DECLARE_DELEGATE_RetVal_TwoParams(bool, FUMOnWindowAction, const TSharedRef<FGenericWindow>&, EWindowAction::Type);
 
-DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnBindingContextChanged, EUMContextBinding /* New Context */, const TSharedRef<SWidget> /* New Widget */);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnBindingContextChanged, EUMBindingContext /* New Context */, const TSharedRef<SWidget> /* New Widget */);
 
 /**
  *
@@ -250,7 +250,7 @@ public:
 	FDelegateHandle			   DelegateHandle_OnTabForegrounded;
 	FUMOnBindingContextChanged OnBindingContextChanged;
 
-	static EUMContextBinding CurrentContext;
+	static EUMBindingContext CurrentContext;
 
 	FTimerHandle TimerHandleNewWidgetTracker;
 	FTimerHandle TimerHandleNewMinorTabTracker;

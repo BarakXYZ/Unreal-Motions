@@ -17,7 +17,7 @@
 
 // DEFINE_LOG_CATEGORY_STATIC(UMFocuserEditorSubsystem, NoLogging, All); // Prod
 DEFINE_LOG_CATEGORY_STATIC(UMFocuserEditorSubsystem, Log, All); // Dev
-EUMContextBinding UUMFocuserEditorSubsystem::CurrentContext{ EUMContextBinding::Generic };
+EUMBindingContext UUMFocuserEditorSubsystem::CurrentContext{ EUMBindingContext::Generic };
 
 bool UUMFocuserEditorSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
@@ -385,11 +385,11 @@ void UUMFocuserEditorSubsystem::HandleOnWindowChanged(
 
 void UUMFocuserEditorSubsystem::UpdateBindingContext(const TSharedRef<SWidget> NewWidget)
 {
-	static TMap<FString, EUMContextBinding> ContextByWidgetType = {
-		{ "SGraphPanel", EUMContextBinding::GraphEditor },
+	static TMap<FString, EUMBindingContext> ContextByWidgetType = {
+		{ "SGraphPanel", EUMBindingContext::GraphEditor },
 
-		{ "SEditableText", EUMContextBinding::TextEditing },
-		{ "SMultiLineEditableText", EUMContextBinding::TextEditing },
+		{ "SEditableText", EUMBindingContext::TextEditing },
+		{ "SMultiLineEditableText", EUMBindingContext::TextEditing },
 	};
 
 	// Cover both specific and base type as a fallback
@@ -397,7 +397,7 @@ void UUMFocuserEditorSubsystem::UpdateBindingContext(const TSharedRef<SWidget> N
 	const FString BaseType = NewWidget->GetWidgetClass().GetWidgetType().ToString();
 
 	// Firstly search by specific type
-	if (EUMContextBinding* Context = ContextByWidgetType.Find(SpecificType))
+	if (EUMBindingContext* Context = ContextByWidgetType.Find(SpecificType))
 	{
 		if (CurrentContext != *Context)
 		{
@@ -412,7 +412,7 @@ void UUMFocuserEditorSubsystem::UpdateBindingContext(const TSharedRef<SWidget> N
 	}
 
 	// Then by base type
-	if (EUMContextBinding* Context = ContextByWidgetType.Find(BaseType))
+	if (EUMBindingContext* Context = ContextByWidgetType.Find(BaseType))
 	{
 		if (CurrentContext != *Context)
 		{
@@ -423,10 +423,10 @@ void UUMFocuserEditorSubsystem::UpdateBindingContext(const TSharedRef<SWidget> N
 	}
 	else // Fallback to generic
 	{
-		if (CurrentContext != EUMContextBinding::Generic)
+		if (CurrentContext != EUMBindingContext::Generic)
 		{
-			FVimInputProcessor::Get()->SetCurrentContext(EUMContextBinding::Generic);
-			CurrentContext = EUMContextBinding::Generic;
+			FVimInputProcessor::Get()->SetCurrentContext(EUMBindingContext::Generic);
+			CurrentContext = EUMBindingContext::Generic;
 			OnBindingContextChanged.Broadcast(CurrentContext, NewWidget);
 		}
 	}
@@ -1345,7 +1345,7 @@ void UUMFocuserEditorSubsystem::BindVimCommands()
 
 	// /* Jump List Navigation: In */
 	// VimInputProcessor->AddKeyBinding_KeyEvent(
-	// 	EUMContextBinding::Generic,
+	// 	EUMBindingContext::Generic,
 	// 	{ FInputChord(EModifierKey::Control, EKeys::I) },
 	// 	WeakFocuserSubsystem,
 	// 	// &FListNavigationManager::JumpListNavigation);
@@ -1355,7 +1355,7 @@ void UUMFocuserEditorSubsystem::BindVimCommands()
 
 	// /* Jump List Navigation: Out */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::I) },
 		// WeakFocuserSubsystem,
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
@@ -1364,7 +1364,7 @@ void UUMFocuserEditorSubsystem::BindVimCommands()
 
 	// /* Jump List Navigation: Out */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::O) },
 		// WeakFocuserSubsystem,
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {

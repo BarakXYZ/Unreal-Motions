@@ -77,49 +77,49 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	/* Append after the last selected node */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::A },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNode);
 
 	/* Insert before the last selected node */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::I },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNode);
 
 	/* Append after last node in the chain */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Shift, EKeys::A) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNode);
 
 	/* Insert before the last node in the chain */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Shift, EKeys::I) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNode);
 
 	/** Zoom-In -> Ctrl + '=' ('+') */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Control, EKeys::Equals) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ZoomGraph);
 
 	/** Zoom-Out -> Ctrl + '-' */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Control, EKeys::Hyphen) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ZoomGraph);
 
 	/** Zoom-to-Fit, center selected nodes -> 'zz' */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Control, EKeys::Hyphen) },
 		{ EKeys::Z, EKeys::Z },
 		WeakGraphSubsystem,
@@ -127,14 +127,14 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	/** Zoom-to-Fit, all nodes in graph -> Shift+'Z' */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Shift, EKeys::Z) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ZoomToFit);
 
 	/** Debug */
 	VimInputProcessor->AddKeyBinding_NoParam(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::SpaceBar, EKeys::D, EKeys::G },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DebugNodeAndPinsTypes);
@@ -155,7 +155,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	// H: Pan Left in Graph Panel
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Alt, EKeys::H) },
 		{ FInputChord(EModifierKey::Shift, EKeys::H) },
 		WeakGraphSubsystem,
@@ -163,7 +163,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	// J: Pan Down in Graph Panel
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Alt, EKeys::J) },
 		{ FInputChord(EModifierKey::Shift, EKeys::J) },
 		WeakGraphSubsystem,
@@ -171,7 +171,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	// K: Pan Up in Graph Panel
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Alt, EKeys::K) },
 		{ FInputChord(EModifierKey::Shift, EKeys::K) },
 		WeakGraphSubsystem,
@@ -179,7 +179,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	// L: Pan Right in Graph Panel
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Alt, EKeys::L) },
 		{ FInputChord(EModifierKey::Shift, EKeys::L) },
 		WeakGraphSubsystem,
@@ -189,7 +189,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	//
 	// H: Go to Left Pin / Node:
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::H) },
 		{ EKeys::H },
 		WeakGraphSubsystem,
@@ -197,7 +197,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	// J: Go Down to Next Pin:
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::J) },
 		{ EKeys::J },
 		WeakGraphSubsystem,
@@ -205,7 +205,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	// K: Go Up to Previous Pin:
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::K) },
 		{ EKeys::K },
 		WeakGraphSubsystem,
@@ -213,7 +213,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	// L: Go to Right Pin / Node:
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::L) },
 		{ EKeys::L },
 		WeakGraphSubsystem,
@@ -223,7 +223,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// If currently in an output pin, go to same node's input pin. (1 move)
 	// Else if currently in Input Pin, go to previous node's input pin. (2 moves)
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::B },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
@@ -231,7 +231,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// 'w':
 	// Go to next node's input pin (no matter if currently in In|Out Pin)
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::W },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
@@ -240,7 +240,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// If currently in an Input pin, go to same node's Output pin. (1 move)
 	// Else if currently in an Output Pin; go to previous node's Output pin. (2 moves)
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::E },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
@@ -248,49 +248,49 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// 'ge':
 	// Go to previous node's Output pin (no matter if currently in In|Out Pin)
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::G, EKeys::E },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
 	// gg: Go to first node in chain from pin.
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::G, EKeys::G },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
 	// Shift+G: Go to last node in chain from pin.
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Shift, EKeys::G) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
 	// gh: Go to first Pin in Node.
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::G, EKeys::K },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
 	// gj: Go to last Pin in Node.
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::G, EKeys::J },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
 	// Ctrl+u: Go 3 Pins Up.
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Control, EKeys::U) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
 
 	// Ctrl+d: Go 3 Pins Down.
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Control, EKeys::D) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::HandleVimNodeNavigation);
@@ -300,20 +300,20 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// Delete Node while retaining natural selection */
 	//
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::Delete },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DeleteNode);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		// { FInputChord(EModifierKey::Shift, EKeys::X) },
 		{ EKeys::X },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DeleteNode);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::D },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DeleteNode);
@@ -326,14 +326,14 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 	// By default they seem to reset node selection (which is unwanted)
 	/** U: Undo Wrapper to retain selection and natural feel */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::U },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::UndoRedo);
 
 	/** Control + R: Redo Wrapper to retain selection and natural feel */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Control, EKeys::R) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::UndoRedo);
@@ -342,14 +342,14 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	/** 'Enter': Add a new node to the currently highlighted pin */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::Enter },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::AddNodeToHighlightedPin);
 
 	/** Shift + 'Enter': Access the clickable within the pin field */
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ FInputChord(EModifierKey::Shift, EKeys::Enter) },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::ClickOnInteractableWithinPin);
@@ -361,7 +361,7 @@ void UVimGraphEditorSubsystem::BindVimCommands()
 
 	// [D]ebug [S]elected [N]ode
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::GraphEditor,
+		EUMBindingContext::GraphEditor,
 		{ EKeys::SpaceBar, EKeys::D, EKeys::S, EKeys::N },
 		WeakGraphSubsystem,
 		&UVimGraphEditorSubsystem::DebugSelectedNode);
@@ -1236,7 +1236,7 @@ TSharedPtr<SGraphEditor> UVimGraphEditorSubsystem::GetGraphEditor(const TSharedR
 }
 
 void UVimGraphEditorSubsystem::HandleOnContextBindingChanged(
-	EUMContextBinding NewContext, const TSharedRef<SWidget> NewWidget)
+	EUMBindingContext NewContext, const TSharedRef<SWidget> NewWidget)
 {
 	CurrentContext = NewContext;
 	return;
@@ -1244,7 +1244,7 @@ void UVimGraphEditorSubsystem::HandleOnContextBindingChanged(
 	// DEPRECATED
 	UnhookFromActiveGraphPanel(); // Deprecated?
 
-	if (NewContext == EUMContextBinding::GraphEditor
+	if (NewContext == EUMBindingContext::GraphEditor
 		&& NewWidget->GetTypeAsString().Equals("SGraphPanel"))
 	{
 		TSharedRef<SGraphPanel> GraphPanel = StaticCastSharedRef<SGraphPanel>(NewWidget);
@@ -1315,9 +1315,6 @@ void UVimGraphEditorSubsystem::UnhookFromActiveGraphPanel()
 	OnGraphChangedHandler.Reset();
 }
 
-// TODO: Work on diagonal motion support:
-// Potentially an array of currently pressed keys, which will determine the
-// offset.
 void UVimGraphEditorSubsystem::HandleGraphPanelPanning(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
@@ -2393,7 +2390,7 @@ void UVimGraphEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 	PreviousVimMode = CurrentVimMode;
 	CurrentVimMode = NewVimMode;
 
-	if (CurrentContext != EUMContextBinding::GraphEditor)
+	if (CurrentContext != EUMBindingContext::GraphEditor)
 		return;
 
 	switch (CurrentVimMode)

@@ -697,37 +697,37 @@ void UVimNavigationEditorSubsystem::BindVimCommands()
 		MakeWeakObjectPtr(this);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::H) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::NavigatePanelTabs);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::J) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::NavigatePanelTabs);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::K) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::NavigatePanelTabs);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Control, EKeys::L) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::NavigatePanelTabs);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::F },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::FlashHintMarkers);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::F) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow);

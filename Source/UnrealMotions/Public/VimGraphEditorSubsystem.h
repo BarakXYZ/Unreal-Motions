@@ -116,7 +116,7 @@ public:
 
 	void MoveConnectedNodesToRight(UEdGraphNode* StartNode, float OffsetX);
 
-	void HandleOnContextBindingChanged(EUMContextBinding NewContext, const TSharedRef<SWidget> NewWidget);
+	void HandleOnContextBindingChanged(EUMBindingContext NewContext, const TSharedRef<SWidget> NewWidget);
 
 	void HandleOnGraphChanged(const FEdGraphEditAction& InAction);
 	void HandleOnSelectionChanged(const FGraphPanelSelectionSet& GraphPanelSelectionSet);
@@ -173,7 +173,7 @@ public:
 	FUMLogger					Logger;
 	int32						NodeCounter;
 	EVimMode					PreviousVimMode{ EVimMode::Insert }, CurrentVimMode{ EVimMode::Insert };
-	EUMContextBinding			CurrentContext{ EUMContextBinding::Generic };
+	EUMBindingContext			CurrentContext{ EUMBindingContext::Generic };
 	FDelegateHandle				DelegateHandle_OnKeyUpEvent;
 	FTimerHandle				TimerHandle_GraphPanning;
 	TArray<FKey>				PressedPanningKeys;

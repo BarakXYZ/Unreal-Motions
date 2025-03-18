@@ -36,7 +36,7 @@ void FVimInputProcessor::Tick(
 }
 
 TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::GetOrCreateTrieRoot(
-	EUMContextBinding Context)
+	EUMBindingContext Context)
 {
 	// Try to find an existing root
 	if (TSharedPtr<FKeyChordTrieNode>* FoundRoot = ContextTrieRoots.Find(Context))
@@ -71,7 +71,7 @@ TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::FindOrCreateTrieNode(
 	return Current;
 }
 
-bool FVimInputProcessor::TraverseTrieForContext(EUMContextBinding InContext, TSharedPtr<FKeyChordTrieNode>& OutNode) const
+bool FVimInputProcessor::TraverseTrieForContext(EUMBindingContext InContext, TSharedPtr<FKeyChordTrieNode>& OutNode) const
 {
 	OutNode = nullptr;
 
@@ -113,9 +113,9 @@ bool FVimInputProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const F
 	bool bUsedGeneric = false;
 	if (!bContextHasPartialOrFull)
 	{
-		if (CurrentContext != EUMContextBinding::Generic)
+		if (CurrentContext != EUMBindingContext::Generic)
 		{
-			bUsedGeneric = TraverseTrieForContext(EUMContextBinding::Generic, MatchedNode);
+			bUsedGeneric = TraverseTrieForContext(EUMBindingContext::Generic, MatchedNode);
 		}
 
 		// If neither the current context nor the Generic context recognized it (even as partial), reset
@@ -188,7 +188,7 @@ void FVimInputProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
 
 // 1) No-Parameter
 void FVimInputProcessor::AddKeyBinding_NoParam(
-	EUMContextBinding		   Context,
+	EUMBindingContext		   Context,
 	const TArray<FInputChord>& Sequence,
 	TFunction<void()>		   Callback)
 {
@@ -201,7 +201,7 @@ void FVimInputProcessor::AddKeyBinding_NoParam(
 
 // 2) Single FKeyEvent param
 void FVimInputProcessor::AddKeyBinding_KeyEvent(
-	EUMContextBinding											   Context,
+	EUMBindingContext											   Context,
 	const TArray<FInputChord>&									   Sequence,
 	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback)
 {
@@ -214,7 +214,7 @@ void FVimInputProcessor::AddKeyBinding_KeyEvent(
 
 // 3) TArray<FInputChord> param
 void FVimInputProcessor::AddKeyBinding_Sequence(
-	EUMContextBinding		   Context,
+	EUMBindingContext		   Context,
 	const TArray<FInputChord>& Sequence,
 	TFunction<void(FSlateApplication& SlateApp,
 		const TArray<FInputChord>&)>
@@ -230,25 +230,25 @@ void FVimInputProcessor::AddKeyBinding_Sequence(
 void FVimInputProcessor::RegisterDefaultKeyBindings()
 {
 	// For convenience, ensure the Generic root exists
-	GetOrCreateTrieRoot(EUMContextBinding::Generic);
+	GetOrCreateTrieRoot(EUMBindingContext::Generic);
 
 	// Example default key bindings in Generic:
 	AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::I },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		});
 
 	AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::V) },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		});
 
 	AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::V },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);

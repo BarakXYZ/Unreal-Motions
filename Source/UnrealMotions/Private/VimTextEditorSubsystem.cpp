@@ -1376,28 +1376,28 @@ void UVimTextEditorSubsystem::BindCommands()
 	//
 	// H: Go to Left Pin / Node:
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ EKeys::H },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
 
 	// J: Go Down to Next Pin:
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ EKeys::J },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
 
 	// K: Go Up to Previous Pin:
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ EKeys::K },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
 
 	// L: Go to Right Pin / Node:
 	VimInputProcessor->AddKeyBinding_Sequence(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ EKeys::L },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
@@ -1407,25 +1407,25 @@ void UVimTextEditorSubsystem::BindCommands()
 	// [i]nsert & [a]ppend + [I]nsert & [A]ppend (start / end of line)
 	//
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ EKeys::I },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::InsertAndAppend);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ EKeys::A },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::InsertAndAppend);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::I) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::InsertAndAppend);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::A) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::InsertAndAppend);
@@ -1434,13 +1434,13 @@ void UVimTextEditorSubsystem::BindCommands()
 
 	// gg & Shift+g -> Goto to End & Start of line
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ EKeys::G, EKeys::G },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::GotoStartOrEnd);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::TextEditing,
+		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::G) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::GotoStartOrEnd);

@@ -21,7 +21,7 @@ enum class EVimMode : uint8
 };
 
 UENUM(BlueprintType)
-enum class EUMContextBinding : uint8
+enum class EUMBindingContext : uint8
 {
 	TextEditing	   UMETA(DisplayName = "Text Editing"), // Both Multi & Single
 	GraphEditor	   UMETA(DisplayName = "Graph Editor"),
@@ -116,7 +116,7 @@ private:
 	 * @param OutNode - The node matched if partial/full success
 	 * @return True if there's at least a partial match, false otherwise
 	 */
-	bool TraverseTrieForContext(EUMContextBinding InContext, TSharedPtr<FKeyChordTrieNode>& OutNode) const;
+	bool TraverseTrieForContext(EUMBindingContext InContext, TSharedPtr<FKeyChordTrieNode>& OutNode) const;
 
 public:
 	/**
@@ -168,12 +168,12 @@ public:
 	/**
 	 * Set the current context (e.g. called from OnFocusChanged or wherever you decide).
 	 */
-	void SetCurrentContext(EUMContextBinding NewContext)
+	void SetCurrentContext(EUMBindingContext NewContext)
 	{
 		CurrentContext = NewContext;
 	}
 
-	EUMContextBinding GetCurrentContext() const
+	EUMBindingContext GetCurrentContext() const
 	{
 		return CurrentContext;
 	}
@@ -185,7 +185,7 @@ public:
 	/**
 	 * High-level function to get or create the trie root for a given context.
 	 */
-	TSharedPtr<FKeyChordTrieNode> GetOrCreateTrieRoot(EUMContextBinding Context);
+	TSharedPtr<FKeyChordTrieNode> GetOrCreateTrieRoot(EUMBindingContext Context);
 
 	/**
 	 * Low-level helper: finds or creates a trie node (descendant of the given root) for a sequence.
@@ -211,7 +211,7 @@ public:
 	 * @param Callback - Function to execute when the sequence is matched
 	 */
 	void AddKeyBinding_NoParam(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TFunction<void()>		   Callback);
 
@@ -223,7 +223,7 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)())
@@ -247,7 +247,7 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)())
@@ -271,7 +271,7 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		ObjectType*				   Obj,
 		void (ObjectType::*MemberFunc)())
@@ -302,7 +302,7 @@ public:
 	 * @param Callback - Function to execute when the sequence is matched
 	 */
 	void AddKeyBinding_KeyEvent(
-		EUMContextBinding											   Context,
+		EUMBindingContext											   Context,
 		const TArray<FInputChord>&									   Sequence,
 		TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback);
 
@@ -316,7 +316,7 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		void (*MemberFunc)(FSlateApplication&, const FKeyEvent&))
 	{
@@ -341,7 +341,7 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(
@@ -367,7 +367,7 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(
@@ -395,7 +395,7 @@ public:
 	 * @param Callback - Function to execute when the sequence is matched
 	 */
 	void AddKeyBinding_Sequence(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TFunction<void(
 			FSlateApplication& SlateApp, const TArray<FInputChord>&)>
@@ -409,7 +409,7 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_Sequence(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(
@@ -435,7 +435,7 @@ public:
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_Sequence(
-		EUMContextBinding		   Context,
+		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(
@@ -575,10 +575,10 @@ private:
 	TSharedPtr<FKeyChordTrieNode> TrieRoot = nullptr; // Root node (unique)
 
 	// Map of roots, one per context
-	TMap<EUMContextBinding, TSharedPtr<FKeyChordTrieNode>> ContextTrieRoots;
+	TMap<EUMBindingContext, TSharedPtr<FKeyChordTrieNode>> ContextTrieRoots;
 
 	// Which context are we currently in?
-	EUMContextBinding CurrentContext = EUMContextBinding::Generic;
+	EUMBindingContext CurrentContext = EUMBindingContext::Generic;
 
 	/** Static instance management */
 	static bool bNativeInputHandling;

@@ -382,47 +382,47 @@ void UUMTabNavigatorEditorSubsystem::BindVimCommands()
 		MakeWeakObjectPtr(this);
 
 	VimInputProcessor->AddKeyBinding_NoParam(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::G, EKeys::T },
 		[this]() { CycleTabs(true, true); });
 
 	VimInputProcessor->AddKeyBinding_NoParam(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::G, FInputChord(EModifierKey::Shift, EKeys::T) },
 		[this]() { CycleTabs(true, false); });
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Zero },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::One },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Two },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Three },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::M, EKeys::T, EKeys::W, EKeys::Four },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabToWindow);
 
 	VimInputProcessor->AddKeyBinding_NoParam(
-		EUMContextBinding::Generic,
+		EUMBindingContext::Generic,
 		{ EKeys::M, EKeys::T, EKeys::O },
 		WeakTabSubsystem,
 		&UUMTabNavigatorEditorSubsystem::MoveActiveTabOut);
