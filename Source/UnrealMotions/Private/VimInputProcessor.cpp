@@ -1,3 +1,4 @@
+// VimInputProcessor.cpp
 #include "VimInputProcessor.h"
 #include "Editor.h"
 #include "Engine/GameInstance.h"
@@ -35,18 +36,27 @@ void FVimInputProcessor::Tick(
 	// 	FUMLogger::AddDebugMessage(FocusedWidget->GetTypeAsString());
 }
 
-TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::GetOrCreateTrieRoot(
-	EUMBindingContext Context)
+TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::GetOrCreateTrieRoot(EUMBindingContext Context, EVimMode InVimMode)
 {
-	// Try to find an existing root
-	if (TSharedPtr<FKeyChordTrieNode>* FoundRoot = ContextTrieRoots.Find(Context))
+	// Try to find an existing map for the context
+	TMap<EVimMode, TSharedPtr<FKeyChordTrieNode>>* VimMap = ContextTrieRoots.Find(Context);
+	if (VimMap)
 	{
-		return *FoundRoot;
+		// Try to find an existing root for the specific Vim mode
+		if (TSharedPtr<FKeyChordTrieNode>* FoundRoot = VimMap->Find(InVimMode))
+		{
+			return *FoundRoot;
+		}
+		// Otherwise, create a new one for this Vim mode
+		TSharedPtr<FKeyChordTrieNode> NewRoot = MakeShared<FKeyChordTrieNode>();
+		VimMap->Add(InVimMode, NewRoot);
+		return NewRoot;
 	}
-
-	// Otherwise, create a new one
-	TSharedPtr<FKeyChordTrieNode> NewRoot = MakeShared<FKeyChordTrieNode>();
-	ContextTrieRoots.Add(Context, NewRoot);
+	// If no map for the context exists, create one
+	TMap<EVimMode, TSharedPtr<FKeyChordTrieNode>> NewVimMap;
+	TSharedPtr<FKeyChordTrieNode>				  NewRoot = MakeShared<FKeyChordTrieNode>();
+	NewVimMap.Add(InVimMode, NewRoot);
+	ContextTrieRoots.Add(Context, NewVimMap);
 	return NewRoot;
 }
 
@@ -71,18 +81,33 @@ TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::FindOrCreateTrieNode(
 	return Current;
 }
 
-bool FVimInputProcessor::TraverseTrieForContext(EUMBindingContext InContext, TSharedPtr<FKeyChordTrieNode>& OutNode) const
+TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::FindOrCreateTrieNode(const TArray<FInputChord>& Sequence)
+{
+	// Default to Generic context and Any Vim mode
+	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(EUMBindingContext::Generic, EVimMode::Any);
+	return FindOrCreateTrieNode(Root, Sequence);
+}
+
+bool FVimInputProcessor::TraverseTrieForContextAndVim(EUMBindingContext InContext, EVimMode InVimMode, TSharedPtr<FKeyChordTrieNode>& OutNode) const
 {
 	OutNode = nullptr;
 
-	// If there's no trie root for this context yet, no match is possible
+	// If there's no trie roots for this context, no match is possible
 	if (!ContextTrieRoots.Contains(InContext))
 	{
 		return false;
 	}
 
-	// Get the root node of this specified context
-	TSharedPtr<FKeyChordTrieNode> Root = ContextTrieRoots[InContext];
+	const TMap<EVimMode, TSharedPtr<FKeyChordTrieNode>>& VimMap = ContextTrieRoots[InContext];
+
+	// If there's no trie root for this Vim mode in the context, no match
+	if (!VimMap.Contains(InVimMode))
+	{
+		return false;
+	}
+
+	// Get the root node for this context and Vim mode
+	TSharedPtr<FKeyChordTrieNode> Root = VimMap[InVimMode];
 	TSharedPtr<FKeyChordTrieNode> CurrentNode = Root;
 
 	// Walk the sequence
@@ -105,25 +130,34 @@ bool FVimInputProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const F
 	// 1) Add this key to current sequence
 	CurrentSequence.Add(FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent));
 
-	// 2) Try to traverse the trie for the current context first
+	// 2) Try to traverse the trie in the following order:
+	//    (CurrentContext, VimMode) -> (CurrentContext, Any) ->
+	//    (Generic, VimMode) -> (Generic, Any)
 	TSharedPtr<FKeyChordTrieNode> MatchedNode;
-	bool						  bContextHasPartialOrFull = TraverseTrieForContext(CurrentContext, MatchedNode);
+	bool						  bMatchFound = false;
 
-	// 3) If that fails, fallback to Generic
-	bool bUsedGeneric = false;
-	if (!bContextHasPartialOrFull)
+	if (TraverseTrieForContextAndVim(CurrentContext, VimMode, MatchedNode))
 	{
-		if (CurrentContext != EUMBindingContext::Generic)
-		{
-			bUsedGeneric = TraverseTrieForContext(EUMBindingContext::Generic, MatchedNode);
-		}
+		bMatchFound = true;
+	}
+	else if (TraverseTrieForContextAndVim(CurrentContext, EVimMode::Any, MatchedNode))
+	{
+		bMatchFound = true;
+	}
+	else if (TraverseTrieForContextAndVim(EUMBindingContext::Generic, VimMode, MatchedNode))
+	{
+		bMatchFound = true;
+	}
+	else if (TraverseTrieForContextAndVim(EUMBindingContext::Generic, EVimMode::Any, MatchedNode))
+	{
+		bMatchFound = true;
+	}
 
-		// If neither the current context nor the Generic context recognized it (even as partial), reset
-		if (!bUsedGeneric)
-		{
-			ResetSequence(SlateApp);
-			return false;
-		}
+	// If no match was found, reset and return false
+	if (!bMatchFound)
+	{
+		ResetSequence(SlateApp);
+		return false;
 	}
 
 	// 4) If we have a matched node, see if it has a callback
@@ -190,9 +224,10 @@ void FVimInputProcessor::ResetBufferVisualizer(FSlateApplication& SlateApp)
 void FVimInputProcessor::AddKeyBinding_NoParam(
 	EUMBindingContext		   Context,
 	const TArray<FInputChord>& Sequence,
-	TFunction<void()>		   Callback)
+	TFunction<void()>		   Callback,
+	EVimMode				   InVimMode)
 {
-	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context);
+	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, InVimMode);
 	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
 
 	Node->NoParamCallback = MoveTemp(Callback);
@@ -203,9 +238,10 @@ void FVimInputProcessor::AddKeyBinding_NoParam(
 void FVimInputProcessor::AddKeyBinding_KeyEvent(
 	EUMBindingContext											   Context,
 	const TArray<FInputChord>&									   Sequence,
-	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback)
+	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback,
+	EVimMode													   InVimMode)
 {
-	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context);
+	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, InVimMode);
 	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
 
 	Node->KeyEventCallback = MoveTemp(Callback);
@@ -218,9 +254,10 @@ void FVimInputProcessor::AddKeyBinding_Sequence(
 	const TArray<FInputChord>& Sequence,
 	TFunction<void(FSlateApplication& SlateApp,
 		const TArray<FInputChord>&)>
-		Callback)
+			 Callback,
+	EVimMode InVimMode)
 {
-	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context);
+	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, InVimMode);
 	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
 
 	Node->SequenceCallback = MoveTemp(Callback);
@@ -229,8 +266,8 @@ void FVimInputProcessor::AddKeyBinding_Sequence(
 
 void FVimInputProcessor::RegisterDefaultKeyBindings()
 {
-	// For convenience, ensure the Generic root exists
-	GetOrCreateTrieRoot(EUMBindingContext::Generic);
+	// For convenience, ensure the Generic root exists (for default Vim mode Any)
+	GetOrCreateTrieRoot(EUMBindingContext::Generic, EVimMode::Any);
 
 	// Example default key bindings in Generic:
 	AddKeyBinding_KeyEvent(
@@ -238,21 +275,24 @@ void FVimInputProcessor::RegisterDefaultKeyBindings()
 		{ EKeys::I },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
-		});
+		},
+		EVimMode::Any);
 
 	AddKeyBinding_KeyEvent(
 		EUMBindingContext::Generic,
 		{ FInputChord(EModifierKey::Shift, EKeys::V) },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
-		});
+		},
+		EVimMode::Any);
 
 	AddKeyBinding_KeyEvent(
 		EUMBindingContext::Generic,
 		{ EKeys::V },
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
-		});
+		},
+		EVimMode::Any);
 }
 
 bool FVimInputProcessor::HandleKeyDownEvent(
@@ -361,28 +401,25 @@ bool FVimInputProcessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp,
 	// 	// AttDesc.DefaultSortOrder();
 	// 	FString WidgetName = FocusedWidget->ToString();
 	// 	FString DebugStr = FString::Printf(TEXT("Widget Type: %s, Widget Name: %s"), *WidgetType.ToString(), *WidgetName);
-
+	//
 	// 	return false;
 	// }
 	return false;
 }
 
-bool FVimInputProcessor::HandleMouseButtonUpEvent(
-	FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
+bool FVimInputProcessor::HandleMouseButtonUpEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
 	// Logger.Print("Mouse Button Up!", ELogVerbosity::Log, true);
 	return false;
 }
 
-bool FVimInputProcessor::HandleMouseMoveEvent(
-	FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
+bool FVimInputProcessor::HandleMouseMoveEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
 	// Logger.Print("Mouse Button Move!", ELogVerbosity::Log, true);
 	return false;
 }
 
-bool FVimInputProcessor::TrackCountPrefix(
-	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+bool FVimInputProcessor::TrackCountPrefix(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// Skip processing if either:
 	// 1. This isn't the first key and we're not already in counting mode
@@ -418,8 +455,7 @@ bool FVimInputProcessor::TrackCountPrefix(
 	return false;
 }
 
-void FVimInputProcessor::SwitchVimModes(
-	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+void FVimInputProcessor::SwitchVimModes(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	const FKey& KeyPressed = InKeyEvent.GetKey();
 
@@ -435,8 +471,7 @@ void FVimInputProcessor::SwitchVimModes(
 	}
 }
 
-bool FVimInputProcessor::IsSimulateEscapeKey(
-	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+bool FVimInputProcessor::IsSimulateEscapeKey(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// NOTE:
 	// Because Escape is used to *enter* Vim Normal mode; We'll use Shift+Escape
@@ -492,8 +527,7 @@ void FVimInputProcessor::UnregisterOnVimModeChanged(const void* CallbackOwner)
 	OnVimModeChanged.RemoveAll(CallbackOwner);
 }
 
-FKeyEvent FVimInputProcessor::GetKeyEventFromKey(
-	const FKey& InKey, bool bIsShiftDown)
+FKeyEvent FVimInputProcessor::GetKeyEventFromKey(const FKey& InKey, bool bIsShiftDown)
 {
 	const FModifierKeysState ModKeys(bIsShiftDown, bIsShiftDown,
 		false, false, false, false, false, false, false);
@@ -504,8 +538,7 @@ FKeyEvent FVimInputProcessor::GetKeyEventFromKey(
 		0, false, 0, 0);
 }
 
-void FVimInputProcessor::SimulateMultiTabPresses(
-	FSlateApplication& SlateApp, int32 TimesToRepeat)
+void FVimInputProcessor::SimulateMultiTabPresses(FSlateApplication& SlateApp, int32 TimesToRepeat)
 {
 	static const FKeyEvent TabEvent(
 		FKey(EKeys::Tab),
@@ -538,8 +571,7 @@ void FVimInputProcessor::SimulateKeyPress(
 	SlateApp.ProcessKeyUpEvent(SimulatedEvent);
 }
 
-void FVimInputProcessor::CheckCreateBufferVisualizer(
-	FSlateApplication& SlateApp, const FKey& InKey)
+void FVimInputProcessor::CheckCreateBufferVisualizer(FSlateApplication& SlateApp, const FKey& InKey)
 {
 	// We probably want to show the buffer not only upon Leaderkey actually
 	// if (InKey == EKeys::SpaceBar && CurrentBuffer.IsEmpty())

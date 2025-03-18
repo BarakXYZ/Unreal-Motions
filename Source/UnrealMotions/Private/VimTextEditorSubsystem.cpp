@@ -1444,6 +1444,22 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EModifierKey::Shift, EKeys::G) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::GotoStartOrEnd);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D },
+		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+			Logger.Print("'D' from Text Editing -> Normal Mode", true);
+		},
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D },
+		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
+			Logger.Print("'D' from Text Editing -> Visual Mode", true);
+		},
+		EVimMode::Visual);
 }
 
 // TODO:

@@ -1,3 +1,4 @@
+// VimInputProcessor.h
 #pragma once
 
 #include "Framework/Application/IInputProcessor.h"
@@ -113,12 +114,13 @@ private:
 	bool ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	/**
-	 * Tries to traverse the trie for the given context using the CurrentSequence.
+	 * Tries to traverse the trie for the given context and Vim mode using the CurrentSequence.
 	 * @param InContext - The context in which to try a match
+	 * @param InVimMode - The Vim mode for which to try a match
 	 * @param OutNode - The node matched if partial/full success
 	 * @return True if there's at least a partial match, false otherwise
 	 */
-	bool TraverseTrieForContext(EUMBindingContext InContext, TSharedPtr<FKeyChordTrieNode>& OutNode) const;
+	bool TraverseTrieForContextAndVim(EUMBindingContext InContext, EVimMode InVimMode, TSharedPtr<FKeyChordTrieNode>& OutNode) const;
 
 public:
 	/**
@@ -185,9 +187,9 @@ public:
 	//
 
 	/**
-	 * High-level function to get or create the trie root for a given context.
+	 * High-level function to get or create the trie root for a given context and Vim mode.
 	 */
-	TSharedPtr<FKeyChordTrieNode> GetOrCreateTrieRoot(EUMBindingContext Context);
+	TSharedPtr<FKeyChordTrieNode> GetOrCreateTrieRoot(EUMBindingContext Context, EVimMode VimMode = EVimMode::Any);
 
 	/**
 	 * Low-level helper: finds or creates a trie node (descendant of the given root) for a sequence.
@@ -215,7 +217,8 @@ public:
 	void AddKeyBinding_NoParam(
 		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
-		TFunction<void()>		   Callback);
+		TFunction<void()>		   Callback,
+		EVimMode				   VimMode = EVimMode::Any);
 
 	/**
 	 * Adds a key binding with no parameters using a weak pointer to an object
@@ -228,7 +231,8 @@ public:
 		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
-		void (ObjectType::*MemberFunc)())
+		void (ObjectType::*MemberFunc)(),
+		EVimMode VimMode = EVimMode::Any)
 	{
 		AddKeyBinding_NoParam(
 			Context,
@@ -238,7 +242,8 @@ public:
 					(Shared.Get()->*MemberFunc)();
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::NoParam);
-			});
+			},
+			VimMode);
 	}
 
 	/**
@@ -252,7 +257,8 @@ public:
 		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
-		void (ObjectType::*MemberFunc)())
+		void (ObjectType::*MemberFunc)(),
+		EVimMode VimMode = EVimMode::Any)
 	{
 		AddKeyBinding_NoParam(
 			Context,
@@ -262,7 +268,8 @@ public:
 					(WeakObj.Get()->*MemberFunc)();
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::NoParam);
-			});
+			},
+			VimMode);
 	}
 
 	/**
@@ -276,7 +283,8 @@ public:
 		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		ObjectType*				   Obj,
-		void (ObjectType::*MemberFunc)())
+		void (ObjectType::*MemberFunc)(),
+		EVimMode VimMode = EVimMode::Any)
 	{
 		AddKeyBinding_NoParam(
 			Context,
@@ -291,7 +299,8 @@ public:
 					// TODO: add logger here
 					// DebugInvalidRawPointer(EUMKeyBindingCallbackType::NoParam);
 				}
-			});
+			},
+			VimMode);
 	}
 
 	//
@@ -306,7 +315,8 @@ public:
 	void AddKeyBinding_KeyEvent(
 		EUMBindingContext											   Context,
 		const TArray<FInputChord>&									   Sequence,
-		TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback);
+		TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback,
+		EVimMode													   VimMode = EVimMode::Any);
 
 	/**
 	 * Adds a key binding for a static function that receives the Slate application and key event.
@@ -320,14 +330,16 @@ public:
 	void AddKeyBinding_KeyEvent(
 		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
-		void (*MemberFunc)(FSlateApplication&, const FKeyEvent&))
+		void (*MemberFunc)(FSlateApplication&, const FKeyEvent&),
+		EVimMode VimMode = EVimMode::Any)
 	{
 		AddKeyBinding_KeyEvent(
 			Context,
 			Sequence,
 			[MemberFunc](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 				MemberFunc(SlateApp, InKeyEvent);
-			});
+			},
+			VimMode);
 	}
 
 	/**
@@ -347,7 +359,8 @@ public:
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(
-			FSlateApplication& SlateApp, const FKeyEvent&))
+			FSlateApplication& SlateApp, const FKeyEvent&),
+		EVimMode VimMode = EVimMode::Any)
 	{
 		AddKeyBinding_KeyEvent(
 			Context,
@@ -358,7 +371,8 @@ public:
 					(Shared.Get()->*MemberFunc)(SlateApp, InKeyEvent);
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::KeyEventParam);
-			});
+			},
+			VimMode);
 	}
 
 	/**
@@ -373,7 +387,8 @@ public:
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(
-			FSlateApplication& SlateApp, const FKeyEvent&))
+			FSlateApplication& SlateApp, const FKeyEvent&),
+		EVimMode VimMode = EVimMode::Any)
 	{
 		AddKeyBinding_KeyEvent(
 			Context,
@@ -384,7 +399,8 @@ public:
 					(WeakObj.Get()->*MemberFunc)(SlateApp, InKeyEvent);
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::KeyEventParam);
-			});
+			},
+			VimMode);
 	}
 
 	//
@@ -401,7 +417,8 @@ public:
 		const TArray<FInputChord>& Sequence,
 		TFunction<void(
 			FSlateApplication& SlateApp, const TArray<FInputChord>&)>
-			Callback);
+				 Callback,
+		EVimMode VimMode = EVimMode::Any);
 
 	/**
 	 * Adds a key binding that receives the Slate application and input chord sequence using a weak pointer
@@ -415,7 +432,8 @@ public:
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(
-			FSlateApplication& SlateApp, const TArray<FInputChord>&))
+			FSlateApplication& SlateApp, const TArray<FInputChord>&),
+		EVimMode VimMode = EVimMode::Any)
 	{
 		AddKeyBinding_Sequence(
 			Context,
@@ -426,7 +444,8 @@ public:
 					(Shared.Get()->*MemberFunc)(SlateApp, Arr);
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::SequenceParam);
-			});
+			},
+			VimMode);
 	}
 
 	/**
@@ -441,7 +460,8 @@ public:
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(
-			FSlateApplication& SlateApp, const TArray<FInputChord>&))
+			FSlateApplication& SlateApp, const TArray<FInputChord>&),
+		EVimMode VimMode = EVimMode::Any)
 	{
 		AddKeyBinding_Sequence(
 			Context,
@@ -452,7 +472,8 @@ public:
 					(WeakObj.Get()->*MemberFunc)(SlateApp, Arr);
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::SequenceParam);
-			});
+			},
+			VimMode);
 	}
 
 private:
@@ -576,8 +597,8 @@ private:
 	/* Deprecated */
 	TSharedPtr<FKeyChordTrieNode> TrieRoot = nullptr; // Root node (unique)
 
-	// Map of roots, one per context
-	TMap<EUMBindingContext, TSharedPtr<FKeyChordTrieNode>> ContextTrieRoots;
+	// Map of roots, one per context and vim mode
+	TMap<EUMBindingContext, TMap<EVimMode, TSharedPtr<FKeyChordTrieNode>>> ContextTrieRoots;
 
 	// Which context are we currently in?
 	EUMBindingContext CurrentContext = EUMBindingContext::Generic;
@@ -617,3 +638,5 @@ public:
 	/** Input mode state */
 	static EVimMode VimMode;
 };
+
+// End of VimInputProcessor.h
