@@ -16,8 +16,10 @@ enum class EVimMode : uint8
 	Normal UMETA(DisplayName = "Normal"),
 	Insert UMETA(DisplayName = "Insert"),
 	Visual UMETA(DisplayName = "Visual"),
-	// Command UMETA(DisplayName = "Command"),   // ":" Mode (optional)
-	// OperatorPending UMETA(DisplayName = "Operator Pending") // Like 'd', 'y', 'c' in Vim
+
+	// Used mainly for binding to comply with any of the above modes
+	// (except Insert of course which will naturally be ignored)
+	Any UMETA(DisplayName = "Any"),
 };
 
 UENUM(BlueprintType)

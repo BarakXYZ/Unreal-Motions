@@ -337,13 +337,14 @@ bool FVimInputProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKe
 bool FVimInputProcessor::ShouldSwitchVimMode(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// Give the user an option to configure entering Vim Modes via either Escape
+	// or Shift+Escape to keep the native Escape as expected.
 	if (InKeyEvent.GetKey() == EKeys::Escape)
 	{
 		SetVimMode(SlateApp, EVimMode::Normal);
 		ResetSequence(SlateApp);
 		return true;
 	}
-	// else if(InKeyEvent.GetKey() == EKeys::I && )
 	return false;
 }
 
@@ -437,10 +438,16 @@ void FVimInputProcessor::SwitchVimModes(
 bool FVimInputProcessor::IsSimulateEscapeKey(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// NOTE:
+	// Because Escape is used to *enter* Vim Normal mode; We'll use Shift+Escape
+	// to simulate normal native Escape mode (which is sometimes needed in the
+	// UE editor).
+	// We may want to allow user to reverse this and have Escape stay native,
+	// while using Shift+Escape to enter Vim Mode. This should be a config option.
 	if (InKeyEvent.IsShiftDown() && InKeyEvent.GetKey() == EKeys::Escape)
 	{
 		static const FKey Escape = EKeys::Escape;
-		SimulateKeyPress(SlateApp, Escape);
+		SimulateKeyPress(SlateApp, Escape); // Native Escape key simulation.
 
 		Logger.Print("Simulate Escape");
 		return true;
