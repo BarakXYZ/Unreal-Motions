@@ -60,9 +60,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void UpdateEditables();
 
-	void ToggleReadOnly();
-	void ToggleReadOnlySingle();
-	void ToggleReadOnlyMulti();
+	void ToggleReadOnly(bool bNegateCurrentState = false);
+	void ToggleReadOnlySingle(bool bNegateCurrentState = false);
+	void ToggleReadOnlyMulti(bool bNegateCurrentState = false);
 
 	void SetNormalModeCursor();
 
@@ -113,6 +113,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool DoesActiveEditableHasAnyTextSelected();
 
+	bool IsCurrentLineEmpty();
+	bool IsCurrentLineInSingleEmpty();
 	bool IsCurrentLineInMultiEmpty();
 
 	void DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay = false);
@@ -126,7 +128,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool IsMultiLineCursorAtEndOrBeginningOfLine();
 	bool IsMultiLineCursorAtEndOfLine();
+
+	bool IsCursorAtBeginningOfLine();
 	bool IsMultiLineCursorAtBeginningOfLine();
+	bool IsSingleLineCursorAtBeginningOfLine();
 
 	bool IsCursorAtEndOfLine(FSlateApplication& SlateApp);
 	bool IsCursorAtEndOfLineSingle(FSlateApplication& SlateApp);
@@ -134,11 +139,17 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void SwitchInsertToNormalMultiLine(FSlateApplication& SlateApp);
 
+	void DeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void ShiftDeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	EUMSelectionState GetSelectionState();
 
-	FUMLogger Logger;
-	EVimMode  CurrentVimMode{ EVimMode::Insert };
-	EVimMode  PreviousVimMode{ EVimMode::Insert };
+	FUMLogger		   Logger;
+	EVimMode		   CurrentVimMode{ EVimMode::Insert };
+	EVimMode		   PreviousVimMode{ EVimMode::Insert };
+	FModifierKeysState ModKeysShiftDown =
+		FModifierKeysState(true, true, /*ShiftDown*/
+			false, false, false, false, false, false, false);
 
 	TWeakPtr<SWidget>					ActiveEditableGeneric{ nullptr };
 	TWeakPtr<SEditableText>				ActiveEditableText{ nullptr };

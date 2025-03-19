@@ -4,6 +4,7 @@
 #include "UMInputHelpers.h"
 #include "Editor.h"
 #include "UMConfig.h"
+#include "UMSlateHelpers.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, Log, All);
@@ -180,7 +181,7 @@ void UVimTextEditorSubsystem::UpdateEditables()
 	}
 }
 
-void UVimTextEditorSubsystem::ToggleReadOnly()
+void UVimTextEditorSubsystem::ToggleReadOnly(bool bNegateCurrentState)
 {
 	switch (EditableWidgetsFocusState)
 	{
@@ -188,20 +189,23 @@ void UVimTextEditorSubsystem::ToggleReadOnly()
 			break;
 
 		case EUMEditableWidgetsFocusState::SingleLine:
-			ToggleReadOnlySingle();
+			ToggleReadOnlySingle(bNegateCurrentState);
 			break;
 
 		case EUMEditableWidgetsFocusState::MultiLine:
-			ToggleReadOnlyMulti();
+			ToggleReadOnlyMulti(bNegateCurrentState);
 			break;
 	}
 }
 
-void UVimTextEditorSubsystem::ToggleReadOnlySingle()
+void UVimTextEditorSubsystem::ToggleReadOnlySingle(bool bNegateCurrentState)
 {
 	if (const TSharedPtr<SEditableTextBox> TextBox = ActiveEditableTextBox.Pin())
 	{
-		TextBox->SetIsReadOnly(CurrentVimMode != EVimMode::Insert);
+		if (bNegateCurrentState)
+			TextBox->SetIsReadOnly(!TextBox->IsReadOnly());
+		else
+			TextBox->SetIsReadOnly(CurrentVimMode != EVimMode::Insert);
 
 		// This coloring helps to unify the look of the editable text box. Still
 		// WIP. There are some edge cases like Node Titles that still need some
@@ -223,12 +227,28 @@ void UVimTextEditorSubsystem::ToggleReadOnlySingle()
 	}
 }
 
-void UVimTextEditorSubsystem::ToggleReadOnlyMulti()
+void UVimTextEditorSubsystem::ToggleReadOnlyMulti(bool bNegateCurrentState)
 {
 	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 			ActiveMultiLineEditableTextBox.Pin())
 	{
-		MultiTextBox->SetIsReadOnly(CurrentVimMode != EVimMode::Insert);
+
+		if (bNegateCurrentState)
+		{
+			// The MultiLineEditableTextBox does not override the ReadOnly getter
+			// from the raw MultiLine Editable, does we need to get it manually
+			// and check for the current ReadOnly value to negate it.
+			TSharedPtr<SWidget> FoundMultiLine;
+			if (!FUMSlateHelpers::TraverseFindWidget(MultiTextBox.ToSharedRef(), FoundMultiLine, "SMultiLineEditableText"))
+				return;
+
+			TSharedPtr<SMultiLineEditableText> MultiLine = StaticCastSharedPtr<SMultiLineEditableText>(FoundMultiLine);
+
+			MultiTextBox->SetIsReadOnly(!MultiLine->IsTextReadOnly());
+		}
+		else
+			MultiTextBox->SetIsReadOnly(CurrentVimMode != EVimMode::Insert);
+
 		// MultiTextBox->SetTextBoxBackgroundColor(
 		// 	FSlateColor(FLinearColor::Black));
 		// MultiTextBox->SetReadOnlyForegroundColor(
@@ -423,9 +443,8 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
 	FKey						   ArrowKeyToSimulate;
 	FUMInputHelpers::GetArrowKeyFromVimKey(InSequence.Last().Key, ArrowKeyToSimulate);
-	FModifierKeysState ModKeysShiftDown = FUMInputHelpers::GetShiftDownModKeys();
-	FKey			   Left = EKeys::Left;
-	FKey			   Right = EKeys::Right;
+	FKey Left = EKeys::Left;
+	FKey Right = EKeys::Right;
 
 	// NOTE:
 	// We're processing and simulating in a very specifc order because we need
@@ -606,7 +625,6 @@ void UVimTextEditorSubsystem::ToggleCursorBlinkingOff()
 	Processor->SimulateKeyPress(SlateApp, EKeys::Left, FUMInputHelpers::GetShiftDownModKeys());
 	if (DoesActiveEditableHasAnyTextSelected())
 	{
-		// Logger.Print("Has Text Selected", ELogVerbosity::Log, true);
 		// Simply compensate by moving one time to the right (opposite direction)
 		Processor->SimulateKeyPress(SlateApp, EKeys::Right /*No Shift Down*/);
 	}
@@ -977,26 +995,48 @@ bool UVimTextEditorSubsystem::SelectAllActiveEditableText()
 	return false;
 }
 
+bool UVimTextEditorSubsystem::IsCurrentLineEmpty()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			return IsCurrentLineInSingleEmpty();
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			return IsCurrentLineInMultiEmpty();
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::IsCurrentLineInSingleEmpty()
+{
+	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+	{
+		FString Text = EditTextBox->GetText().ToString();
+		// return Text.IsEmpty() || IsDefaultEditableBuffer(Text);
+		return Text.IsEmpty();
+	}
+	return false;
+}
+
 bool UVimTextEditorSubsystem::IsCurrentLineInMultiEmpty()
 {
-	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
 	{
-		if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-				ActiveMultiLineEditableTextBox.Pin())
-		{
-			FString CurrTextLine;
-			MultiTextBox->GetCurrentTextLine(CurrTextLine);
-			return CurrTextLine.IsEmpty();
-		}
+		FString CurrTextLine;
+		MultiTextBox->GetCurrentTextLine(CurrTextLine);
+		// Also we might want to check if default buffer.
+		return CurrTextLine.IsEmpty();
 	}
 	return false;
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
 {
-	if (EditableWidgetsFocusState != EUMEditableWidgetsFocusState::MultiLine)
-		return;
-
 	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 		ActiveMultiLineEditableTextBox.Pin();
 	if (!MultiTextBox.IsValid())
@@ -1109,7 +1149,6 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(FSlateApplication
 		return false;
 
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-	FModifierKeysState			   ModKeysShiftDown = FUMInputHelpers::GetShiftDownModKeys();
 
 	// First, we want to simulate down once to see if there are other lines
 	// in the document. If there are, we're clearly not at the end of the doc.
@@ -1185,6 +1224,52 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfLine()
 	MultiTextBox->GetCurrentTextLine(CurrLineText);
 
 	return CurrLineText.Len() == StartTextLocation.GetOffset();
+}
+
+bool UVimTextEditorSubsystem::IsSingleLineCursorAtBeginningOfLine()
+{
+	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+	{
+		FSlateApplication&			   SlateApp = FSlateApplication::Get();
+		TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+
+		if (EditTextBox->AnyTextSelected())
+		{
+			FString OriginSelText = EditTextBox->GetSelectedText().ToString();
+			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
+			FString NewSelText = EditTextBox->GetSelectedText().ToString();
+			bool	bIsAtBeginningOfLine = OriginSelText.Len() == NewSelText.Len();
+			if (!bIsAtBeginningOfLine)
+				InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModKeysShiftDown);
+			return bIsAtBeginningOfLine;
+		}
+		else
+		{
+			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
+			FString NewSelText = EditTextBox->GetSelectedText().ToString();
+			bool	bIsAtBeginningOfLine = !EditTextBox->AnyTextSelected();
+			if (!bIsAtBeginningOfLine)
+				InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModKeysShiftDown);
+			return bIsAtBeginningOfLine;
+		}
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::IsCursorAtBeginningOfLine()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			return IsSingleLineCursorAtBeginningOfLine();
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			return IsMultiLineCursorAtBeginningOfLine();
+	}
+	return false;
 }
 
 bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfLine()
@@ -1357,10 +1442,51 @@ void UVimTextEditorSubsystem::SwitchInsertToNormalMultiLine(FSlateApplication& S
 
 		else // Non-Empty line, we can shift down to the right to prop align.
 			FVimInputProcessor::Get()->SimulateKeyPress(
-				SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+				SlateApp, EKeys::Right, ModKeysShiftDown);
 	}
 	else
 		SetCursorSelectionToDefaultLocation(SlateApp);
+}
+
+void UVimTextEditorSubsystem::DeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	if (IsCurrentLineEmpty())
+		return;
+
+	ClearTextSelection(false /*Insert*/);
+
+	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete);
+
+	if (!IsCurrentLineEmpty()
+		&& !IsCursorAtEndOfLine(SlateApp))
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Right);
+
+	ClearTextSelection(true /*Normal*/);
+
+	SetNormalModeCursor();
+}
+
+void UVimTextEditorSubsystem::ShiftDeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	if (IsCurrentLineEmpty() || IsCursorAtBeginningOfLine())
+		return;
+
+	ClearTextSelection(false /*Insert*/);
+
+	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Left);
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete);
+
+	if (!IsCurrentLineEmpty()
+		&& !IsCursorAtEndOfLine(SlateApp))
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Right);
+
+	ClearTextSelection(true /*Normal*/);
+
+	SetNormalModeCursor();
 }
 
 void UVimTextEditorSubsystem::BindCommands()
@@ -1447,29 +1573,21 @@ void UVimTextEditorSubsystem::BindCommands()
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
-		{ EKeys::D },
-		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
-			Logger.Print("'D' from Text Editing -> Normal Mode", true);
-		},
+		{ EKeys::X },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteNormalMode,
 		EVimMode::Normal);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
-		{ EKeys::D },
-		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
-			Logger.Print("'D' from Text Editing -> Visual Mode", true);
-		},
-		EVimMode::Visual);
+		{ FInputChord(EModifierKey::Shift, EKeys::X) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ShiftDeleteNormalMode,
+		EVimMode::Normal);
 }
 
-// TODO:
-// Vim Navigation in Single-Line Editable Text - V
-// Proper handling for [i]nsert and [a]ppend - V
-// Go to end and start of input Single-Line - V
-// Go to end and start of input Multi-Line -
-// Vim Navigation in Multi-Line Editable Text -
 /**
- * Known issues:
+ * Known (unsolved) issues:
  * 1) Given the following rows of text:
  * "I'm a short tex(t)"
  * "I'm actually a longer t(e)xt"
