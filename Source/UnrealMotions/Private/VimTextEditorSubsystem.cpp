@@ -1597,5 +1597,6 @@ void UVimTextEditorSubsystem::BindCommands()
  * we'll get. The cursor will highlight the closest bottom character instead of
  * smartly knowing from where we came.
  *
- * 2)
+ * 2) Trying to simulate BackSpace does not seem to work. It looks like only
+ * simulating Delete works.
  */
