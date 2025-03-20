@@ -60,9 +60,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void UpdateEditables();
 
-	void ToggleReadOnly(bool bNegateCurrentState = false);
-	void ToggleReadOnlySingle(bool bNegateCurrentState = false);
-	void ToggleReadOnlyMulti(bool bNegateCurrentState = false);
+	void ToggleReadOnly(bool bNegateCurrentState = false, bool bHandleBlinking = true);
+	void ToggleReadOnlySingle(bool bNegateCurrentState = false, bool bHandleBlinking = true);
+	void ToggleReadOnlyMulti(bool bNegateCurrentState = false, bool bHandleBlinking = true);
 
 	void SetNormalModeCursor();
 
@@ -139,8 +139,14 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void SwitchInsertToNormalMultiLine(FSlateApplication& SlateApp);
 
-	void DeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void Delete(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void DeleteLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void DeleteLineSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void DeleteLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void ShiftDeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	bool AppendBreakMultiLine();
 
 	EUMSelectionState GetSelectionState();
 

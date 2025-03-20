@@ -181,7 +181,7 @@ void UVimTextEditorSubsystem::UpdateEditables()
 	}
 }
 
-void UVimTextEditorSubsystem::ToggleReadOnly(bool bNegateCurrentState)
+void UVimTextEditorSubsystem::ToggleReadOnly(bool bNegateCurrentState, bool bHandleBlinking)
 {
 	switch (EditableWidgetsFocusState)
 	{
@@ -189,16 +189,16 @@ void UVimTextEditorSubsystem::ToggleReadOnly(bool bNegateCurrentState)
 			break;
 
 		case EUMEditableWidgetsFocusState::SingleLine:
-			ToggleReadOnlySingle(bNegateCurrentState);
+			ToggleReadOnlySingle(bNegateCurrentState, bHandleBlinking);
 			break;
 
 		case EUMEditableWidgetsFocusState::MultiLine:
-			ToggleReadOnlyMulti(bNegateCurrentState);
+			ToggleReadOnlyMulti(bNegateCurrentState, bHandleBlinking);
 			break;
 	}
 }
 
-void UVimTextEditorSubsystem::ToggleReadOnlySingle(bool bNegateCurrentState)
+void UVimTextEditorSubsystem::ToggleReadOnlySingle(bool bNegateCurrentState, bool bHandleBlinking)
 {
 	if (const TSharedPtr<SEditableTextBox> TextBox = ActiveEditableTextBox.Pin())
 	{
@@ -223,11 +223,16 @@ void UVimTextEditorSubsystem::ToggleReadOnlySingle(bool bNegateCurrentState)
 		// BeginSearch with an empty FText (LOL).
 		// This seems to keep the cursor in the same location while aligning
 		// the blinking cursor with the current mode (Normal vs. Insert) :0
-		TextBox->BeginSearch(FText::GetEmpty());
+		// NOTE:
+		// Because this clears the selection, we the bHandleBlinking param
+		// to bypass this behavior in cases where we only need a pure ReadOnly
+		// change but keep the selection in place.
+		if (bHandleBlinking)
+			TextBox->BeginSearch(FText::GetEmpty());
 	}
 }
 
-void UVimTextEditorSubsystem::ToggleReadOnlyMulti(bool bNegateCurrentState)
+void UVimTextEditorSubsystem::ToggleReadOnlyMulti(bool bNegateCurrentState, bool bHandleBlinking)
 {
 	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 			ActiveMultiLineEditableTextBox.Pin())
@@ -256,7 +261,12 @@ void UVimTextEditorSubsystem::ToggleReadOnlyMulti(bool bNegateCurrentState)
 
 		// NOTE:
 		// We set this dummy GoTo to refresh the cursor blinking to ON / OFF
-		MultiTextBox->GoTo(MultiTextBox->GetCursorLocation());
+		// NOTE:
+		// Because this clears the selection, we the bHandleBlinking param
+		// to bypass this behavior in cases where we only need a pure ReadOnly
+		// change but keep the selection in place.
+		if (bHandleBlinking)
+			MultiTextBox->GoTo(MultiTextBox->GetCursorLocation());
 	}
 }
 void UVimTextEditorSubsystem::SetNormalModeCursor()
@@ -1448,15 +1458,14 @@ void UVimTextEditorSubsystem::SwitchInsertToNormalMultiLine(FSlateApplication& S
 		SetCursorSelectionToDefaultLocation(SlateApp);
 }
 
-void UVimTextEditorSubsystem::DeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+void UVimTextEditorSubsystem::Delete(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	if (IsCurrentLineEmpty())
 		return;
 
-	ClearTextSelection(false /*Insert*/);
+	ToggleReadOnly(true, false /*Skip handle blinking to not clear selection*/);
 
 	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
-	VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
 	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete);
 
 	if (!IsCurrentLineEmpty()
@@ -1465,7 +1474,11 @@ void UVimTextEditorSubsystem::DeleteNormalMode(FSlateApplication& SlateApp, cons
 
 	ClearTextSelection(true /*Normal*/);
 
-	SetNormalModeCursor();
+	/// aslkdadf
+	if (CurrentVimMode == EVimMode::Visual)
+		VimProc->SetVimMode(SlateApp, EVimMode::Normal);
+	else
+		SetNormalModeCursor();
 }
 
 void UVimTextEditorSubsystem::ShiftDeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -1485,6 +1498,114 @@ void UVimTextEditorSubsystem::ShiftDeleteNormalMode(FSlateApplication& SlateApp,
 		VimProc->SimulateKeyPress(SlateApp, EKeys::Right);
 
 	ClearTextSelection(true /*Normal*/);
+
+	SetNormalModeCursor();
+}
+
+void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	if (EditableWidgetsFocusState != EUMEditableWidgetsFocusState::MultiLine)
+		return; // In Single-Line editables there's no option to go down a line.
+
+	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	VimProc->SetVimMode(SlateApp, EVimMode::Insert);
+
+	if (InKeyEvent.IsShiftDown())
+	{
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Home);
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Enter, ModKeysShiftDown);
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Up);
+	}
+	else
+	{
+		VimProc->SimulateKeyPress(SlateApp, EKeys::End);
+		// NOTE:
+		// Because we're not actually pressing shift, for some reason, this isn't
+		// working. We aren't able to *simulate* shift down with enter. Not sure
+		// why. So created this helper function to inserts \n after we go to the
+		// end of the line, which essentially achieves the same goal of going
+		// down a line.
+		// VimProc->SimulateKeyPress(SlateApp, EKeys::Enter, ModKeysShiftDown);
+		AppendBreakMultiLine();
+	}
+}
+
+bool UVimTextEditorSubsystem::AppendBreakMultiLine()
+{
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return false;
+
+	MultiTextBox->InsertTextAtCursor(FText::FromString("\n"));
+	return true;
+}
+
+void UVimTextEditorSubsystem::DeleteLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			DeleteLineSingle(SlateApp, InKeyEvent);
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			DeleteLineMulti(SlateApp, InKeyEvent);
+	}
+}
+
+void UVimTextEditorSubsystem::DeleteLineSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const auto EditTextBox = ActiveEditableTextBox.Pin();
+	if (!EditTextBox.IsValid())
+		return;
+
+	EditTextBox->SetText(FText::GetEmpty());
+	SetNormalModeCursor();
+}
+
+void UVimTextEditorSubsystem::DeleteLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return;
+
+	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	ClearTextSelection(false /*Insert*/);
+
+	FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
+	if (!TextLocation.IsValid())
+		return;
+
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Home);
+	VimProc->SimulateKeyPress(SlateApp, EKeys::End, ModKeysShiftDown);
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete); // Delete selection
+
+	// If at the end of the document, we can't normally delete the line. We have
+	// to firstly go up and to the rightmost, and then perform the deletion.
+	if (IsMultiLineCursorAtEndOfDocument(SlateApp, MultiTextBox.ToSharedRef()))
+	{
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Up);
+		VimProc->SimulateKeyPress(SlateApp, EKeys::End);
+	}
+
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete); // Delete the line itself
+
+	// Check if we can keep the same cursor index or if we should opt to go
+	// to the end of the line.
+	FString NewTextLine;
+	MultiTextBox->GetCurrentTextLine(NewTextLine);
+	int32 NewLineLen = NewTextLine.Len();
+	if (NewLineLen >= TextLocation.GetOffset())
+		MultiTextBox->GoTo(TextLocation);
+	else
+	{
+		FTextLocation NewGoToLocation(TextLocation.GetLineIndex(), NewLineLen);
+		MultiTextBox->GoTo(NewGoToLocation);
+	}
 
 	SetNormalModeCursor();
 }
@@ -1575,8 +1696,15 @@ void UVimTextEditorSubsystem::BindCommands()
 		EUMBindingContext::TextEditing,
 		{ EKeys::X },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::DeleteNormalMode,
-		EVimMode::Normal);
+		&UVimTextEditorSubsystem::Delete,
+		EVimMode::Any /* Handles deletion in both Normal & Visual Mode*/);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::Delete,
+		EVimMode::Visual /* Handles deletion only in Visual Mode*/);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
@@ -1584,6 +1712,32 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ShiftDeleteNormalMode,
 		EVimMode::Normal);
+
+	// Delete current line
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::D },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteLine,
+		EVimMode::Normal);
+
+	// Append New Line (After & Before the current Line)
+	//
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::O },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::AppendNewLine,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::O) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::AppendNewLine,
+		EVimMode::Normal);
+	//
+	// Append New Line (After & Before the current Line)
 }
 
 /**
@@ -1599,4 +1753,10 @@ void UVimTextEditorSubsystem::BindCommands()
  *
  * 2) Trying to simulate BackSpace does not seem to work. It looks like only
  * simulating Delete works.
+ *
+ * 3) In Insert mode, the normal UE behavior is to select all text on enter.
+ * I don't really want to intercept with the native insert mode stuff. But maybe
+ * we should? It will definitely be a better UX (in my opinion). Maybe this
+ * should be an option. The implementation of this isn't that obvious though.
+ * So need to see...
  */

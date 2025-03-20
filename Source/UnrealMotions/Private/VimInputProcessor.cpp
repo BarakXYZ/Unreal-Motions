@@ -564,7 +564,7 @@ void FVimInputProcessor::SimulateKeyPress(
 	const FKeyEvent SimulatedEvent(
 		SimulatedKey,
 		ModifierKeys,
-		0, 0, 0, 0);
+		0 /*UserIndex*/, false /*bIsRepeat*/, 0, 0);
 
 	bNativeInputHandling = true;
 	SlateApp.ProcessKeyDownEvent(SimulatedEvent);
