@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Framework/Application/SlateApplication.h"
 #include "UMLogger.h"
 #include "EditorSubsystem.h"
 #include "Widgets/Input/SEditableTextBox.h"
@@ -85,6 +86,20 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleVimTextNavigation(
 		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
+	void HandleRightNavigation(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandleRightNavigationSingle(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandleRightNavigationMulti(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
+	void HandleLeftNavigation(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandleLeftNavigationSingle(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandleLeftNavigationMulti(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
 	void ClearTextSelection(bool bKeepInputInNormalMode = true);
 
 	void ToggleCursorBlinkingOff();
@@ -103,8 +118,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleGoToEndMultiLine(FSlateApplication& SlateApp);
 	void HandleVisualModeGoToStartOrEndMultiLine(FSlateApplication& SlateApp, bool bGoToStart);
 
-	void HandleGoToStartSingleLine(FSlateApplication& SlateApp);
-	void HandleGoToEndSingleLine(FSlateApplication& SlateApp);
+	void HandleGoToStartOrEndSingleLine(FSlateApplication& SlateApp, bool bGoToEnd);
 	//
 	//
 	//////////////////////////////////////////////////////////////////////////
@@ -116,11 +130,13 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool IsCurrentLineEmpty();
 	bool IsCurrentLineInSingleEmpty();
 	bool IsCurrentLineInMultiEmpty();
-	bool IsCurrentLineInMultiEmpty(const TSharedRef<SMultiLineEditableTextBox> InMultiLine);
+	bool IsCurrentLineInMultiEmpty(const TSharedRef<SMultiLineEditableTextBox> InMultiTextBox);
 
 	void DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay = false);
 
-	bool NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir);
+	bool HandleUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir);
+	bool HandleUpDownMultiLineNormalMode(FSlateApplication& SlateApp, const FKey& InKeyDir);
+	bool HandleUpDownMultiLineVisualMode(FSlateApplication& SlateApp, const FKey& InKeyDir);
 
 	bool IsMultiLineCursorAtBeginningOfDocument();
 
@@ -151,6 +167,17 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	EUMSelectionState GetSelectionState();
 
+	void DeleteCurrentLineContent(FSlateApplication& SlateApp);
+	void DeleteCurrentSelection(FSlateApplication& SlateApp);
+
+	void ChangeEntireLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void ChangeToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void ChangeVisualMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	void AddDebuggingText(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	bool TrackVisualModeStartLocation();
+
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
 	EVimMode		   PreviousVimMode{ EVimMode::Insert };
@@ -164,4 +191,5 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	TWeakPtr<SEditableTextBox>			ActiveEditableTextBox{ nullptr };
 	TWeakPtr<SMultiLineEditableTextBox> ActiveMultiLineEditableTextBox{ nullptr };
 	EUMEditableWidgetsFocusState		EditableWidgetsFocusState{ EUMEditableWidgetsFocusState::None };
+	FTextLocation						VisualModeStartLocation;
 };

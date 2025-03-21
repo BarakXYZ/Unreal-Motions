@@ -34,7 +34,25 @@ void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
 	PreviousVimMode = CurrentVimMode;
 	CurrentVimMode = NewVimMode;
+	if (NewVimMode == EVimMode::Visual)
+		TrackVisualModeStartLocation();
+
 	UpdateEditables();
+}
+
+bool UVimTextEditorSubsystem::TrackVisualModeStartLocation()
+{
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	{
+		const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin();
+		if (!MultiTextBox.IsValid())
+			return false;
+
+		VisualModeStartLocation = MultiTextBox->GetCursorLocation();
+		return VisualModeStartLocation.IsValid();
+	}
+	return false;
 }
 
 void UVimTextEditorSubsystem::RegisterSlateEvents()
@@ -448,10 +466,7 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 
 	DebugMultiLineCursorLocation(true /*Pre-Navigation*/);
 
-	const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
-
-	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
-	FKey						   ArrowKeyToSimulate;
+	FKey ArrowKeyToSimulate;
 	FUMInputHelpers::GetArrowKeyFromVimKey(InSequence.Last().Key, ArrowKeyToSimulate);
 	FKey Left = EKeys::Left;
 	FKey Right = EKeys::Right;
@@ -468,114 +483,154 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	// below seems to work well for now.
 
 	if (ArrowKeyToSimulate == Left)
-	{
-		if (!IsCurrentLineInMultiEmpty())
-		{
-			if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine && IsMultiLineCursorAtBeginningOfLine())
-				return; // Shouldn't continue navigation per Vim rules
+		HandleLeftNavigation(SlateApp, InSequence);
 
-			if (bIsVisualMode)
-			{
-				switch (GetSelectionState())
-				{
-					case (EUMSelectionState::None):
-					{
-						SetCursorSelectionToDefaultLocation(SlateApp);
-						break;
-					}
-					case (EUMSelectionState::OneChar):
-					{
-						// We will need to align left to retain the anchor
-						// selection and also highlight the next left char.
-						// Thus, we're breaking, then aligning left, then
-						// moving to the next char.
-						if (IsCursorAlignedRight(SlateApp))
-						{
-							ClearTextSelection();
-							Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
-						}
-						break;
-					}
-					default:
-						break;
-				}
-				Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
-			}
-			else // Normal Mode
-			{
-				ClearTextSelection(); // Break from current selection
-
-				// Because we're right aligned, we need to sim left to go to
-				// the beginning of the currently selected char:
-				// Given Asterisk (*) == Cursor Location
-				// Pre: Exa*mple | Post: Ex*ample
-				Input->SimulateKeyPress(SlateApp, Left);
-
-				// GoTo previous char, highlight it (and align to the right)
-				SetCursorSelectionToDefaultLocation(SlateApp);
-			}
-		}
-	}
 	else if (ArrowKeyToSimulate == Right)
-	{
-		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine
-			&& IsMultiLineCursorAtEndOfLine())
-			return; // Shouldn't continue navigation per Vim rules
+		HandleRightNavigation(SlateApp, InSequence);
 
-		if (!IsCurrentLineInMultiEmpty())
-		{
-			if (!bIsVisualMode)
-			{
-				ClearTextSelection();					  // Break from curr sel
-				Input->SimulateKeyPress(SlateApp, Right); // GoTo next char
-				Input->SimulateKeyPress(SlateApp, Left);  // Prep right alignment
-			}
-			else
-			{
-				switch (GetSelectionState())
-				{
-					case (EUMSelectionState::None):
-					{
-						SetCursorSelectionToDefaultLocation(SlateApp);
-						break;
-					}
-					case (EUMSelectionState::OneChar):
-					{
-						// We will need to align right to retain the anchor
-						// selection and also highlight the next left right.
-						// Thus, we're breaking, then aligning right, then
-						// moving to the next char.
-						if (!IsCursorAlignedRight(SlateApp))
-						{
-							ClearTextSelection();
-							Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
-						}
-						break;
-					}
-					default:
-						break;
-				}
-			}
-			Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown); // Sel
-		}
-	}
-
-	//					** Handle Up & Down **
-	// for now we can process them although maybe we
-	// souldn't in Single-Line Editable? Not sure what's a better UX.
 	else
 	{
-		if (bIsVisualMode)
-			Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate, ModKeysShiftDown);
-		else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine) // Multi-Line Normal Mode
+		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
 		{
-			NavigateUpDownMultiLine(SlateApp, ArrowKeyToSimulate);
+			HandleUpDownMultiLine(SlateApp, ArrowKeyToSimulate);
 		}
 		else // Single-line -> Just go up or down
+		{
+			TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
 			Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
+		}
 	}
 
 	DebugMultiLineCursorLocation(false /*Post-Navigation*/);
+}
+
+void UVimTextEditorSubsystem::HandleRightNavigation(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	if (IsCurrentLineEmpty())
+		return;
+
+	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
+	const FKey					   Right = EKeys::Right;
+
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine
+		&& IsMultiLineCursorAtEndOfLine())
+		return; // Shouldn't continue navigation per Vim rules
+
+	if (CurrentVimMode == EVimMode::Visual)
+	{
+		switch (GetSelectionState())
+		{
+			case (EUMSelectionState::None):
+			{
+				SetCursorSelectionToDefaultLocation(SlateApp);
+				break;
+			}
+			case (EUMSelectionState::OneChar):
+			{
+				// Logger.Print("Once Char Right Visual", true);
+				// We will need to align right to retain the anchor
+				// selection and also highlight the next left right.
+				// Thus, we're breaking, then aligning right, then
+				// moving to the next char.
+				if (!IsCursorAlignedRight(SlateApp))
+				{
+					Logger.Print("Aligned Left", true);
+					ClearTextSelection();
+					Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown);
+				}
+				break;
+			}
+			default:
+				break;
+		}
+	}
+	else // Normal Mode
+	{
+		ClearTextSelection();							// Break from curr sel
+		Input->SimulateKeyPress(SlateApp, Right);		// GoTo next char
+		Input->SimulateKeyPress(SlateApp, EKeys::Left); // Prep right alignment
+	}
+	Input->SimulateKeyPress(SlateApp, Right, ModKeysShiftDown); // Sel
+}
+
+void UVimTextEditorSubsystem::HandleRightNavigationSingle(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+}
+
+void UVimTextEditorSubsystem::HandleRightNavigationMulti(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+}
+
+void UVimTextEditorSubsystem::HandleLeftNavigation(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	if (IsCurrentLineEmpty())
+		return;
+
+	// if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	// 	HandleLeftNavigationMulti(SlateApp, InSequence);
+	// else
+	// 	HandleLeftNavigationSingle(SlateApp, InSequence);
+
+	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
+	FKey						   Left = EKeys::Left;
+
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine && IsMultiLineCursorAtBeginningOfLine())
+		return; // Shouldn't continue navigation per Vim rules
+
+	if (CurrentVimMode == EVimMode::Visual)
+	{
+		switch (GetSelectionState())
+		{
+			case (EUMSelectionState::None):
+			{
+				SetCursorSelectionToDefaultLocation(SlateApp);
+				break;
+			}
+			case (EUMSelectionState::OneChar):
+			{
+				// We will need to align left to retain the anchor
+				// selection and also highlight the next left char.
+				// Thus, we're breaking, then aligning left, then
+				// moving to the next char.
+				if (IsCursorAlignedRight(SlateApp))
+				{
+					ClearTextSelection();
+					Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
+				}
+				break;
+			}
+			default:
+				break;
+		}
+		Input->SimulateKeyPress(SlateApp, Left, ModKeysShiftDown);
+	}
+	else // Normal Mode
+	{
+		ClearTextSelection(); // Break from current selection
+
+		// Because we're right aligned, we need to sim left to go to
+		// the beginning of the currently selected char:
+		// Given Asterisk (*) == Cursor Location
+		// Pre: Exa*mple | Post: Ex*ample
+		Input->SimulateKeyPress(SlateApp, Left);
+
+		// GoTo previous char, highlight it (and align to the right)
+		SetCursorSelectionToDefaultLocation(SlateApp);
+	}
+}
+
+void UVimTextEditorSubsystem::HandleLeftNavigationSingle(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+}
+
+void UVimTextEditorSubsystem::HandleLeftNavigationMulti(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
 }
 
 void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
@@ -730,7 +785,7 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 			HandleGoToEndMultiLine(SlateApp);
 
 		else // Single-Line
-			HandleGoToEndSingleLine(SlateApp);
+			HandleGoToStartOrEndSingleLine(SlateApp, true /*GoTo End*/);
 	}
 	else // gg -> GoTo Start
 	{
@@ -738,7 +793,7 @@ void UVimTextEditorSubsystem::GotoStartOrEnd(
 			HandleGoToStartMultiLine(SlateApp);
 
 		else // Single-Line
-			HandleGoToStartSingleLine(SlateApp);
+			HandleGoToStartOrEndSingleLine(SlateApp, false /*GoTo Start*/);
 	}
 }
 
@@ -806,34 +861,46 @@ void UVimTextEditorSubsystem::HandleVisualModeGoToStartOrEndMultiLine(FSlateAppl
 	while (SelectionSize != SelectedText.Len());
 }
 
-void UVimTextEditorSubsystem::HandleGoToEndSingleLine(FSlateApplication& SlateApp)
+void UVimTextEditorSubsystem::HandleGoToStartOrEndSingleLine(FSlateApplication& SlateApp, bool bGoToEnd)
 {
-	const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
+	if (CurrentVimMode == EVimMode::Visual)
+	{
+		if (!DoesActiveEditableHasAnyTextSelected())
+			SetNormalModeCursor();
 
-	FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::End,
-		// If Visual Mode, we should simulate shift down to append
-		// to selection new text to the current selection
-		bIsVisualMode ? FUMInputHelpers::GetShiftDownModKeys() : FModifierKeysState());
+		// Lambda to choose the correct navigation based on bGoToEnd.
+		auto Navigate = [&]() {
+			if (bGoToEnd)
+				HandleRightNavigation(SlateApp, TArray<FInputChord>{ FInputChord(EKeys::Right) });
+			else
+				HandleLeftNavigation(SlateApp, TArray<FInputChord>{ FInputChord(EKeys::Left) });
+		};
 
-	if (!bIsVisualMode)
-		SetCursorSelectionToDefaultLocation(SlateApp);
-}
+		// Loop until the selection length remains unchanged.
+		FString PrevSelectedText;
+		FString NewSelectedText;
+		do
+		{
+			if (!GetSelectedText(PrevSelectedText))
+				return;
 
-void UVimTextEditorSubsystem::HandleGoToStartSingleLine(FSlateApplication& SlateApp)
-{
-	const bool bIsVisualMode = CurrentVimMode == EVimMode::Visual;
+			Navigate();
 
-	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-	InputProc->SimulateKeyPress(SlateApp, EKeys::Home,
-		// If Visual Mode, we should simulate shift down to append
-		// to selection new text to the current selection
-		bIsVisualMode
-			? FUMInputHelpers::GetShiftDownModKeys()
-			: FModifierKeysState());
+			if (!GetSelectedText(NewSelectedText))
+				return;
+		}
+		while (NewSelectedText.Len() != PrevSelectedText.Len());
+	}
+	else // Normal Mode
+	{
+		TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+		InputProc->SimulateKeyPress(SlateApp, bGoToEnd ? EKeys::End : EKeys::Home);
 
-	if (!bIsVisualMode)
-		InputProc->SimulateKeyPress(
-			SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+		if (bGoToEnd)
+			SetCursorSelectionToDefaultLocation(SlateApp);
+		else
+			InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModKeysShiftDown);
+	}
 }
 
 void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight)
@@ -1045,40 +1112,16 @@ bool UVimTextEditorSubsystem::IsCurrentLineInMultiEmpty(const TSharedRef<SMultiL
 	return CurrTextLine.IsEmpty();
 }
 
-void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
+// TODO: Refactor this function (i.e. break it down to smaller functions)
+bool UVimTextEditorSubsystem::HandleUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir)
 {
-	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-		ActiveMultiLineEditableTextBox.Pin();
-	if (!MultiTextBox.IsValid())
-		return;
-
-	const FString NavigationContext = bIsPreNavigation
-		? "Pre-Navigation"
-		: "Post-Navigation";
-
-	FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
-	if (!TextLocation.IsValid())
-		return;
-	int32 LineIndex = TextLocation.GetLineIndex();
-	int32 CharOffset = TextLocation.GetOffset();
-
-	// Debug if current line is empty
-	FString CurrLineText;
-	MultiTextBox->GetCurrentTextLine(CurrLineText);
-	FString CurrLineEmptyDebug = CurrLineText.IsEmpty() ? "TRUE" : "FALSE";
-
-	// Debug if the cursor is aligned to the Left or to the Right
-	FString AlignedRightDebug = IsCursorAlignedRight(FSlateApplication::Get()) ? "TRUE" : "FALSE";
-
-	Logger.Print(FString::Printf(TEXT("MultiLine %s Location:\nLine Index: %d\nChar Offset: %d\nis Empty Line: %s Content: %s\nis Cursor Aligned Right: %s"),
-					 *NavigationContext, LineIndex,
-					 CharOffset, *CurrLineEmptyDebug, *CurrLineText, *AlignedRightDebug),
-		ELogVerbosity::Log, true);
+	if (CurrentVimMode == EVimMode::Visual)
+		return HandleUpDownMultiLineVisualMode(SlateApp, InKeyDir);
+	else
+		return HandleUpDownMultiLineNormalMode(SlateApp, InKeyDir);
 }
 
-// TODO: Refactor this function (i.e. break it down to smaller functions) and
-// fix bugs when navigating to and from end of document.
-bool UVimTextEditorSubsystem::NavigateUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir)
+bool UVimTextEditorSubsystem::HandleUpDownMultiLineNormalMode(FSlateApplication& SlateApp, const FKey& InKeyDir)
 {
 	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 		ActiveMultiLineEditableTextBox.Pin();
@@ -1105,7 +1148,7 @@ bool UVimTextEditorSubsystem::NavigateUpDownMultiLine(FSlateApplication& SlateAp
 		: CurrLineIndex + 1; // Next line index
 	MultiTextBox->GoTo(FTextLocation(NewLineIndex, 0));
 
-	// Check if we've entered an empty line to determine proper movement
+	// Check if we've entered an empty line to determine proper navigation
 	FString NewLineText;
 	MultiTextBox->GetCurrentTextLine(NewLineText);
 	if (NewLineText.IsEmpty())
@@ -1138,6 +1181,43 @@ bool UVimTextEditorSubsystem::NavigateUpDownMultiLine(FSlateApplication& SlateAp
 				SetCursorSelectionToDefaultLocation(SlateApp);
 		}
 	}
+	return true;
+}
+
+bool UVimTextEditorSubsystem::HandleUpDownMultiLineVisualMode(FSlateApplication& SlateApp, const FKey& InKeyDir)
+{
+	// const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+	// 	ActiveMultiLineEditableTextBox.Pin();
+	// if (!MultiTextBox.IsValid())
+	// 	return false;
+
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+
+	FString SelectedText;
+	GetSelectedText(SelectedText);
+	if (SelectedText.Len() != 1)
+	{
+		InputProc->SimulateKeyPress(SlateApp, InKeyDir, ModKeysShiftDown);
+		return true;
+	}
+
+	const bool bIsAlignedRight = IsCursorAlignedRight(SlateApp);
+	ClearTextSelection();
+
+	if (InKeyDir == EKeys::Up)
+	{
+		if (bIsAlignedRight)
+			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
+	}
+	else // Moving Down
+	{
+		if (!bIsAlignedRight)
+		{
+			InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModKeysShiftDown);
+		}
+	}
+
+	InputProc->SimulateKeyPress(SlateApp, InKeyDir, ModKeysShiftDown);
 	return true;
 }
 
@@ -1323,7 +1403,10 @@ bool UVimTextEditorSubsystem::IsCursorAlignedRight(FSlateApplication& SlateApp)
 		return false;
 
 	if (IsCursorAtEndOfLine(SlateApp))
+	{
+		Logger.Print("Cursor at End of Line");
 		return true;
+	}
 
 	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 	VimProc->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
@@ -1365,19 +1448,23 @@ bool UVimTextEditorSubsystem::IsCursorAtEndOfLineSingle(FSlateApplication& Slate
 		return true;
 
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-	const FModifierKeysState	   ModKeys = FUMInputHelpers::GetShiftDownModKeys();
 
 	if (EditTextBox->AnyTextSelected())
 	{
 		FString OriginSelText = EditTextBox->GetSelectedText().ToString();
 
-		InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModKeys);
+		InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModKeysShiftDown);
 		FString NewSelText = EditTextBox->GetSelectedText().ToString();
-		if (NewSelText.Len() > OriginSelText.Len())
+		int32	NewSelLen = NewSelText.Len();
+		if (NewSelLen > OriginSelText.Len()
+			// if == 0 it also means we've managed to move, because we had text
+			// selected, and if we're at the end and simulating right, we should
+			// continue to have some text selected (i.e. retain our selection)
+			|| NewSelLen == 0)
 		{
 			// We've managed to move, thus not at end.
 			// Revert to origin position.
-			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeys);
+			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
 			return false;
 		}
 		// We haven't moved, thus we're at the end of the line.
@@ -1385,13 +1472,13 @@ bool UVimTextEditorSubsystem::IsCursorAtEndOfLineSingle(FSlateApplication& Slate
 	}
 	else // Initially, no text selected
 	{
-		InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModKeys);
+		InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModKeysShiftDown);
 		FString NewSelText = EditTextBox->GetSelectedText().ToString();
 		if (EditTextBox->AnyTextSelected())
 		{
 			// We've managed to move, thus not at end.
 			// Revert to origin position.
-			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeys);
+			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModKeysShiftDown);
 			return false;
 		}
 		// We haven't moved, thus we're at the end of the line.
@@ -1580,9 +1667,7 @@ void UVimTextEditorSubsystem::DeleteLineMulti(FSlateApplication& SlateApp, const
 	if (!TextLocation.IsValid())
 		return;
 
-	VimProc->SimulateKeyPress(SlateApp, EKeys::Home);
-	VimProc->SimulateKeyPress(SlateApp, EKeys::End, ModKeysShiftDown);
-	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete); // Delete selection
+	DeleteCurrentLineContent(SlateApp);
 
 	// If at the end of the document, we can't normally delete the line. We have
 	// to firstly go up and to the rightmost, and then perform the deletion.
@@ -1608,6 +1693,53 @@ void UVimTextEditorSubsystem::DeleteLineMulti(FSlateApplication& SlateApp, const
 	}
 
 	SetNormalModeCursor();
+}
+
+void UVimTextEditorSubsystem::DeleteCurrentLineContent(FSlateApplication& SlateApp)
+{
+	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Home);
+	VimProc->SimulateKeyPress(SlateApp, EKeys::End, ModKeysShiftDown);
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete); // Delete selection
+}
+
+void UVimTextEditorSubsystem::DeleteCurrentSelection(FSlateApplication& SlateApp)
+{
+	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	ToggleReadOnly(true, false /*Don't Clear Selection*/);
+	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete);
+	ToggleReadOnly(true, true /*Stop Blinking*/);
+}
+
+void UVimTextEditorSubsystem::ChangeEntireLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+}
+
+void UVimTextEditorSubsystem::ChangeToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+}
+
+void UVimTextEditorSubsystem::ChangeVisualMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+	DeleteCurrentSelection(SlateApp);
+	InputProc->SetVimMode(SlateApp, EVimMode::Insert);
+	// ABCD
+	// EFGH
+	// IJKL
+	// MNOP
+	// QRST
+	// UVW
+	// XYZ
+}
+
+void UVimTextEditorSubsystem::AddDebuggingText(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+	const FText					   DebugContent = FText::FromString(
+		   "ABCD\nEFGH\nIJKL\nMNOP\nQRST\nUVW\nXYZ");
+	SetActiveEditableTextContent(DebugContent);
+	SetCursorSelectionToDefaultLocation(SlateApp);
 }
 
 void UVimTextEditorSubsystem::BindCommands()
@@ -1738,6 +1870,83 @@ void UVimTextEditorSubsystem::BindCommands()
 		EVimMode::Normal);
 	//
 	// Append New Line (After & Before the current Line)
+
+	//							~ Change ~
+	//
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ChangeVisualMode,
+		EVimMode::Visual);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::C) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ChangeVisualMode,
+		EVimMode::Visual);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, EKeys::C },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ChangeEntireLine,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::C) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ChangeToEndOfLine,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, EKeys::Dollar },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ChangeToEndOfLine,
+		EVimMode::Normal);
+	//
+	//							~ Change ~
+
+	// Add debugging text (content) to the current editable
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::SpaceBar, EKeys::A, EKeys::D },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::AddDebuggingText);
+}
+
+void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
+{
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return;
+
+	const FString NavigationContext = bIsPreNavigation
+		? "Pre-Navigation"
+		: "Post-Navigation";
+
+	FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
+	if (!TextLocation.IsValid())
+		return;
+	int32 LineIndex = TextLocation.GetLineIndex();
+	int32 CharOffset = TextLocation.GetOffset();
+
+	// Debug if current line is empty
+	FString CurrLineText;
+	MultiTextBox->GetCurrentTextLine(CurrLineText);
+	FString CurrLineEmptyDebug = CurrLineText.IsEmpty() ? "TRUE" : "FALSE";
+
+	// Debug if the cursor is aligned to the Left or to the Right
+	FString AlignedRightDebug = IsCursorAlignedRight(FSlateApplication::Get()) ? "TRUE" : "FALSE";
+
+	Logger.Print(FString::Printf(TEXT("MultiLine %s Location:\nLine Index: %d\nChar Offset: %d\nis Empty Line: %s Content: %s\nis Cursor Aligned Right: %s"),
+					 *NavigationContext, LineIndex,
+					 CharOffset, *CurrLineEmptyDebug, *CurrLineText, *AlignedRightDebug),
+		ELogVerbosity::Log, true);
 }
 
 /**
