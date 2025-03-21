@@ -116,6 +116,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool IsCurrentLineEmpty();
 	bool IsCurrentLineInSingleEmpty();
 	bool IsCurrentLineInMultiEmpty();
+	bool IsCurrentLineInMultiEmpty(const TSharedRef<SMultiLineEditableTextBox> InMultiLine);
 
 	void DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay = false);
 

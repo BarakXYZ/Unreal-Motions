@@ -666,23 +666,18 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 {
 	const FKey					   InKey = InKeyEvent.GetKey();
 	const bool					   bIsShiftDown = InKeyEvent.IsShiftDown();
-	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
 	const bool					   bIsVisualMode = CurrentVimMode == EVimMode::Visual;
 
 	if (InKey == EKeys::I)
-	{
+	{ // [i/I]nsert
 		if (bIsShiftDown)
 		{
 			if (bIsVisualMode || IsCurrentLineInMultiEmpty())
 				ClearTextSelection(false); // Simply clear and insert
 			else
-			{
 				// Go to the beginning of the line.
-				GotoStartOrEnd(SlateApp, FUMInputHelpers::GetKeyEventFromKey(EKeys::G, false /*ShiftDown*/));
-
-				// See explanation below ("By default...")
-				InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
-			}
+				InputProc->SimulateKeyPress(SlateApp, EKeys::Home);
 		}
 		else
 		{
@@ -695,7 +690,7 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 				// selected character. So we need to simulate one time left to
 				// mimic insert behavior (which puts the cursor *before* the
 				// currently selected character).
-				InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
+				InputProc->SimulateKeyPress(SlateApp, EKeys::Left);
 		}
 	}
 	else // [a/A]ppend
@@ -705,21 +700,19 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 			if (bIsVisualMode)
 				ClearTextSelection(false); // Simply clear and insert
 			else
-			{
 				// Go to the end of the line.
-				GotoStartOrEnd(SlateApp, FUMInputHelpers::GetKeyEventFromKey(EKeys::G, true /*ShiftDown*/));
-			}
+				InputProc->SimulateKeyPress(SlateApp, EKeys::End);
 		}
 		else
 		{
 			if (bIsVisualMode)
-				return; // Do nothing. AFAIK that's Vim behavior.
+				return; // Do nothing. AFAIK that's Vim's behavior.
 
-			// Else, just goto Insert Mode:
+			// Else, just enter Insert Mode:
 			// Default behavior is in the correct cursor location already.
 		}
 	}
-	InputProcessor->SetVimMode(SlateApp, EVimMode::Insert);
+	InputProc->SetVimMode(SlateApp, EVimMode::Insert);
 }
 
 // TODO: Update practice to conform with new methods for Multiline
@@ -785,7 +778,10 @@ void UVimTextEditorSubsystem::HandleGoToStartMultiLine(FSlateApplication& SlateA
 	{
 		MultiTextBox->GoTo(ETextLocation::BeginningOfDocument);
 		FString CurrTextLine;
-		SetCursorSelectionToDefaultLocation(SlateApp, false /*Left Align*/);
+		if (IsCurrentLineInMultiEmpty(MultiTextBox.ToSharedRef()))
+			SetCursorSelectionToDefaultLocation(SlateApp, false /*Left Align*/);
+		else
+			SetCursorSelectionToDefaultLocation(SlateApp, true /*Right Align*/);
 	}
 }
 
@@ -1036,13 +1032,17 @@ bool UVimTextEditorSubsystem::IsCurrentLineInMultiEmpty()
 {
 	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 			ActiveMultiLineEditableTextBox.Pin())
-	{
-		FString CurrTextLine;
-		MultiTextBox->GetCurrentTextLine(CurrTextLine);
-		// Also we might want to check if default buffer.
-		return CurrTextLine.IsEmpty();
-	}
+		return IsCurrentLineInMultiEmpty(MultiTextBox.ToSharedRef());
+
 	return false;
+}
+
+bool UVimTextEditorSubsystem::IsCurrentLineInMultiEmpty(const TSharedRef<SMultiLineEditableTextBox> InMultiTextBox)
+{
+	FString CurrTextLine;
+	InMultiTextBox->GetCurrentTextLine(CurrTextLine);
+	// Also we might want to check if default buffer.
+	return CurrTextLine.IsEmpty();
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
