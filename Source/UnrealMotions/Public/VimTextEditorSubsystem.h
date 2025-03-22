@@ -23,6 +23,12 @@ enum class EUMSelectionState : uint8
 	ManyChars
 };
 
+struct FUMStringInfo
+{
+	int32 LineCount;
+	int32 LastCharIndex;
+};
+
 /**
  *
  */
@@ -178,10 +184,18 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool TrackVisualModeStartLocation();
 
+	void AlignCursorToIndex(FSlateApplication& SlateApp, int32 CurrIndex, int32 AlignToIndex, bool bAlignRight);
+
+	bool SelectTextInRange(FSlateApplication& SlateApp, const FTextLocation& StartLocation, const FTextLocation& EndLocation);
+
+	TSharedPtr<SMultiLineEditableText> GetMultilineEditableFromBox(const TSharedRef<SMultiLineEditableTextBox> InMultiLineTextBox);
+
+	FUMStringInfo GetFStringInfo(const FString& InputString);
+
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
 	EVimMode		   PreviousVimMode{ EVimMode::Insert };
-	FModifierKeysState ModKeysShiftDown =
+	FModifierKeysState ModShiftDown =
 		FModifierKeysState(true, true, /*ShiftDown*/
 			false, false, false, false, false, false, false);
 
@@ -191,5 +205,5 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	TWeakPtr<SEditableTextBox>			ActiveEditableTextBox{ nullptr };
 	TWeakPtr<SMultiLineEditableTextBox> ActiveMultiLineEditableTextBox{ nullptr };
 	EUMEditableWidgetsFocusState		EditableWidgetsFocusState{ EUMEditableWidgetsFocusState::None };
-	FTextLocation						VisualModeStartLocation;
+	FTextLocation						StartCursorLocationVisualMode;
 };
