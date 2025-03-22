@@ -1427,7 +1427,7 @@ bool UVimTextEditorSubsystem::SelectTextInRange(FSlateApplication& SlateApp, con
 	int32	   CurrLineIndex = CurrentTextLocation.GetLineIndex();
 	const bool bShouldGoUp = StartLineIndex > EndLineIndex;
 	const FKey NavDirVertical = bShouldGoUp ? EKeys::Up : EKeys::Down;
-	int32	   PrevLineIndex = -1;
+	int32	   PrevLineIndex = INDEX_NONE;
 
 	while (CurrLineIndex != EndLineIndex && CurrLineIndex != PrevLineIndex)
 	{
@@ -1447,7 +1447,7 @@ bool UVimTextEditorSubsystem::SelectTextInRange(FSlateApplication& SlateApp, con
 					   ? &UVimTextEditorSubsystem::HandleRightNavigation
 					   : &UVimTextEditorSubsystem::HandleLeftNavigation;
 	const TArray<FInputChord> DummyInput;
-	int32					  PrevOffset = -1;
+	int32					  PrevOffset = INDEX_NONE;
 
 	while (CurrOffset != EndOffset && CurrOffset != PrevOffset)
 	{
@@ -1520,12 +1520,16 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfLine()
 	FTextLocation StartTextLocation = MultiTextBox->GetCursorLocation();
 	if (!StartTextLocation.IsValid())
 		return false;
-	const int32 CursorOffset = StartTextLocation.GetOffset();
+	const int32		   CursorOffset = StartTextLocation.GetOffset();
+	FSlateApplication& SlateApp = FSlateApplication::Get();
 	// NOTE:
 	// In Visual Mode we should be allowed to go to the 0th offset location
 	// thus the boundary changes to 0 instead of 1.
+	// We also need to take in consideration right vs. left cursor alignment
+	// as if we're aligned right we should keep our target limit to 1 to properly
+	// keep the first char in the line selected.
 	const int32 TargetLimit =
-		CurrentVimMode == EVimMode::Visual
+		(CurrentVimMode == EVimMode::Visual && !IsCursorAlignedRight(SlateApp))
 			// If no text selected, we should also only compare against 0,
 			// as we're not yet aligned to the right with highlighting
 			|| !MultiTextBox->AnyTextSelected()
@@ -2153,4 +2157,14 @@ void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation
  *
  * 4) Trying to traverse to the inner MultiLine Editable Text from a box and then
  * calling GetTextLineCount() seems to crash the editor. Not sure why.
+ */
+
+/*
+ABCD
+EFGH
+IJKL
+MNOP
+QRST
+UVW
+XYZ
  */
