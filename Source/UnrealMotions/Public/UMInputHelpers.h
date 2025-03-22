@@ -21,6 +21,16 @@ public:
 		const FKey& EffectingButton, float Delay, bool bIsDoubleClick = false,
 		bool bIsShiftDown = false, bool bIsCtrlDown = false);
 
+	static void SimulateClickAtPosition(
+		FSlateApplication& SlateApp, const FVector2D& ClickPosition,
+		const FKey& EffectingButton, float Delay, bool bIsDoubleClick = false,
+		bool bIsShiftDown = false, bool bIsCtrlDown = false);
+
+	static void SimulateClickAtPosition(
+		FSlateApplication& SlateApp, const FVector2D& ClickPosition,
+		const FKey& EffectingButton, bool bIsDoubleClick = false,
+		bool bIsShiftDown = false, bool bIsCtrlDown = false);
+
 	static void SimulateRightClick(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 

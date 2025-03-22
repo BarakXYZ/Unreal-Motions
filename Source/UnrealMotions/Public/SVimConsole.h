@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UMLogger.h"
 #include "Widgets/SCompoundWidget.h"
 
 class SWindow;
@@ -40,4 +41,11 @@ private:
 
 	/** Called when a console command is executed. */
 	void HandleConsoleCommandExecuted();
+
+	void RegisterLastFocusedWidget();
+	void TryFocusLastFocusedWidget();
+
+	static TWeakPtr<SWidget> PreConsoleFocusedWidget;
+	static FVector2D		 LastWidgetAbsCoords;
+	static FUMLogger		 Logger;
 };

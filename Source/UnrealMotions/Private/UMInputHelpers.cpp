@@ -127,6 +127,80 @@ void FUMInputHelpers::SimulateRightClick(
 	FUMFocusHelpers::TryFocusFuturePopupMenu(SlateApp);
 }
 
+void FUMInputHelpers::SimulateClickAtPosition(
+	FSlateApplication& SlateApp, const FVector2D& ClickPosition,
+	const FKey& EffectingButton, float Delay, bool bIsDoubleClick,
+	bool bIsShiftDown, bool bIsCtrlDown)
+{
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[&SlateApp, ClickPosition, EffectingButton, bIsDoubleClick, bIsShiftDown, bIsCtrlDown]() {
+			FUMInputHelpers::SimulateClickAtPosition(
+				SlateApp, ClickPosition,
+				EffectingButton, bIsDoubleClick, bIsShiftDown, bIsCtrlDown);
+		},
+		Delay, false);
+}
+
+void FUMInputHelpers::SimulateClickAtPosition(
+	FSlateApplication& SlateApp, const FVector2D& ClickPosition,
+	const FKey& EffectingButton, bool bIsDoubleClick,
+	bool bIsShiftDown, bool bIsCtrlDown)
+{
+	TSharedPtr<SWindow> ActiveWindow = SlateApp.GetActiveTopLevelRegularWindow();
+	if (!ActiveWindow.IsValid())
+	{
+		Logger.Print("SimulateClickAtPosition: No active window found!", ELogVerbosity::Warning);
+		return;
+	}
+
+	// Get the native OS window
+	TSharedPtr<FGenericWindow> NativeWindow = ActiveWindow->GetNativeWindow();
+	if (!NativeWindow.IsValid())
+	{
+		Logger.Print("SimulateClickAtPosition: Native window is invalid!", ELogVerbosity::Warning);
+		return;
+	}
+
+	// Save the original cursor position to restore after clicking
+	const FVector2D OriginalCursorPosition = SlateApp.GetCursorPos();
+
+	SlateApp.GetPlatformApplication()->Cursor->Show(false); // Hide cursor for micro flicker
+	SlateApp.SetCursorPos(ClickPosition);					// Move to the specified click position
+
+	// Set modifier key state
+	FModifierKeysState ModKeys(
+		bIsShiftDown, bIsShiftDown, // LeftShift, RightShift
+		bIsCtrlDown, bIsCtrlDown,	// LeftControl, RightControl
+		false, false, false, false, false);
+
+	// Construct the pointer event for the click
+	FPointerEvent MouseDownEvent(
+		0,			   // PointerIndex
+		ClickPosition, // Current cursor position
+		ClickPosition, // Last cursor position
+		TSet<FKey>(),  // No additional buttons pressed
+		EffectingButton,
+		0.0f, // WheelDelta
+		ModKeys);
+
+	if (bIsDoubleClick)
+	{
+		SlateApp.ProcessMouseButtonDoubleClickEvent(NativeWindow, MouseDownEvent);
+		SlateApp.ProcessMouseButtonUpEvent(MouseDownEvent); // May be needed to complete the double-click
+	}
+	else
+	{
+		SlateApp.ProcessMouseButtonDownEvent(NativeWindow, MouseDownEvent);
+		SlateApp.ProcessMouseButtonUpEvent(MouseDownEvent);
+	}
+
+	// Restore original cursor position and show the cursor again
+	SlateApp.SetCursorPos(OriginalCursorPosition);
+	SlateApp.GetPlatformApplication()->Cursor->Show(true);
+}
+
 void FUMInputHelpers::ToggleRightClickPress(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {

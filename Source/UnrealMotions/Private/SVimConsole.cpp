@@ -11,6 +11,9 @@
 // Helpers
 #include "UMFocusHelpers.h"
 #include "UMSlateHelpers.h"
+#include "UMInputHelpers.h"
+
+#include "Editor.h"
 
 // Internal Classes
 #include "VimInputProcessor.h"
@@ -18,6 +21,10 @@
 // ---------------------------------------------------------
 //  SVimConsole
 // ---------------------------------------------------------
+DEFINE_LOG_CATEGORY_STATIC(LogVimConsole, Log, All);
+TWeakPtr<SWidget> SVimConsole::PreConsoleFocusedWidget = nullptr;
+FVector2D		  SVimConsole::LastWidgetAbsCoords = FVector2D();
+FUMLogger		  SVimConsole::Logger(&LogVimConsole);
 
 void SVimConsole::Open()
 {
@@ -59,6 +66,8 @@ void SVimConsole::Open()
 
 void SVimConsole::Construct(const FArguments& InArgs)
 {
+	RegisterLastFocusedWidget();
+
 	// Build delegates that handle console close & command execution
 	FSimpleDelegate OnCloseConsoleDelegate = FSimpleDelegate::CreateSP(this, &SVimConsole::HandleConsoleClosed);
 	FSimpleDelegate OnCommandExecutedDelegate = FSimpleDelegate::CreateSP(this, &SVimConsole::HandleConsoleCommandExecuted);
@@ -79,6 +88,7 @@ void SVimConsole::Construct(const FArguments& InArgs)
 
 void SVimConsole::HandleConsoleClosed()
 {
+	TryFocusLastFocusedWidget();
 	FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Normal);
 	TSharedPtr<SWindow> Window = FSlateApplication::Get().FindWidgetWindow(AsShared());
 	if (Window.IsValid())
@@ -88,4 +98,45 @@ void SVimConsole::HandleConsoleClosed()
 void SVimConsole::HandleConsoleCommandExecuted()
 {
 	HandleConsoleClosed();
+}
+
+void SVimConsole::RegisterLastFocusedWidget()
+{
+	FSlateApplication&	SlateApp = FSlateApplication::Get();
+	TSharedPtr<SWidget> FocusedWidget = SlateApp.GetUserFocusedWidget(0);
+	if (!FocusedWidget.IsValid())
+	{
+		LastWidgetAbsCoords = FVector2D(0, 0);
+		PreConsoleFocusedWidget = nullptr;
+		return;
+	}
+
+	PreConsoleFocusedWidget = FocusedWidget;
+	LastWidgetAbsCoords = FVector2D(FUMSlateHelpers::GetWidgetCenterScreenSpacePosition(FocusedWidget.ToSharedRef()));
+
+	// Logger.Print(FString::Printf(TEXT("Widget Registered: %s"),
+	// 				 FocusedWidget.IsValid()
+	// 					 ? *FocusedWidget->GetTypeAsString()
+	// 					 : TEXT("NONE")),
+	// 	ELogVerbosity::Log, true);
+}
+
+void SVimConsole::TryFocusLastFocusedWidget()
+{
+	FSlateApplication& SlateApp = FSlateApplication::Get();
+	if (auto WidgetToFocusWidget = PreConsoleFocusedWidget.Pin())
+	{
+		// Logger.Print("Widget is Valid", true);
+		FTimerHandle TimerHandle;
+		FUMFocusHelpers::SetWidgetFocusWithDelay(
+			WidgetToFocusWidget.ToSharedRef(), TimerHandle, 0.025f, false);
+	}
+	else
+	{
+		// Logger.Print("Widget is Invalid, trying to click...", true);
+		if (!LastWidgetAbsCoords.IsZero())
+		{
+			FUMInputHelpers::SimulateClickAtPosition(SlateApp, LastWidgetAbsCoords, EKeys::LeftMouseButton, 0.025f);
+		}
+	}
 }
