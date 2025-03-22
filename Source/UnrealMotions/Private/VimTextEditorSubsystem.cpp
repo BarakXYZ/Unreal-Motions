@@ -1,5 +1,6 @@
 #include "VimTextEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
+#include "GenericPlatform/GenericApplication.h"
 #include "VimInputProcessor.h"
 #include "UMInputHelpers.h"
 #include "Editor.h"
@@ -1087,7 +1088,7 @@ bool UVimTextEditorSubsystem::RetrieveActiveEditableCursorBlinking()
 	return false;
 }
 
-bool UVimTextEditorSubsystem::SelectAllActiveEditableText()
+void UVimTextEditorSubsystem::SelectAllActiveEditableText()
 {
 	switch (EditableWidgetsFocusState)
 	{
@@ -1096,25 +1097,13 @@ bool UVimTextEditorSubsystem::SelectAllActiveEditableText()
 
 		case EUMEditableWidgetsFocusState::SingleLine:
 			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
-			{
 				EditTextBox->SelectAllText();
-				return true;
-			}
 
 		case EUMEditableWidgetsFocusState::MultiLine:
 			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 					ActiveMultiLineEditableTextBox.Pin())
-			{
 				MultiTextBox->SelectAllText();
-
-				// Useful functions
-				// MultiTextBox->InsertTextAtCursor();
-				// MultiTextBox->Refresh();
-				// MultiTextBox->ScrollTo();
-				return true;
-			}
 	}
-	return false;
 }
 
 bool UVimTextEditorSubsystem::IsCurrentLineEmpty()
@@ -1971,6 +1960,52 @@ TSharedPtr<SMultiLineEditableText> UVimTextEditorSubsystem::GetMultilineEditable
 	return StaticCastSharedPtr<SMultiLineEditableText>(FoundMultiLine);
 }
 
+void UVimTextEditorSubsystem::VimCommandSelectAll(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// NOTE:
+	// The delays are essential for proper selection because we're switching to
+	// visual mode.
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			break; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
+				InputProc->SimulateKeyPress(SlateApp, EKeys::Home);
+				InputProc->SetVimMode(SlateApp, EVimMode::Visual);
+				FTimerHandle TimerHandle;
+				GEditor->GetTimerManager()->SetTimer(
+					TimerHandle,
+					[this, &SlateApp]() {
+						TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+						InputProc->SimulateKeyPress(SlateApp, EKeys::End, ModShiftDown);
+					},
+					0.025f, false);
+			}
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				MultiTextBox->GoTo(FTextLocation(0, 0));
+				InputProc->SetVimMode(SlateApp, EVimMode::Visual);
+				HandleVisualModeGoToStartOrEndMultiLine(SlateApp, false /*End*/);
+				FTimerHandle TimerHandle;
+				GEditor->GetTimerManager()->SetTimer(
+					TimerHandle,
+					[this, &SlateApp]() {
+						TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+						HandleUpDownMultiLineVisualMode(SlateApp, EKeys::Down);
+					},
+					0.025f, false);
+			}
+	}
+}
+
 void UVimTextEditorSubsystem::BindCommands()
 {
 	TSharedRef<FVimInputProcessor> VimInputProcessor = FVimInputProcessor::Get();
@@ -2145,6 +2180,12 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::SpaceBar, EKeys::A, EKeys::D },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::AddDebuggingText);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Control, EKeys::A) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::VimCommandSelectAll);
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)

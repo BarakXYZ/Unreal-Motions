@@ -82,7 +82,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool RetrieveActiveEditableCursorBlinking();
 
-	bool SelectAllActiveEditableText();
+	void SelectAllActiveEditableText();
 
 	void OnEditableFocusLost();
 
@@ -193,6 +193,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	FUMStringInfo GetFStringInfo(const FString& InputString);
 
 	bool ForceFocusActiveEditable(FSlateApplication& SlateApp);
+
+	void VimCommandSelectAll(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
