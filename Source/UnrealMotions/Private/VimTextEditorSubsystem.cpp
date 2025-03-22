@@ -347,6 +347,8 @@ void UVimTextEditorSubsystem::SetNormalModeCursor()
 	// 3) There are multiple custom chars, potentially words, etc.
 	else
 	{
+		// FSlateApplication& SlateApp = FSlateApplication::Get();
+		// ForceFocusActiveEditable(SlateApp);
 		// Again delaying the processing as it seems to be needed in order
 		// to process correctly
 		FTimerHandle TimerHandle;
@@ -354,6 +356,10 @@ void UVimTextEditorSubsystem::SetNormalModeCursor()
 			TimerHandle,
 			[this]() {
 				FSlateApplication& SlateApp = FSlateApplication::Get();
+				// This seems to be needed for first contact with MultiLine
+				// when navigating from outer panels and when the Multi has
+				// more than 1 character.
+				ForceFocusActiveEditable(SlateApp);
 
 				// This is important in order to mitigate a potential
 				// Stack Overflow that seems to occur in Preferences
@@ -396,6 +402,43 @@ void UVimTextEditorSubsystem::SetNormalModeCursor()
 			},
 			0.025f, false);
 	}
+}
+
+bool UVimTextEditorSubsystem::ForceFocusActiveEditable(FSlateApplication& SlateApp)
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::SingleLine:
+		{
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
+				if (EditTextBox->HasAnyUserFocusOrFocusedDescendants())
+					return true;
+				SlateApp.SetAllUserFocus(EditTextBox, EFocusCause::Navigation);
+				return true;
+			}
+			break;
+		}
+		case EUMEditableWidgetsFocusState::MultiLine:
+		{
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				TSharedPtr<SMultiLineEditableText> MultiText = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+				if (!MultiText.IsValid())
+					return false;
+
+				if (MultiText->HasAnyUserFocusOrFocusedDescendants())
+					return true;
+				SlateApp.SetAllUserFocus(MultiText, EFocusCause::Navigation);
+				return true;
+			}
+			break;
+		}
+		default:
+			break;
+	}
+	return false;
 }
 
 void UVimTextEditorSubsystem::OnEditableFocusLost()

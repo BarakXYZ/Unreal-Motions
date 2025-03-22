@@ -192,6 +192,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	FUMStringInfo GetFStringInfo(const FString& InputString);
 
+	bool ForceFocusActiveEditable(FSlateApplication& SlateApp);
+
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
 	EVimMode		   PreviousVimMode{ EVimMode::Insert };
