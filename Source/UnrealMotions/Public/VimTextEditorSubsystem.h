@@ -196,6 +196,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void VimCommandSelectAll(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void DebugSelectStartToEnd(const FTextLocation& StartLocation, const FTextLocation& GoToLocation);
+
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
 	EVimMode		   PreviousVimMode{ EVimMode::Insert };

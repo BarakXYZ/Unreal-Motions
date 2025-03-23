@@ -508,44 +508,36 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 		|| IsEditableTextWithDefaultBuffer()) // Preserve default buffer sel
 		return;
 
-	DebugMultiLineCursorLocation(true /*Pre-Navigation*/);
+	// DebugMultiLineCursorLocation(true /*Pre-Navigation*/);
 
 	FKey ArrowKeyToSimulate;
 	FUMInputHelpers::GetArrowKeyFromVimKey(InSequence.Last().Key, ArrowKeyToSimulate);
-	FKey Left = EKeys::Left;
-	FKey Right = EKeys::Right;
 
 	// NOTE:
 	// We're processing and simulating in a very specifc order because we need
 	// to have a determinstic placement for our cursor at any given time.
 	// We want to keep our cursor essentially always to the right of each
 	// character so we can handle beginning & end of line properly to maintain
-	// correct selection.
-	// Another small note is that simulating keys seems a bit loosy-goosy
-	// sometimes (for example, it seems like if we had another simulate left
-	// when going left, it won't really effect the selection?) But this combo
-	// below seems to work well for now.
+	// correct selection. Some edge cases like end of document and such will
+	// require custom alignment (left-align) for proper selection.
 
-	if (ArrowKeyToSimulate == Left)
+	if (ArrowKeyToSimulate == EKeys::Left)
 		HandleLeftNavigation(SlateApp, InSequence);
 
-	else if (ArrowKeyToSimulate == Right)
+	else if (ArrowKeyToSimulate == EKeys::Right)
 		HandleRightNavigation(SlateApp, InSequence);
 
 	else
 	{
 		if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
-		{
 			HandleUpDownMultiLine(SlateApp, ArrowKeyToSimulate);
-		}
+
 		else // Single-line -> Just go up or down
-		{
-			TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
-			Input->SimulateKeyPress(SlateApp, ArrowKeyToSimulate);
-		}
+			FVimInputProcessor::Get()->SimulateKeyPress(
+				SlateApp, ArrowKeyToSimulate);
 	}
 
-	DebugMultiLineCursorLocation(false /*Post-Navigation*/);
+	// DebugMultiLineCursorLocation(false /*Post-Navigation*/);
 }
 
 void UVimTextEditorSubsystem::HandleRightNavigation(
@@ -896,16 +888,17 @@ void UVimTextEditorSubsystem::HandleVisualModeGoToStartOrEndMultiLine(FSlateAppl
 		GoToLocation = FTextLocation(0, 0);
 	else
 	{
-		FUMStringInfo StrInfo = GetFStringInfo(MultiTextBox->GetText().ToString());
-		GoToLocation = FTextLocation(StrInfo.LineCount - 1, // Line 1 is 0 base.
-			StrInfo.LastCharIndex + 1);						// Go 1 extra to end.
-	}
-	Logger.Print(
-		FString::Printf(
-			TEXT("Start Line Index: %d\n Start Offset: %d\n GoTo Line Index: %d\n GoTo Offset: %d"),
-			StartCursorLocationVisualMode.GetLineIndex(), StartCursorLocationVisualMode.GetOffset(), GoToLocation.GetLineIndex(), GoToLocation.GetOffset()),
-		true);
+		TSharedPtr<SMultiLineEditableText> MultiLineText = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+		if (!MultiLineText.IsValid())
+			return;
 
+		const int32 LineCount = MultiLineText->GetTextLineCount();
+		FString		TextAtLastLine;
+		MultiLineText->GetTextLine(LineCount > 0 ? LineCount - 1 : LineCount, TextAtLastLine);
+		const int32 LastCharOffset = TextAtLastLine.Len();
+		GoToLocation = FTextLocation(LineCount, LastCharOffset);
+	}
+	// DebugSelectStartToEnd(StartCursorLocationVisualMode, GoToLocation);
 	SelectTextInRange(SlateApp, StartCursorLocationVisualMode, GoToLocation);
 }
 
@@ -1968,6 +1961,15 @@ void UVimTextEditorSubsystem::VimCommandSelectAll(FSlateApplication& SlateApp, c
 					0.025f, false);
 			}
 	}
+}
+
+void UVimTextEditorSubsystem::DebugSelectStartToEnd(const FTextLocation& StartLocation, const FTextLocation& GoToLocation)
+{
+	Logger.Print(
+		FString::Printf(
+			TEXT("Start Line Index: %d\n Start Offset: %d\n GoTo Line Index: %d\n GoTo Offset: %d"),
+			StartLocation.GetLineIndex(), StartLocation.GetOffset(), GoToLocation.GetLineIndex(), GoToLocation.GetOffset()),
+		true);
 }
 
 void UVimTextEditorSubsystem::BindCommands()
