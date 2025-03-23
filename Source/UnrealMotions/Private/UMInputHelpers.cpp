@@ -580,6 +580,13 @@ void FUMInputHelpers::SimulateMouseMoveToPosition(FSlateApplication& SlateApp, c
 			FModifierKeysState()));
 }
 
+// TODO:
+// This should really return a delegate or some way to know when the delays are
+// done to explicitly let the caller know when it's safe to call more actions!
+// Already had a problem where a timer was set to 0.05f in the caller (which is
+// bad because they we're racing and not in sync - both set to 0.05f).
+// Essentially, to caller should always make sure to call actions *after* the
+// delays of this function are finished (so best via some delegate calling?)
 bool FUMInputHelpers::DragAndReleaseWidgetAtPosition(
 	const TSharedRef<SWidget> InWidget,
 	const FVector2f			  TargetPosition)
@@ -703,9 +710,6 @@ bool FUMInputHelpers::SimulateMousePressAtPosition(
 		FUMSlateHelpers::GetGenericActiveTopLevelWindow();
 	if (!GenericActiveWindow.IsValid())
 		return false;
-
-	// Hide the mouse cursor to reduce flickering (not very important - but nice)
-	SlateApp.GetPlatformApplication()->Cursor->Show(false);
 
 	// Move to the center of the tab we want to drag and store current position
 	SlateApp.SetCursorPos(FVector2d(TargetPosition));

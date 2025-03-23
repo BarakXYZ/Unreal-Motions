@@ -1934,6 +1934,7 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 		? (FUMSlateHelpers::GetWidgetTopRightScreenSpacePosition(PinRef, OffA))
 		: (FUMSlateHelpers::GetWidgetTopLeftScreenSpacePosition(PinRef));
 
+	SlateApp.SetPlatformCursorVisibility(false); // Hide cursor flicker move
 	FUMInputHelpers::DragAndReleaseWidgetAtPosition(FoundPinImage.ToSharedRef(), CurOffset);
 
 	FTimerHandle TimerHandle;
@@ -1941,6 +1942,7 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 		TimerHandle,
 		[this, &SlateApp, OriginCurPos, InPin, bIsAppendingNode]() {
 			SlateApp.SetCursorPos(OriginCurPos); // Restore cursor position
+			SlateApp.SetPlatformCursorVisibility(true);
 
 			const TSharedPtr<SWindow> MenuWin = // Get the Popup Menu Win
 				SlateApp.GetActiveTopLevelWindow();
@@ -1966,7 +1968,7 @@ void UVimGraphEditorSubsystem::AddNodeToPin(
 						0.05f, false);
 				});
 		},
-		0.05f, false);
+		0.10f, false);
 }
 
 void UVimGraphEditorSubsystem::AddNodeToPin(
