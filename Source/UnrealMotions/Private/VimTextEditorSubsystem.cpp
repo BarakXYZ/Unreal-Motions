@@ -1240,46 +1240,10 @@ bool UVimTextEditorSubsystem::HandleUpDownMultiLineVisualMode(FSlateApplication&
 		CurrentTextLocation.GetLineIndex() + (InKeyDir == EKeys::Up ? -1 : 1),
 		CurrentTextLocation.GetOffset());
 
+	TSharedPtr<SMultiLineEditableText> MultiLine = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+
 	return SelectTextInRange(SlateApp,
 		StartCursorLocationVisualMode, GoToTextLocation);
-
-	// const int32 CurrLineIndex = CurrentTextLocation.GetLineIndex();
-	// const int32 CurrCharOffset = CurrentTextLocation.GetOffset();
-	// const int32 StartLineIndex = StartCursorLocationVisualMode.GetLineIndex();
-	// const int32 StartCharOffset = StartCursorLocationVisualMode.GetOffset();
-
-	// const bool bIsInStartLineIndex = CurrLineIndex == StartLineIndex;
-	// const bool bIsMovingUp = InKeyDir == EKeys::Up;
-	// const bool bIsFutureToBeInStartLineIndex =
-	// 	(CurrLineIndex + (bIsMovingUp ? -1 : 1)) == StartLineIndex;
-	// const bool bIsCursorAlignedRight = IsCursorAlignedRight(SlateApp);
-
-	FString SelectedText;
-	GetSelectedText(SelectedText);
-	if (SelectedText.Len() > 1) // Many chars
-	{
-		InputProc->SimulateKeyPress(SlateApp, InKeyDir, ModShiftDown);
-		return true;
-	}
-
-	// Handle 1 char selected:
-	const bool bIsAlignedRight = IsCursorAlignedRight(SlateApp);
-	ClearTextSelection();
-	if (InKeyDir == EKeys::Up)
-	{
-		if (bIsAlignedRight)
-			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
-	}
-	else // Moving Down
-	{
-		if (!bIsAlignedRight)
-		{
-			InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
-		}
-	}
-
-	InputProc->SimulateKeyPress(SlateApp, InKeyDir, ModShiftDown);
-	return true;
 }
 
 void UVimTextEditorSubsystem::AlignCursorToIndex(FSlateApplication& SlateApp, int32 CurrIndex, int32 AlignToIndex, bool bAlignRight)
@@ -1954,7 +1918,7 @@ void UVimTextEditorSubsystem::AddDebuggingText(FSlateApplication& SlateApp, cons
 TSharedPtr<SMultiLineEditableText> UVimTextEditorSubsystem::GetMultilineEditableFromBox(const TSharedRef<SMultiLineEditableTextBox> InMultiLineTextBox)
 {
 	TSharedPtr<SWidget> FoundMultiLine;
-	if (!FUMSlateHelpers::TraverseFindWidget(InMultiLineTextBox, FoundMultiLine, "SMultiLineEditableText"))
+	if (!FUMSlateHelpers::TraverseFindWidget(InMultiLineTextBox->GetContent(), FoundMultiLine, "SMultiLineEditableText"))
 		return nullptr;
 
 	return StaticCastSharedPtr<SMultiLineEditableText>(FoundMultiLine);
@@ -2239,8 +2203,10 @@ void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation
  * should be an option. The implementation of this isn't that obvious though.
  * So need to see...
  *
- * 4) Trying to traverse to the inner MultiLine Editable Text from a box and then
- * calling GetTextLineCount() seems to crash the editor. Not sure why.
+ * 4) The native MultiLineEditable widget does have a select text in range method
+ * but we have our own version that is concerned with some Vim specific selection
+ * rules and leverages some custom functionality that selects text in a more
+ * reliable way (that is concerned with Vim specfics).
  */
 
 /*
