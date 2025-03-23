@@ -614,19 +614,6 @@ void FVimInputProcessor::UpdateBufferAndVisualizer(const FKey& InKey)
 	}
 }
 
-template <typename UserClass>
-void FVimInputProcessor::Possess(UserClass* InObject, void (UserClass::*InMethod)(FSlateApplication&, const FKeyEvent&))
-{
-	if (!PossessedObjects.Contains(InObject))
-	{
-		// Store the binding so it can be unbound later
-		auto Binding = Delegate_OnKeyDown.AddUObject(InObject, InMethod);
-
-		// Save the binding handle for later unbinding
-		PossessedObjects.Add(InObject, Binding);
-	}
-}
-
 void FVimInputProcessor::Unpossess(UObject* InObject)
 {
 	if (PossessedObjects.Contains(InObject))

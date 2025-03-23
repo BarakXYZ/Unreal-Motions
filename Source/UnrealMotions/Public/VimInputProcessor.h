@@ -564,7 +564,16 @@ public:
 
 	// Possess: Bind the object's member function to the delegate
 	template <typename UserClass>
-	void Possess(UserClass* InObject, void (UserClass::*InMethod)(FSlateApplication&, const FKeyEvent&));
+	void Possess(UserClass* InObject, void (UserClass::*InMethod)(FSlateApplication&, const FKeyEvent&))
+	{
+		if (!PossessedObjects.Contains(InObject))
+		{
+			// Store the binding so it can be unbound later
+			auto Binding = Delegate_OnKeyDown.AddUObject(InObject, InMethod);
+			// Save the binding handle for later unbinding
+			PossessedObjects.Add(InObject, Binding);
+		}
+	}
 
 	void Unpossess(UObject* InObject);
 
