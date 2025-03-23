@@ -54,6 +54,13 @@ void FUMEditorCommands::ToggleAllowNotifications()
 void FUMEditorCommands::UndoRedo(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// TODO:
+	// We should verify our widget re-gain focus after this action.
+	// For example, widgets inside blueprint panels are re-created after this.
+	// We should use the simulate mouse click method to re-gain focus for them
+	// in case they're destroyed (see VimConsole destruction method for bringing
+	// focus to destroyed widgets as fallback).
+
 	FVimInputProcessor::SimulateKeyPress(SlateApp,
 		FKey(InKeyEvent.GetKey() == EKeys::U ? EKeys::Z : EKeys::Y),
 		FModifierKeysState(
