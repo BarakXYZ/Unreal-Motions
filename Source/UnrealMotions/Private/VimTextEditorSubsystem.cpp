@@ -272,38 +272,7 @@ void UVimTextEditorSubsystem::SetEditableUnifiedStyleSingleLine(
 void UVimTextEditorSubsystem::SetEditableUnifiedStyleMultiLine(
 	const TSharedRef<SMultiLineEditableTextBox> InMultiTextBox)
 {
-	// InMultiTextBox->SetBorderImage(FCoreStyle::Get().GetBrush(TEXT("Debug.Border")));
-	// InMultiTextBox->SetBorderBackgroundColor(FSlateColor(FLinearColor::Black));
-
-	// Seems to color the border image
-	// InMultiTextBox->SetTextBoxBackgroundColor(
-	// 	FSlateColor(FLinearColor::Yellow));
-	// Also seems to control the look of the border image. Not sure what's
-	// the difference.
-	// InMultiTextBox->SetBorderBackgroundColor(
-	// 	FSlateColor(FLinearColor::Red));
-
-	// InMultiTextBox->SetReadOnlyForegroundColor(InMultiTextBox->GetForegroundColor());
-
-	// auto Multiline = GetMultilineEditableFromBox(InMultiTextBox.ToSharedRef());
-
-	// Seems to solve it for Normal Mode looks
-	// InMultiTextBox->SetReadOnlyForegroundColor(Multiline->GetForegroundColor());
-
-	// InMultiTextBox->SetForegroundColor(Multiline->GetForegroundColor());
-
-	// Seems to do the trick overall
-	// InMultiTextBox->SetForegroundColor(InMultiTextBox->GetForegroundColor());
-
-	// The color of the text
-	// InMultiTextBox->SetForegroundColor(
-	// 	FSlateColor(FLinearColor::White));
-
-	// InMultiTextBox->GetForegroundColor();
-
-	// Not exactly sure what this is doing. Maybe it is overriden by the rest
-	// InMultiTextBox->SetTextBoxForegroundColor(
-	// 	FSlateColor(FLinearColor::Yellow));
+	// Currently not needed
 }
 
 void UVimTextEditorSubsystem::ToggleReadOnly(bool bNegateCurrentState, bool bHandleBlinking)
