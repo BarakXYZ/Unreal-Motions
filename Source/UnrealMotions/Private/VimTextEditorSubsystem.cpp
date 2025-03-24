@@ -1,4 +1,5 @@
 #include "VimTextEditorSubsystem.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "VimInputProcessor.h"
@@ -35,10 +36,37 @@ void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
 	PreviousVimMode = CurrentVimMode;
 	CurrentVimMode = NewVimMode;
+
 	if (NewVimMode == EVimMode::Visual)
 		TrackVisualModeStartLocation();
 
+	AssignEditableBorder();
 	HandleEditableUX();
+}
+
+void UVimTextEditorSubsystem::AssignEditableBorder(bool bAssignDefaultBorder)
+{
+	const EVimMode VimMode =
+		bAssignDefaultBorder ? EVimMode::Any /*OnFocusLost*/ : CurrentVimMode;
+
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::SingleLine:
+		{
+			if (const auto TextBox = ActiveEditableTextBox.Pin())
+				TextBox->SetBorderImage(&GetBorderBrush(VimMode));
+			return;
+		}
+		case EUMEditableWidgetsFocusState::MultiLine:
+		{
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+				MultiTextBox->SetBorderImage(&GetBorderBrush(VimMode));
+			return;
+		}
+		default:
+			break;
+	}
 }
 
 bool UVimTextEditorSubsystem::TrackVisualModeStartLocation()
@@ -183,7 +211,99 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 		}
 	}
 
+	SetEditableUnifiedStyle();
+	AssignEditableBorder();
 	HandleEditableUX(); // We early return if Non-Editables, so this is safe.
+}
+
+void UVimTextEditorSubsystem::SetEditableUnifiedStyle(const float InDelay)
+{
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[this]() {
+			SetEditableUnifiedStyle();
+		},
+		InDelay, false);
+}
+void UVimTextEditorSubsystem::SetEditableUnifiedStyle()
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::SingleLine:
+		{
+			if (const auto TextBox = ActiveEditableTextBox.Pin())
+				SetEditableUnifiedStyleSingleLine(TextBox.ToSharedRef());
+			break;
+		}
+		case EUMEditableWidgetsFocusState::MultiLine:
+		{
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+				SetEditableUnifiedStyleMultiLine(MultiTextBox.ToSharedRef());
+			break;
+		}
+		default:
+			break;
+	}
+}
+
+void UVimTextEditorSubsystem::SetEditableUnifiedStyleSingleLine(
+	const TSharedRef<SEditableTextBox> InTextBox)
+{
+	FSlateColor CurrFGColor = InTextBox->GetForegroundColor();
+	if (CurrFGColor.GetSpecifiedColor() == FLinearColor::White)
+		InTextBox->SetTextBoxBackgroundColor(
+			FSlateColor(FLinearColor::Black));
+	else if (CurrFGColor.GetSpecifiedColor() == FLinearColor::Black)
+		InTextBox->SetTextBoxBackgroundColor(
+			FSlateColor(FLinearColor::White));
+	else // Seems to be needed for first time focus as GetFG won't work
+		InTextBox->SetTextBoxBackgroundColor(
+			FSlateColor(FLinearColor::Black));
+
+	InTextBox->SetTextBoxBackgroundColor(
+		FSlateColor(FLinearColor::Black));
+
+	// Override ReadOnly color text with the foreground regular one.
+	InTextBox->SetReadOnlyForegroundColor(InTextBox->GetForegroundColor());
+}
+
+void UVimTextEditorSubsystem::SetEditableUnifiedStyleMultiLine(
+	const TSharedRef<SMultiLineEditableTextBox> InMultiTextBox)
+{
+	// InMultiTextBox->SetBorderImage(FCoreStyle::Get().GetBrush(TEXT("Debug.Border")));
+	// InMultiTextBox->SetBorderBackgroundColor(FSlateColor(FLinearColor::Black));
+
+	// Seems to color the border image
+	// InMultiTextBox->SetTextBoxBackgroundColor(
+	// 	FSlateColor(FLinearColor::Yellow));
+	// Also seems to control the look of the border image. Not sure what's
+	// the difference.
+	// InMultiTextBox->SetBorderBackgroundColor(
+	// 	FSlateColor(FLinearColor::Red));
+
+	// InMultiTextBox->SetReadOnlyForegroundColor(InMultiTextBox->GetForegroundColor());
+
+	// auto Multiline = GetMultilineEditableFromBox(InMultiTextBox.ToSharedRef());
+
+	// Seems to solve it for Normal Mode looks
+	// InMultiTextBox->SetReadOnlyForegroundColor(Multiline->GetForegroundColor());
+
+	// InMultiTextBox->SetForegroundColor(Multiline->GetForegroundColor());
+
+	// Seems to do the trick overall
+	// InMultiTextBox->SetForegroundColor(InMultiTextBox->GetForegroundColor());
+
+	// The color of the text
+	// InMultiTextBox->SetForegroundColor(
+	// 	FSlateColor(FLinearColor::White));
+
+	// InMultiTextBox->GetForegroundColor();
+
+	// Not exactly sure what this is doing. Maybe it is overriden by the rest
+	// InMultiTextBox->SetTextBoxForegroundColor(
+	// 	FSlateColor(FLinearColor::Yellow));
 }
 
 void UVimTextEditorSubsystem::ToggleReadOnly(bool bNegateCurrentState, bool bHandleBlinking)
@@ -211,19 +331,6 @@ void UVimTextEditorSubsystem::ToggleReadOnlySingle(bool bNegateCurrentState, boo
 			TextBox->SetIsReadOnly(!TextBox->IsReadOnly());
 		else
 			TextBox->SetIsReadOnly(CurrentVimMode != EVimMode::Insert);
-
-		// TextBox->GetColorAndOpacity();
-		// TextBox->GetForegroundColor();
-		// TextBox->GetBorderBackgroundColor();
-		// TextBox->SetBorderBackgroundColor();
-
-		// This coloring helps to unify the look of the editable text box. Still
-		// WIP. There are some edge cases like Node Titles that still need some
-		// testing.
-		// TextBox->SetTextBoxBackgroundColor(
-		// 	FSlateColor(FLinearColor::Black));
-		// TextBox->SetReadOnlyForegroundColor(
-		// 	FSlateColor(FLinearColor::White));
 
 		// NOTE:
 		// Unlike the MultiLineEditable we don't have GetCursorLocation
@@ -264,11 +371,6 @@ void UVimTextEditorSubsystem::ToggleReadOnlyMulti(bool bNegateCurrentState, bool
 		else
 			MultiTextBox->SetIsReadOnly(CurrentVimMode != EVimMode::Insert);
 
-		// MultiTextBox->SetTextBoxBackgroundColor(
-		// 	FSlateColor(FLinearColor::Black));
-		// MultiTextBox->SetReadOnlyForegroundColor(
-		// 	FSlateColor(FLinearColor::White));
-
 		// NOTE:
 		// We set this dummy GoTo to refresh the cursor blinking to ON / OFF
 		// NOTE:
@@ -278,6 +380,66 @@ void UVimTextEditorSubsystem::ToggleReadOnlyMulti(bool bNegateCurrentState, bool
 		if (bHandleBlinking)
 			MultiTextBox->GoTo(MultiTextBox->GetCursorLocation());
 	}
+}
+
+const FSlateRoundedBoxBrush& UVimTextEditorSubsystem::GetBorderBrush(EVimMode InVimMode)
+{
+	static const FLinearColor BaseColor = FLinearColor::White;
+	static const int32		  OutlineWidth = 1.0f;
+	static const int32		  CournerRoundness = 8.0f;
+
+	static UTexture2D* T_BorderDefault = LoadObject<UTexture2D>(
+		nullptr,
+		TEXT("/Script/Engine.Texture2D'/UnrealMotions/Textures/T_EditableBase.T_EditableBase'"));
+
+	static FSlateRoundedBoxBrush BorderDefault(
+		BaseColor,
+		CournerRoundness,
+		FLinearColor(0.1f, 0.1f, 0.1f, 1.0f), // Grey
+		OutlineWidth);
+
+	static FSlateRoundedBoxBrush BorderNormal(
+		BaseColor,
+		CournerRoundness,
+		FLinearColor(0.0f, 0.5f, 1.0f, 1.0f), // Cyan
+		OutlineWidth);
+
+	static FSlateRoundedBoxBrush BorderVisual(
+		BaseColor,
+		CournerRoundness,
+		FLinearColor(1.0f, 0.25f, 1.0f, 1.0f), // Purple
+		OutlineWidth);
+
+	static FSlateRoundedBoxBrush BorderInsert(
+		BaseColor,
+		CournerRoundness,
+		FLinearColor(0.75f, 0.5f, 0.0f, 1.0f), // Orange
+		OutlineWidth);
+
+	switch (InVimMode)
+	{
+		case (EVimMode::Any):
+		{
+			BorderDefault.SetResourceObject(T_BorderDefault);
+			return BorderDefault;
+		}
+		case (EVimMode::Normal):
+		{
+			BorderNormal.SetResourceObject(T_BorderDefault);
+			return BorderNormal;
+		}
+		case (EVimMode::Insert):
+		{
+			BorderInsert.SetResourceObject(T_BorderDefault);
+			return BorderInsert;
+		}
+		case (EVimMode::Visual):
+		{
+			BorderVisual.SetResourceObject(T_BorderDefault);
+			return BorderVisual;
+		}
+	}
+	return BorderDefault;
 }
 
 bool UVimTextEditorSubsystem::TrySetHintTextForVimMode()
@@ -445,7 +607,7 @@ bool UVimTextEditorSubsystem::ForceFocusActiveEditable(FSlateApplication& SlateA
 			{
 				if (EditTextBox->HasAnyUserFocusOrFocusedDescendants())
 					return true;
-				SlateApp.SetAllUserFocus(EditTextBox, EFocusCause::Navigation);
+				SlateApp.SetAllUserFocus(EditTextBox, EFocusCause::Mouse);
 				return true;
 			}
 			break;
@@ -461,7 +623,7 @@ bool UVimTextEditorSubsystem::ForceFocusActiveEditable(FSlateApplication& SlateA
 
 				if (MultiText->HasAnyUserFocusOrFocusedDescendants())
 					return true;
-				SlateApp.SetAllUserFocus(MultiText, EFocusCause::Navigation);
+				SlateApp.SetAllUserFocus(MultiText, EFocusCause::Mouse);
 				return true;
 			}
 			break;
@@ -474,7 +636,8 @@ bool UVimTextEditorSubsystem::ForceFocusActiveEditable(FSlateApplication& SlateA
 
 void UVimTextEditorSubsystem::OnEditableFocusLost()
 {
-	ResetEditableHintText(true);
+	ResetEditableHintText(true /*Clear Tracked Hint Text for next run*/);
+	AssignEditableBorder(true /*Assign Default Border -> Focus Lost*/);
 
 	switch (EditableWidgetsFocusState)
 	{

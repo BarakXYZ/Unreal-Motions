@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Framework/Application/SlateApplication.h"
 #include "UMLogger.h"
 #include "EditorSubsystem.h"
@@ -199,8 +200,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool SelectTextInRange(FSlateApplication& SlateApp, const FTextLocation& StartLocation, const FTextLocation& EndLocation);
 
-	TSharedPtr<SMultiLineEditableText> GetMultilineEditableFromBox(const TSharedRef<SMultiLineEditableTextBox> InMultiLineTextBox);
-	TSharedPtr<SEditableText>		   GetSingleEditableFromBox(const TSharedRef<SEditableTextBox> InEditableTextBox);
+	TSharedPtr<SMultiLineEditableText> GetMultilineEditableFromBox(
+		const TSharedRef<SMultiLineEditableTextBox> InMultiLineTextBox);
+	TSharedPtr<SEditableText> GetSingleEditableFromBox(
+		const TSharedRef<SEditableTextBox> InEditableTextBox);
 
 	FUMStringInfo GetFStringInfo(const FString& InputString);
 
@@ -211,6 +214,17 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void DebugSelectStartToEnd(const FTextLocation& StartLocation, const FTextLocation& GoToLocation);
 
 	void ResetEditableHintText(bool bResetTrackedHintText);
+
+	void SetEditableUnifiedStyle(const float InDelay);
+	void SetEditableUnifiedStyle();
+	void SetEditableUnifiedStyleSingleLine(
+		const TSharedRef<SEditableTextBox> InTextBox);
+	void SetEditableUnifiedStyleMultiLine(
+		const TSharedRef<SMultiLineEditableTextBox> InMultiTextBox);
+
+	const FSlateRoundedBoxBrush& GetBorderBrush(EVimMode InVimMode);
+
+	void AssignEditableBorder(bool bAssignDefaultBorder = false);
 
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
