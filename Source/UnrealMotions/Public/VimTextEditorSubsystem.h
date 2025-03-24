@@ -65,20 +65,25 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 		const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 		const TSharedPtr<SWidget>& NewWidget);
 
-	void UpdateEditables();
-
 	void ToggleReadOnly(bool bNegateCurrentState = false, bool bHandleBlinking = true);
 	void ToggleReadOnlySingle(bool bNegateCurrentState = false, bool bHandleBlinking = true);
 	void ToggleReadOnlyMulti(bool bNegateCurrentState = false, bool bHandleBlinking = true);
 
-	void SetNormalModeCursor();
+	void HandleEditableUX();
 
 	bool GetActiveEditableTextContent(FString& OutText);
 	bool GetSelectedText(FString& OutText);
 
 	bool IsCursorAlignedRight(FSlateApplication& SlateApp);
 
-	bool SetActiveEditableTextContent(const FText& InText);
+	bool SetActiveEditableText(const FText& InText);
+	/**
+	 * bConsiderDefaultHintText will make sure to set Hint Text only if this
+	 * widget already had one available on initial focus. This is useful for
+	 * MultiLine Editable Text which seems to be buggy when setting hint texts
+	 * and initially they start without any.
+	 */
+	bool SetActiveEditableHintText(const FText& InText, bool bConsiderDefaultHintText);
 
 	bool RetrieveActiveEditableCursorBlinking();
 
@@ -110,6 +115,12 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void ToggleCursorBlinkingOff();
 	bool IsEditableTextWithDefaultBuffer();
+	void SetDefaultBuffer();
+	void HandleInsertMode(const FString& InCurrentText);
+	void HandleNormalModeOneChar();
+	void HandleNormalModeMultipleChars();
+	void HandleNormalModeMultipleChars(float InDelay);
+	bool TrySetHintTextForVimMode();
 
 	void InsertAndAppend(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
@@ -189,6 +200,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool SelectTextInRange(FSlateApplication& SlateApp, const FTextLocation& StartLocation, const FTextLocation& EndLocation);
 
 	TSharedPtr<SMultiLineEditableText> GetMultilineEditableFromBox(const TSharedRef<SMultiLineEditableTextBox> InMultiLineTextBox);
+	TSharedPtr<SEditableText>		   GetSingleEditableFromBox(const TSharedRef<SEditableTextBox> InEditableTextBox);
 
 	FUMStringInfo GetFStringInfo(const FString& InputString);
 
@@ -197,6 +209,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void VimCommandSelectAll(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void DebugSelectStartToEnd(const FTextLocation& StartLocation, const FTextLocation& GoToLocation);
+
+	void ResetEditableHintText(bool bResetTrackedHintText);
 
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
@@ -212,4 +226,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	TWeakPtr<SMultiLineEditableTextBox> ActiveMultiLineEditableTextBox{ nullptr };
 	EUMEditableWidgetsFocusState		EditableWidgetsFocusState{ EUMEditableWidgetsFocusState::None };
 	FTextLocation						StartCursorLocationVisualMode;
+	FText								DefaultHintText = FText::GetEmpty();
+
+	const FText	  InsertModeHintText = FText::FromString("Start Typing... ('Esc'-> Normal Mode)");
+	const FText	  NormalModeHintText = FText::FromString("Press 'i' to Start Typing...");
+	const FString SingleEditableTextType = "SEditableText";
+	const FString MultiEditableTextType = "SMultiLineEditableText";
 };
