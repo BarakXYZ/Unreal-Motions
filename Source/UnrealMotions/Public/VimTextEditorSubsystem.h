@@ -158,8 +158,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool IsMultiLineCursorAtBeginningOfDocument();
 
-	bool IsMultiLineCursorAtEndOfDocument();
-	bool IsMultiLineCursorAtEndOfDocument(FSlateApplication& SlateApp, const TSharedRef<SMultiLineEditableTextBox> InMultiLine);
+	bool IsMultiLineCursorAtEndOfDocument(const bool bConsiderLastLineAsEnd = false);
+	bool IsMultiLineCursorAtEndOfDocument(FSlateApplication& SlateApp, const TSharedRef<SMultiLineEditableTextBox> InMultiLine, const bool bConsiderLastLineAsEnd = false);
 
 	bool IsMultiLineCursorAtEndOrBeginningOfLine();
 	bool IsMultiLineCursorAtEndOfLine();
@@ -177,7 +177,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void Delete(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void DeleteLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void DeleteLineSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void DeleteLineNormalModeSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void DeleteLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void DeleteLineNormalModeMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void ShiftDeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
@@ -189,6 +191,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void DeleteCurrentSelection(FSlateApplication& SlateApp);
 
 	void ChangeEntireLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void ChangeEntireLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	void ChangeToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void ChangeVisualMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
@@ -225,6 +229,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	const FSlateRoundedBoxBrush& GetBorderBrush(EVimMode InVimMode);
 
 	void AssignEditableBorder(bool bAssignDefaultBorder = false);
+
+	int32 GetMultiLineCount();
 
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };

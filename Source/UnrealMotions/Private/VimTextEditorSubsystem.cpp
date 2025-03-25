@@ -1,5 +1,4 @@
 #include "VimTextEditorSubsystem.h"
-#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "VimInputProcessor.h"
@@ -1495,17 +1494,20 @@ void UVimTextEditorSubsystem::AlignCursorToIndex(FSlateApplication& SlateApp, in
 	SetCursorSelectionToDefaultLocation(SlateApp, bAlignRight);
 }
 
-bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument()
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(const bool bConsiderLastLineAsEnd)
 {
 	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 			ActiveMultiLineEditableTextBox.Pin())
 	{
-		return IsMultiLineCursorAtEndOfDocument(FSlateApplication::Get(), MultiTextBox.ToSharedRef());
+		return IsMultiLineCursorAtEndOfDocument(FSlateApplication::Get(), MultiTextBox.ToSharedRef(), bConsiderLastLineAsEnd);
 	}
 	return false;
 }
 
-bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(FSlateApplication& SlateApp, const TSharedRef<SMultiLineEditableTextBox> InMultiLine)
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(
+	FSlateApplication&							SlateApp,
+	const TSharedRef<SMultiLineEditableTextBox> InMultiLine,
+	const bool									bConsiderLastLineAsEnd)
 {
 	// Get current text location
 	FTextLocation StartTextLocation = InMultiLine->GetCursorLocation();
@@ -1528,6 +1530,8 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(FSlateApplication
 		InputProc->SimulateKeyPress(SlateApp, EKeys::Up, ModShiftDown);
 		return false;
 	}
+	else if (bConsiderLastLineAsEnd)
+		return true;
 
 	// At this point we know we're at the last line of the document.
 	// Before checking if we're also at the last char in that line, we should
@@ -1998,11 +2002,16 @@ void UVimTextEditorSubsystem::DeleteLine(FSlateApplication& SlateApp, const FKey
 			break; // Theoretically not reachable
 
 		case EUMEditableWidgetsFocusState::SingleLine:
-			DeleteLineSingle(SlateApp, InKeyEvent);
+			DeleteLineNormalModeSingle(SlateApp, InKeyEvent);
 
 		case EUMEditableWidgetsFocusState::MultiLine:
-			DeleteLineMulti(SlateApp, InKeyEvent);
+			DeleteLineNormalModeMulti(SlateApp, InKeyEvent);
 	}
+}
+void UVimTextEditorSubsystem::DeleteLineNormalModeSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	DeleteLineSingle(SlateApp, InKeyEvent);
+	HandleEditableUX();
 }
 
 void UVimTextEditorSubsystem::DeleteLineSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -2012,7 +2021,37 @@ void UVimTextEditorSubsystem::DeleteLineSingle(FSlateApplication& SlateApp, cons
 		return;
 
 	EditTextBox->SetText(FText::GetEmpty());
-	HandleEditableUX();
+}
+
+void UVimTextEditorSubsystem::DeleteLineNormalModeMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return;
+
+	// For later comparison with the new line to determine if we can preserve
+	// character index.
+	FTextLocation OriginLocation = MultiTextBox->GetCursorLocation();
+	if (!OriginLocation.IsValid())
+		return;
+
+	DeleteLineMulti(SlateApp, FKeyEvent());
+
+	// Check if we can keep the same cursor index or (second best alternative)
+	// if we should opt to go to the end of the line.
+	FString NewTextLine;
+	MultiTextBox->GetCurrentTextLine(NewTextLine);
+	int32 NewLineLen = NewTextLine.Len();
+	if (NewLineLen >= OriginLocation.GetOffset())
+		MultiTextBox->GoTo(OriginLocation);
+	else
+	{
+		FTextLocation NewGoToLocation(OriginLocation.GetLineIndex(), NewLineLen);
+		MultiTextBox->GoTo(NewGoToLocation);
+	}
+
+	HandleEditableUX(); // Highlight current char properly in Normal Mode
 }
 
 void UVimTextEditorSubsystem::DeleteLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -2025,14 +2064,10 @@ void UVimTextEditorSubsystem::DeleteLineMulti(FSlateApplication& SlateApp, const
 	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 	ClearTextSelection(false /*Insert*/);
 
-	FTextLocation TextLocation = MultiTextBox->GetCursorLocation();
-	if (!TextLocation.IsValid())
-		return;
-
 	DeleteCurrentLineContent(SlateApp);
 
 	// If at the end of the document, we can't normally delete the line. We have
-	// to firstly go up and to the rightmost, and then perform the deletion.
+	// to firstly go Up and to the Right(End), and then perform the deletion.
 	if (IsMultiLineCursorAtEndOfDocument(SlateApp, MultiTextBox.ToSharedRef()))
 	{
 		VimProc->SimulateKeyPress(SlateApp, EKeys::Up);
@@ -2040,21 +2075,6 @@ void UVimTextEditorSubsystem::DeleteLineMulti(FSlateApplication& SlateApp, const
 	}
 
 	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete); // Delete the line itself
-
-	// Check if we can keep the same cursor index or if we should opt to go
-	// to the end of the line.
-	FString NewTextLine;
-	MultiTextBox->GetCurrentTextLine(NewTextLine);
-	int32 NewLineLen = NewTextLine.Len();
-	if (NewLineLen >= TextLocation.GetOffset())
-		MultiTextBox->GoTo(TextLocation);
-	else
-	{
-		FTextLocation NewGoToLocation(TextLocation.GetLineIndex(), NewLineLen);
-		MultiTextBox->GoTo(NewGoToLocation);
-	}
-
-	HandleEditableUX();
 }
 
 void UVimTextEditorSubsystem::DeleteCurrentLineContent(FSlateApplication& SlateApp)
@@ -2075,6 +2095,46 @@ void UVimTextEditorSubsystem::DeleteCurrentSelection(FSlateApplication& SlateApp
 
 void UVimTextEditorSubsystem::ChangeEntireLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::None:
+			return; // Theoretically not reachable
+
+		case EUMEditableWidgetsFocusState::SingleLine:
+			DeleteLineSingle(SlateApp, InKeyEvent);
+			break;
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			ChangeEntireLineMulti(SlateApp, InKeyEvent);
+			break;
+	}
+	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Insert);
+}
+
+void UVimTextEditorSubsystem::ChangeEntireLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	DeleteLineMulti(SlateApp, InKeyEvent); // Also goes to insert mode
+	if (GetMultiLineCount() == 1)		   // Multi's with 1 line are G2G
+		return;
+
+	bool bAtEnd = IsMultiLineCursorAtEndOfDocument(true /*Last Line as End*/);
+
+	AppendBreakMultiLine();
+	if (!bAtEnd)
+		FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::Up);
+}
+
+int32 UVimTextEditorSubsystem::GetMultiLineCount()
+{
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+		const TSharedPtr<SMultiLineEditableText> MultiLineText = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+
+		if (MultiLineText.IsValid())
+			return MultiLineText->GetTextLineCount();
+	}
+	return INDEX_NONE;
 }
 
 void UVimTextEditorSubsystem::ChangeToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -2425,12 +2485,13 @@ void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation
  * above it, in Vim, when we try to go down again we expect our cursor to
  * highlight (e), but without some custom tracking, in Unreal this is not what
  * we'll get. The cursor will highlight the closest bottom character instead of
- * smartly knowing from where we came.
+ * intelligently knowing from where we came.
  *
- * 2) Trying to simulate BackSpace does not seem to work. It looks like only
- * simulating Delete works.
+ * 2) Trying to simulate BackSpace does not seem to work. In order to 'delete'
+ * stuff it seems like only simulating the 'Delete' key works.
  *
- * 3) In Insert mode, the normal UE behavior is to select all text on enter.
+ * 3) In Insert mode, the normal UE behavior is to select all text on enter
+ * (rather than to go down a line).
  * I don't really want to intercept with the native insert mode stuff. But maybe
  * we should? It will definitely be a better UX (in my opinion). Maybe this
  * should be an option. The implementation of this isn't that obvious though.
