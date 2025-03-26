@@ -95,6 +95,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool IsNewEditableText(const TSharedRef<SWidget> NewEditableText);
 	bool IsDefaultEditableBuffer(const FString& InBuffer);
 
+	void ClearTextSelection(bool bKeepInputInNormalMode = true);
+
 	void HandleVimTextNavigation(
 		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
@@ -112,7 +114,30 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleLeftNavigationMulti(
 		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
-	void ClearTextSelection(bool bKeepInputInNormalMode = true);
+	void NavigateW(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateBigW(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateB(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateBigB(
+		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
+	bool IsWordChar(TCHAR Char);
+
+	int32 FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	int32 FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	void AbsoluteOffsetToTextLocation(const FString& Text, int32 AbsoluteOffset, FTextLocation& OutLocation);
+
+	int32 TextLocationToAbsoluteOffset(const FString& Text, const FTextLocation& Location);
+
+	int32 GetCursorOffsetSingle();
+	void  SetCursorOffsetSingle(int32 NewOffset);
+
+	void NavigateWordForward(FSlateApplication& SlateApp, bool bBigWord);
+	void NavigateWordBackward(FSlateApplication& SlateApp, bool bBigWord);
 
 	void ToggleCursorBlinkingOff();
 	bool IsEditableTextWithDefaultBuffer();
@@ -202,7 +227,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void AlignCursorToIndex(FSlateApplication& SlateApp, int32 CurrIndex, int32 AlignToIndex, bool bAlignRight);
 
-	bool SelectTextInRange(FSlateApplication& SlateApp, const FTextLocation& StartLocation, const FTextLocation& EndLocation);
+	bool SelectTextInRange(FSlateApplication& SlateApp, const FTextLocation& StartLocation, const FTextLocation& EndLocation, bool bJumpToStart = true);
 
 	TSharedPtr<SMultiLineEditableText> GetMultilineEditableFromBox(
 		const TSharedRef<SMultiLineEditableTextBox> InMultiLineTextBox);

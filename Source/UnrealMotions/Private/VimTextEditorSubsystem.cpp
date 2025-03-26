@@ -1594,7 +1594,7 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfLine()
 	return CurrLineText.Len() == StartTextLocation.GetOffset();
 }
 
-bool UVimTextEditorSubsystem::SelectTextInRange(FSlateApplication& SlateApp, const FTextLocation& StartLocation, const FTextLocation& EndLocation)
+bool UVimTextEditorSubsystem::SelectTextInRange(FSlateApplication& SlateApp, const FTextLocation& StartLocation, const FTextLocation& EndLocation, bool bJumpToStart)
 {
 	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 		ActiveMultiLineEditableTextBox.Pin();
@@ -1619,7 +1619,8 @@ bool UVimTextEditorSubsystem::SelectTextInRange(FSlateApplication& SlateApp, con
 		|| (StartLineIndex == EndLineIndex
 			&& StartOffset < EndOffset);
 
-	MultiTextBox->GoTo(StartLocation);
+	if (bJumpToStart) // vs. moving from where we're currently at
+		MultiTextBox->GoTo(StartLocation);
 	const bool bIsAtBeginningOfLine = IsMultiLineCursorAtBeginningOfLine();
 
 	if (bShouldAlignRight)
@@ -2278,6 +2279,280 @@ void UVimTextEditorSubsystem::DebugSelectStartToEnd(const FTextLocation& StartLo
 		true);
 }
 
+// while (CurrentPos < Len && IsWordChar(Text[CurrentPos]))
+void UVimTextEditorSubsystem::NavigateW(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	// 'w' – forward word (small word).
+	NavigateWordForward(SlateApp, false);
+}
+
+void UVimTextEditorSubsystem::NavigateBigW(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	// 'W' – forward word (big word).
+	NavigateWordForward(SlateApp, true);
+}
+
+void UVimTextEditorSubsystem::NavigateB(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	// 'b' – backward word (small word).
+	NavigateWordBackward(SlateApp, false);
+}
+
+void UVimTextEditorSubsystem::NavigateBigB(
+	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	// 'B' – backward word (big word).
+	NavigateWordBackward(SlateApp, true);
+}
+
+// Helper to determine what counts as a word character.
+// For "small word" motions (w, b) we treat alphanumeric and underscore as word characters.
+bool UVimTextEditorSubsystem::IsWordChar(TCHAR Char)
+{
+	return FChar::IsAlnum(Char) || Char == TEXT('_');
+}
+
+//------------------------------------------------------------------------------
+// Word Boundary Helpers
+//------------------------------------------------------------------------------
+
+// Returns the absolute offset (0-based) for the next word boundary.
+// bBigWord == false means using “small word” rules (w), where punctuation is a delimiter;
+// bBigWord == true means whitespace-delimited words (W).
+int32 UVimTextEditorSubsystem::FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord)
+{
+	const int32 Len = Text.Len();
+	if (CurrentPos >= Len)
+		return Len;
+
+	if (bBigWord)
+	{
+		// For a big word, treat any whitespace as a delimiter.
+		if (!FChar::IsWhitespace(Text[CurrentPos]))
+		{
+			while (CurrentPos < Len && !FChar::IsWhitespace(Text[CurrentPos]))
+				++CurrentPos;
+		}
+		while (CurrentPos < Len && FChar::IsWhitespace(Text[CurrentPos]))
+			++CurrentPos;
+	}
+	else
+	{
+		// For a small word, use alphanumerics/underscore as word chars.
+		if (IsWordChar(Text[CurrentPos]))
+		{
+			while (CurrentPos < Len && IsWordChar(Text[CurrentPos]))
+				++CurrentPos;
+		}
+		// Then skip over any punctuation or non-word, non-whitespace characters.
+		while (CurrentPos < Len && !IsWordChar(Text[CurrentPos]) && !FChar::IsWhitespace(Text[CurrentPos]))
+			++CurrentPos;
+
+		// Finally, skip any whitespace.
+		while (CurrentPos < Len && FChar::IsWhitespace(Text[CurrentPos]))
+			++CurrentPos;
+	}
+	return CurrentPos;
+}
+
+// Returns the absolute offset for the previous word boundary.
+int32 UVimTextEditorSubsystem::FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord)
+{
+	if (CurrentPos <= 0)
+		return 0;
+	// Start from the character just before the current position.
+	--CurrentPos;
+
+	if (bBigWord)
+	{
+		// For big word, first skip any whitespace backwards...
+		while (CurrentPos > 0 && FChar::IsWhitespace(Text[CurrentPos]))
+		{
+			--CurrentPos;
+		}
+		// ...then skip non-whitespace backwards.
+		while (CurrentPos > 0 && !FChar::IsWhitespace(Text[CurrentPos - 1]))
+		{
+			--CurrentPos;
+		}
+	}
+	else
+	{
+		// For small word, if the current char isn’t a word char, move backward until one is found.
+		if (!IsWordChar(Text[CurrentPos]))
+		{
+			while (CurrentPos > 0 && !IsWordChar(Text[CurrentPos]))
+			{
+				--CurrentPos;
+			}
+		}
+		// Then skip the word characters backwards.
+		while (CurrentPos > 0 && IsWordChar(Text[CurrentPos - 1]))
+		{
+			--CurrentPos;
+		}
+	}
+	return CurrentPos;
+}
+
+//------------------------------------------------------------------------------
+// Text Location Helpers for Multi-line Editables
+//------------------------------------------------------------------------------
+
+// Convert an absolute offset into a FTextLocation (line index and offset).
+void UVimTextEditorSubsystem::AbsoluteOffsetToTextLocation(const FString& Text, int32 AbsoluteOffset, FTextLocation& OutLocation)
+{
+	TArray<FString> Lines;
+	Text.ParseIntoArray(Lines, TEXT("\n"), false);
+	int32 Offset = AbsoluteOffset;
+	for (int32 LineIndex = 0; LineIndex < Lines.Num(); ++LineIndex)
+	{
+		// If the offset is within this line, that’s our location.
+		if (Offset <= Lines[LineIndex].Len())
+		{
+			OutLocation = FTextLocation(LineIndex, Offset);
+			return;
+		}
+		// Subtract the length of this line plus one for the newline.
+		Offset -= (Lines[LineIndex].Len() + 1);
+	}
+	// Fallback: place at end of last line.
+	OutLocation = FTextLocation(Lines.Num() - 1, Lines.Last().Len());
+}
+
+// Convert a FTextLocation into an absolute offset.
+int32 UVimTextEditorSubsystem::TextLocationToAbsoluteOffset(const FString& Text, const FTextLocation& Location)
+{
+	TArray<FString> Lines;
+	Text.ParseIntoArray(Lines, TEXT("\n"), false);
+	int32 Offset = 0;
+	for (int32 i = 0; i < Location.GetLineIndex(); ++i)
+	{
+		Offset += Lines[i].Len() + 1;
+	}
+	Offset += Location.GetOffset();
+	return Offset;
+}
+
+int32 UVimTextEditorSubsystem::GetCursorOffsetSingle()
+{
+	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+	{
+		// TODO:
+		// Hypothetical function – implement according to your API.
+		// return EditTextBox->GetCursorOffset();
+	}
+	return 0;
+}
+
+void UVimTextEditorSubsystem::SetCursorOffsetSingle(int32 NewOffset)
+{
+	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+	{
+		// TODO:
+		// Hypothetical function – implement according to your API.
+		// EditTextBox->SetCursorOffset(NewOffset);
+	}
+}
+
+//------------------------------------------------------------------------------
+// Main Navigation Functions
+//------------------------------------------------------------------------------
+// These functions calculate a new cursor position (as an absolute offset)
+// and then update the editor accordingly (handling multi-line vs. single-line).
+
+void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, bool bBigWord)
+{
+	FString Text;
+	if (!GetActiveEditableTextContent(Text))
+		return;
+
+	int32 CurrentAbs = 0;
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	{
+		TSharedPtr<SMultiLineEditableTextBox> MultiTextBox = ActiveMultiLineEditableTextBox.Pin();
+		if (!MultiTextBox.IsValid())
+			return;
+
+		FTextLocation CurrLoc = MultiTextBox->GetCursorLocation();
+		if (!CurrLoc.IsValid())
+			return;
+		CurrentAbs = TextLocationToAbsoluteOffset(Text, CurrLoc);
+
+		const int32 NewAbs = FindNextWordBoundary(Text, CurrentAbs, bBigWord);
+
+		FTextLocation NewLoc;
+		AbsoluteOffsetToTextLocation(Text, NewAbs, NewLoc);
+		if (!NewLoc.IsValid())
+			return;
+		if (CurrentVimMode == EVimMode::Visual)
+		{
+			SelectTextInRange(SlateApp, CurrLoc, NewLoc, false /*Don't Jump*/);
+			FVimInputProcessor::Get()
+				->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+		}
+		else // Normal Mode
+		{
+			MultiTextBox->GoTo(NewLoc);
+			FVimInputProcessor::Get()
+				->SimulateKeyPress(SlateApp, EKeys::Right);
+			HandleEditableUX();
+		}
+	}
+	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
+	// {
+	// 	CurrentAbs = GetCursorOffsetSingle();
+	// 	const int32 NewAbs = FindNextWordBoundary(Text, CurrentAbs, bBigWord);
+	// 	SetCursorOffsetSingle(NewAbs);
+	// }
+}
+
+void UVimTextEditorSubsystem::NavigateWordBackward(FSlateApplication& SlateApp, bool bBigWord)
+{
+	FString Text;
+	if (!GetActiveEditableTextContent(Text))
+		return;
+
+	int32 CurrentAbs = 0;
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	{
+		TSharedPtr<SMultiLineEditableTextBox> MultiTextBox = ActiveMultiLineEditableTextBox.Pin();
+		if (!MultiTextBox.IsValid())
+			return;
+
+		FTextLocation CurrLoc = MultiTextBox->GetCursorLocation();
+		if (!CurrLoc.IsValid())
+			return;
+		CurrentAbs = TextLocationToAbsoluteOffset(Text, CurrLoc);
+	}
+	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
+	// {
+	// 	CurrentAbs = GetCursorOffsetSingle();
+	// }
+
+	const int32 NewAbs = FindPreviousWordBoundary(Text, CurrentAbs, bBigWord);
+
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
+	{
+		TSharedPtr<SMultiLineEditableTextBox> MultiTextBox = ActiveMultiLineEditableTextBox.Pin();
+		if (!MultiTextBox.IsValid())
+			return;
+
+		FTextLocation NewLoc;
+		AbsoluteOffsetToTextLocation(Text, NewAbs, NewLoc);
+		MultiTextBox->GoTo(NewLoc);
+		// SetCursorSelectionToDefaultLocation(SlateApp);
+		HandleEditableUX();
+	}
+	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
+	// {
+	// 	SetCursorOffsetSingle(NewAbs);
+	// }
+}
+
 void UVimTextEditorSubsystem::BindCommands()
 {
 	TSharedRef<FVimInputProcessor> VimInputProcessor = FVimInputProcessor::Get();
@@ -2458,6 +2733,31 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EModifierKey::Control, EKeys::A) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::VimCommandSelectAll);
+
+	// Example key bindings for word motions:
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::W }, // 'w' for forward (small word)
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::NavigateW);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::W) }, // 'W' for forward (big word)
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::NavigateBigW);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::B }, // 'b' for backward (small word)
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::NavigateB);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::B) }, // 'B' for backward (big word)
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::NavigateBigB);
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
@@ -2523,7 +2823,7 @@ ABCD
 EFGH
 IJKL
 MNOP
-QRST
+QRST /,,/asd lkasjdf
 UVW
 XYZ
  */
