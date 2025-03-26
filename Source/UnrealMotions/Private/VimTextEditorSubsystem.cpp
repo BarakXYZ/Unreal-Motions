@@ -1724,7 +1724,7 @@ bool UVimTextEditorSubsystem::IsCursorAtBeginningOfLine()
 	return false;
 }
 
-bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfLine()
+bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfLine(bool bForceZeroValidation)
 {
 	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 		ActiveMultiLineEditableTextBox.Pin();
@@ -1744,7 +1744,9 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfLine()
 	// as if we're aligned right we should keep our target limit to 1 to properly
 	// keep the first char in the line selected.
 	const int32 TargetLimit =
-		(CurrentVimMode == EVimMode::Visual && !IsCursorAlignedRight(SlateApp))
+		bForceZeroValidation
+			|| (CurrentVimMode == EVimMode::Visual
+				&& !IsCursorAlignedRight(SlateApp))
 			// If no text selected, we should also only compare against 0,
 			// as we're not yet aligned to the right with highlighting
 			|| !MultiTextBox->AnyTextSelected()
@@ -1927,7 +1929,6 @@ void UVimTextEditorSubsystem::Delete(FSlateApplication& SlateApp, const FKeyEven
 
 	ClearTextSelection(true /*Normal*/);
 
-	/// aslkdadf
 	if (CurrentVimMode == EVimMode::Visual)
 		VimProc->SetVimMode(SlateApp, EVimMode::Normal);
 	else
@@ -2036,6 +2037,9 @@ void UVimTextEditorSubsystem::DeleteLineNormalModeMulti(FSlateApplication& Slate
 	if (!OriginLocation.IsValid())
 		return;
 
+	// const TSharedPtr<SMultiLineEditableText> MultiText = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+	// MultiText->DeleteSelectedText();
+
 	DeleteLineMulti(SlateApp, FKeyEvent());
 
 	// Check if we can keep the same cursor index or (second best alternative)
@@ -2139,6 +2143,17 @@ int32 UVimTextEditorSubsystem::GetMultiLineCount()
 
 void UVimTextEditorSubsystem::ChangeToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+
+	// We wanna simulate one time to the left is we're aligned right to properly
+	// be inserted at the right offset.
+	if (IsCursorAlignedRight(SlateApp)
+		&& !IsMultiLineCursorAtBeginningOfLine(true /*Zero Validation Offset*/))
+		InputProc->SimulateKeyPress(SlateApp, EKeys::Left);
+
+	InputProc->SetVimMode(SlateApp, EVimMode::Insert);
+	InputProc->SimulateKeyPress(SlateApp, EKeys::End, ModShiftDown);
+	InputProc->SimulateKeyPress(SlateApp, EKeys::Delete);
 }
 
 void UVimTextEditorSubsystem::ChangeVisualMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -2424,7 +2439,7 @@ void UVimTextEditorSubsystem::BindCommands()
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
-		{ EKeys::C, EKeys::Dollar },
+		{ EKeys::C, FInputChord(EModifierKey::Shift, EKeys::Four /*Shift+$*/) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ChangeToEndOfLine,
 		EVimMode::Normal);

@@ -165,7 +165,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool IsMultiLineCursorAtEndOfLine();
 
 	bool IsCursorAtBeginningOfLine();
-	bool IsMultiLineCursorAtBeginningOfLine();
+	bool IsMultiLineCursorAtBeginningOfLine(bool bForceZeroValidation = false);
 	bool IsSingleLineCursorAtBeginningOfLine();
 
 	bool IsCursorAtEndOfLine(FSlateApplication& SlateApp);
