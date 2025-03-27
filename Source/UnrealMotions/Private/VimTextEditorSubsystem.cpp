@@ -553,7 +553,7 @@ void UVimTextEditorSubsystem::HandleEditableUX()
 		// In this case, a better UX will be to opt for the Default Buffer
 		// (i.e. "  ") and cursor like visualization (select all).
 		if (!SetActiveEditableHintText(
-				FText::FromString("Press 'i' to Start Typing..."),
+				NormalModeHintText,
 				true /*Check if had default buffer*/))
 			SetDefaultBuffer(); // Default buffer alternative if return false
 	}
@@ -2318,9 +2318,8 @@ bool UVimTextEditorSubsystem::IsWordChar(TCHAR Char)
 //------------------------------------------------------------------------------
 // Word Boundary Helpers
 //------------------------------------------------------------------------------
-
 // Returns the absolute offset (0-based) for the next word boundary.
-// bBigWord == false means using “small word” rules (w), where punctuation is a delimiter;
+// bBigWord == false means using "small word" rules (w), where punctuation is a delimiter;
 // bBigWord == true means whitespace-delimited words (W).
 int32 UVimTextEditorSubsystem::FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord)
 {
@@ -2328,74 +2327,245 @@ int32 UVimTextEditorSubsystem::FindNextWordBoundary(const FString& Text, int32 C
 	if (CurrentPos >= Len)
 		return Len;
 
+	// Special case: if we're at the end of the text, return the end
+	if (CurrentPos == Len - 1)
+		return Len;
+
+	// Move to the next position first to ensure we always make progress
+	int32 NextPos = CurrentPos + 1;
+
 	if (bBigWord)
 	{
-		// For a big word, treat any whitespace as a delimiter.
-		if (!FChar::IsWhitespace(Text[CurrentPos]))
+		// For big words (W), skip until we find a non-whitespace after whitespace
+
+		// First, determine if we're currently on whitespace
+		bool bCurrentIsWhitespace = (CurrentPos < Len) && FChar::IsWhitespace(Text[CurrentPos]);
+
+		if (bCurrentIsWhitespace)
 		{
-			while (CurrentPos < Len && !FChar::IsWhitespace(Text[CurrentPos]))
-				++CurrentPos;
+			// Skip all consecutive whitespace
+			while (NextPos < Len && FChar::IsWhitespace(Text[NextPos]))
+				++NextPos;
 		}
-		while (CurrentPos < Len && FChar::IsWhitespace(Text[CurrentPos]))
-			++CurrentPos;
+		else
+		{
+			// Skip all consecutive non-whitespace
+			while (NextPos < Len && !FChar::IsWhitespace(Text[NextPos]))
+				++NextPos;
+
+			// Then skip any whitespace that follows
+			while (NextPos < Len && FChar::IsWhitespace(Text[NextPos]))
+				++NextPos;
+		}
 	}
 	else
 	{
-		// For a small word, use alphanumerics/underscore as word chars.
-		if (IsWordChar(Text[CurrentPos]))
-		{
-			while (CurrentPos < Len && IsWordChar(Text[CurrentPos]))
-				++CurrentPos;
-		}
-		// Then skip over any punctuation or non-word, non-whitespace characters.
-		while (CurrentPos < Len && !IsWordChar(Text[CurrentPos]) && !FChar::IsWhitespace(Text[CurrentPos]))
-			++CurrentPos;
+		// For small words (w), we need to identify the character type first
 
-		// Finally, skip any whitespace.
-		while (CurrentPos < Len && FChar::IsWhitespace(Text[CurrentPos]))
-			++CurrentPos;
+		// Determine the type of the current character
+		enum class CharType
+		{
+			Word,	   // Alphanumeric or underscore
+			Symbol,	   // Non-word, non-whitespace (punctuation, etc.)
+			Whitespace // Space, tab, etc.
+		};
+
+		CharType CurrentType;
+
+		if (FChar::IsWhitespace(Text[CurrentPos]))
+			CurrentType = CharType::Whitespace;
+		else if (IsWordChar(Text[CurrentPos]))
+			CurrentType = CharType::Word;
+		else
+			CurrentType = CharType::Symbol;
+
+		// Determine the type of the next character
+		CharType NextType;
+
+		if (NextPos < Len)
+		{
+			if (FChar::IsWhitespace(Text[NextPos]))
+				NextType = CharType::Whitespace;
+			else if (IsWordChar(Text[NextPos]))
+				NextType = CharType::Word;
+			else
+				NextType = CharType::Symbol;
+		}
+		else
+		{
+			// If we're at the end, use a different type to ensure we stop
+			NextType = CharType::Whitespace;
+		}
+
+		// If we're transitioning to a different type, that's a word boundary
+		if (CurrentType != NextType)
+		{
+			// If we're moving to whitespace, skip all consecutive whitespace
+			if (NextType == CharType::Whitespace)
+			{
+				while (NextPos < Len && FChar::IsWhitespace(Text[NextPos]))
+					++NextPos;
+			}
+		}
+		else
+		{
+			// We're still in the same character type
+			// Skip all characters of the current type
+			if (CurrentType == CharType::Word)
+			{
+				while (NextPos < Len && IsWordChar(Text[NextPos]))
+					++NextPos;
+			}
+			else if (CurrentType == CharType::Symbol)
+			{
+				while (NextPos < Len && !IsWordChar(Text[NextPos]) && !FChar::IsWhitespace(Text[NextPos]))
+					++NextPos;
+			}
+			else // CurrentType == CharType::Whitespace
+			{
+				while (NextPos < Len && FChar::IsWhitespace(Text[NextPos]))
+					++NextPos;
+			}
+
+			// Skip any trailing whitespace
+			while (NextPos < Len && FChar::IsWhitespace(Text[NextPos]))
+				++NextPos;
+		}
 	}
-	return CurrentPos;
+
+	return NextPos;
 }
 
 // Returns the absolute offset for the previous word boundary.
 int32 UVimTextEditorSubsystem::FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord)
 {
+	// Handle edge cases
 	if (CurrentPos <= 0)
 		return 0;
-	// Start from the character just before the current position.
-	--CurrentPos;
+
+	// Special case: if we're at the beginning of the text, return the beginning
+	if (CurrentPos == 1)
+		return 0;
+
+	// Start from the character just before the current position
+	int32 PrevPos = CurrentPos - 1;
 
 	if (bBigWord)
 	{
-		// For big word, first skip any whitespace backwards...
-		while (CurrentPos > 0 && FChar::IsWhitespace(Text[CurrentPos]))
+		// For big words (B), we focus on whitespace as the delimiter
+
+		// Skip any whitespace backwards first
+		while (PrevPos > 0 && FChar::IsWhitespace(Text[PrevPos]))
 		{
-			--CurrentPos;
+			--PrevPos;
 		}
-		// ...then skip non-whitespace backwards.
-		while (CurrentPos > 0 && !FChar::IsWhitespace(Text[CurrentPos - 1]))
+
+		// If we're now on a non-whitespace character, find the start of this word
+		if (PrevPos > 0 && !FChar::IsWhitespace(Text[PrevPos]))
 		{
-			--CurrentPos;
+			// Continue moving backward until we find the beginning of this word
+			// (either we hit the start of the text or a whitespace character)
+			while (PrevPos > 0 && !FChar::IsWhitespace(Text[PrevPos - 1]))
+			{
+				--PrevPos;
+			}
 		}
 	}
 	else
 	{
-		// For small word, if the current char isn’t a word char, move backward until one is found.
-		if (!IsWordChar(Text[CurrentPos]))
+		// For small words (b), we need to identify character types
+
+		// Define character types (matching the forward function)
+		enum class CharType
 		{
-			while (CurrentPos > 0 && !IsWordChar(Text[CurrentPos]))
+			Word,	   // Alphanumeric or underscore
+			Symbol,	   // Non-word, non-whitespace (punctuation, etc.)
+			Whitespace // Space, tab, etc.
+		};
+
+		// Skip any whitespace backwards first
+		while (PrevPos > 0 && FChar::IsWhitespace(Text[PrevPos]))
+		{
+			--PrevPos;
+		}
+
+		// If we're at the start of the text after skipping whitespace, return 0
+		if (PrevPos == 0)
+			return 0;
+
+		// Determine the type of the current character
+		CharType CurrentType;
+
+		if (IsWordChar(Text[PrevPos]))
+			CurrentType = CharType::Word;
+		else if (FChar::IsWhitespace(Text[PrevPos]))
+			CurrentType = CharType::Whitespace;
+		else
+			CurrentType = CharType::Symbol;
+
+		// Find the beginning of the current character group
+		if (CurrentType == CharType::Word)
+		{
+			// Find the start of this word
+			while (PrevPos > 0 && IsWordChar(Text[PrevPos - 1]))
 			{
-				--CurrentPos;
+				--PrevPos;
 			}
 		}
-		// Then skip the word characters backwards.
-		while (CurrentPos > 0 && IsWordChar(Text[CurrentPos - 1]))
+		else if (CurrentType == CharType::Symbol)
 		{
-			--CurrentPos;
+			// Find the start of this symbol group
+			while (PrevPos > 0 && !IsWordChar(Text[PrevPos - 1]) && !FChar::IsWhitespace(Text[PrevPos - 1]))
+			{
+				--PrevPos;
+			}
+		}
+
+		// If we're still at the original position minus one and not at the start,
+		// we might be in a complex transition - try moving back further
+		if (PrevPos == CurrentPos - 1 && PrevPos > 0)
+		{
+			CharType PrevType;
+
+			if (IsWordChar(Text[PrevPos - 1]))
+				PrevType = CharType::Word;
+			else if (FChar::IsWhitespace(Text[PrevPos - 1]))
+				PrevType = CharType::Whitespace;
+			else
+				PrevType = CharType::Symbol;
+
+			// If the previous character is of a different type, move to it
+			if (PrevType != CurrentType)
+			{
+				--PrevPos;
+
+				// Now find the beginning of this new character group
+				if (PrevType == CharType::Word)
+				{
+					while (PrevPos > 0 && IsWordChar(Text[PrevPos - 1]))
+					{
+						--PrevPos;
+					}
+				}
+				else if (PrevType == CharType::Symbol)
+				{
+					while (PrevPos > 0 && !IsWordChar(Text[PrevPos - 1]) && !FChar::IsWhitespace(Text[PrevPos - 1]))
+					{
+						--PrevPos;
+					}
+				}
+				else if (PrevType == CharType::Whitespace)
+				{
+					while (PrevPos > 0 && FChar::IsWhitespace(Text[PrevPos - 1]))
+					{
+						--PrevPos;
+					}
+				}
+			}
 		}
 	}
-	return CurrentPos;
+
+	return PrevPos;
 }
 
 //------------------------------------------------------------------------------
@@ -2476,6 +2646,13 @@ void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, b
 		TSharedPtr<SMultiLineEditableTextBox> MultiTextBox = ActiveMultiLineEditableTextBox.Pin();
 		if (!MultiTextBox.IsValid())
 			return;
+		TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+
+		// TODO: This should probably be more robust and have more checks
+		if (IsCursorAlignedRight(SlateApp))
+		{
+			VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
+		}
 
 		FTextLocation CurrLoc = MultiTextBox->GetCursorLocation();
 		if (!CurrLoc.IsValid())
@@ -2489,18 +2666,11 @@ void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, b
 		if (!NewLoc.IsValid())
 			return;
 		if (CurrentVimMode == EVimMode::Visual)
-		{
 			SelectTextInRange(SlateApp, CurrLoc, NewLoc, false /*Don't Jump*/);
-			FVimInputProcessor::Get()
-				->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
-		}
 		else // Normal Mode
-		{
 			MultiTextBox->GoTo(NewLoc);
-			FVimInputProcessor::Get()
-				->SimulateKeyPress(SlateApp, EKeys::Right);
-			HandleEditableUX();
-		}
+
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 	}
 	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 	// {
@@ -2522,33 +2692,36 @@ void UVimTextEditorSubsystem::NavigateWordBackward(FSlateApplication& SlateApp, 
 		TSharedPtr<SMultiLineEditableTextBox> MultiTextBox = ActiveMultiLineEditableTextBox.Pin();
 		if (!MultiTextBox.IsValid())
 			return;
+		TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+
+		// TODO: This should probably be more robust and have more checks
+		if (IsCursorAlignedRight(SlateApp))
+		{
+			VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
+		}
 
 		FTextLocation CurrLoc = MultiTextBox->GetCursorLocation();
 		if (!CurrLoc.IsValid())
 			return;
 		CurrentAbs = TextLocationToAbsoluteOffset(Text, CurrLoc);
+
+		const int32 NewAbs = FindPreviousWordBoundary(Text, CurrentAbs, bBigWord);
+
+		FTextLocation NewLoc;
+		AbsoluteOffsetToTextLocation(Text, NewAbs, NewLoc);
+		if (!NewLoc.IsValid())
+			return;
+		if (CurrentVimMode == EVimMode::Visual)
+			SelectTextInRange(SlateApp, CurrLoc, NewLoc, false /*Don't Jump*/);
+		else // Normal Mode
+			MultiTextBox->GoTo(NewLoc);
+
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 	}
 	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 	// {
 	// 	CurrentAbs = GetCursorOffsetSingle();
-	// }
-
-	const int32 NewAbs = FindPreviousWordBoundary(Text, CurrentAbs, bBigWord);
-
-	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
-	{
-		TSharedPtr<SMultiLineEditableTextBox> MultiTextBox = ActiveMultiLineEditableTextBox.Pin();
-		if (!MultiTextBox.IsValid())
-			return;
-
-		FTextLocation NewLoc;
-		AbsoluteOffsetToTextLocation(Text, NewAbs, NewLoc);
-		MultiTextBox->GoTo(NewLoc);
-		// SetCursorSelectionToDefaultLocation(SlateApp);
-		HandleEditableUX();
-	}
-	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
-	// {
+	// 	const int32 NewAbs = FindPreviousWordBoundary(Text, CurrentAbs, bBigWord);
 	// 	SetCursorOffsetSingle(NewAbs);
 	// }
 }
