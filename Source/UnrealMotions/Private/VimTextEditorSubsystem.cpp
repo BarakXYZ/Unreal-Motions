@@ -2325,6 +2325,8 @@ int32 UVimTextEditorSubsystem::FindNextWordBoundary(const FString& Text, int32 C
 {
 	const int32 Len = Text.Len();
 	if (CurrentPos >= Len)
+		// Bail as our curr pos is bigger than the entire Text, thus
+		// we can't find any "next" words to jump to.
 		return Len;
 
 	// Special case: if we're at the end of the text, return the end
@@ -2447,14 +2449,21 @@ int32 UVimTextEditorSubsystem::FindPreviousWordBoundary(const FString& Text, int
 	if (CurrentPos == 1)
 		return 0;
 
-	// Start from the character just before the current position
+	// Always start from the character just before the current position
 	int32 PrevPos = CurrentPos - 1;
 
+	// Define character types
+	enum class CharType
+	{
+		Word,	   // Alphanumeric or underscore
+		Symbol,	   // Non-word, non-whitespace (punctuation, etc.)
+		Whitespace // Space, tab, etc.
+	};
+
+	// For big words, we only care about whitespace vs. non-whitespace
 	if (bBigWord)
 	{
-		// For big words (B), we focus on whitespace as the delimiter
-
-		// Skip any whitespace backwards first
+		// Skip any whitespace backwards
 		while (PrevPos > 0 && FChar::IsWhitespace(Text[PrevPos]))
 		{
 			--PrevPos;
@@ -2473,29 +2482,20 @@ int32 UVimTextEditorSubsystem::FindPreviousWordBoundary(const FString& Text, int
 	}
 	else
 	{
-		// For small words (b), we need to identify character types
+		// For small words, we need to handle the different character types
 
-		// Define character types (matching the forward function)
-		enum class CharType
-		{
-			Word,	   // Alphanumeric or underscore
-			Symbol,	   // Non-word, non-whitespace (punctuation, etc.)
-			Whitespace // Space, tab, etc.
-		};
-
-		// Skip any whitespace backwards first
+		// Skip any trailing whitespace
 		while (PrevPos > 0 && FChar::IsWhitespace(Text[PrevPos]))
 		{
 			--PrevPos;
 		}
 
-		// If we're at the start of the text after skipping whitespace, return 0
+		// If we reached the beginning after skipping whitespace, return 0
 		if (PrevPos == 0)
 			return 0;
 
-		// Determine the type of the current character
+		// Determine the type of character we're on now
 		CharType CurrentType;
-
 		if (IsWordChar(Text[PrevPos]))
 			CurrentType = CharType::Word;
 		else if (FChar::IsWhitespace(Text[PrevPos]))
@@ -2503,7 +2503,7 @@ int32 UVimTextEditorSubsystem::FindPreviousWordBoundary(const FString& Text, int
 		else
 			CurrentType = CharType::Symbol;
 
-		// Find the beginning of the current character group
+		// Find the beginning of this character group
 		if (CurrentType == CharType::Word)
 		{
 			// Find the start of this word
@@ -2520,49 +2520,7 @@ int32 UVimTextEditorSubsystem::FindPreviousWordBoundary(const FString& Text, int
 				--PrevPos;
 			}
 		}
-
-		// If we're still at the original position minus one and not at the start,
-		// we might be in a complex transition - try moving back further
-		if (PrevPos == CurrentPos - 1 && PrevPos > 0)
-		{
-			CharType PrevType;
-
-			if (IsWordChar(Text[PrevPos - 1]))
-				PrevType = CharType::Word;
-			else if (FChar::IsWhitespace(Text[PrevPos - 1]))
-				PrevType = CharType::Whitespace;
-			else
-				PrevType = CharType::Symbol;
-
-			// If the previous character is of a different type, move to it
-			if (PrevType != CurrentType)
-			{
-				--PrevPos;
-
-				// Now find the beginning of this new character group
-				if (PrevType == CharType::Word)
-				{
-					while (PrevPos > 0 && IsWordChar(Text[PrevPos - 1]))
-					{
-						--PrevPos;
-					}
-				}
-				else if (PrevType == CharType::Symbol)
-				{
-					while (PrevPos > 0 && !IsWordChar(Text[PrevPos - 1]) && !FChar::IsWhitespace(Text[PrevPos - 1]))
-					{
-						--PrevPos;
-					}
-				}
-				else if (PrevType == CharType::Whitespace)
-				{
-					while (PrevPos > 0 && FChar::IsWhitespace(Text[PrevPos - 1]))
-					{
-						--PrevPos;
-					}
-				}
-			}
-		}
+		// No need to handle Whitespace case as we've already skipped whitespace
 	}
 
 	return PrevPos;
@@ -2648,15 +2606,14 @@ void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, b
 			return;
 		TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 
-		// TODO: This should probably be more robust and have more checks
-		if (IsCursorAlignedRight(SlateApp))
-		{
-			VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
-		}
-
 		FTextLocation CurrLoc = MultiTextBox->GetCursorLocation();
 		if (!CurrLoc.IsValid())
 			return;
+		if (IsCursorAlignedRight(SlateApp))
+			CurrLoc = FTextLocation(
+				CurrLoc.GetLineIndex(),
+				CurrLoc.GetOffset() - 1 /*Sub 1 to align left abs offset wise*/);
+
 		CurrentAbs = TextLocationToAbsoluteOffset(Text, CurrLoc);
 
 		const int32 NewAbs = FindNextWordBoundary(Text, CurrentAbs, bBigWord);
@@ -2666,11 +2623,26 @@ void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, b
 		if (!NewLoc.IsValid())
 			return;
 		if (CurrentVimMode == EVimMode::Visual)
-			SelectTextInRange(SlateApp, CurrLoc, NewLoc, false /*Don't Jump*/);
-		else // Normal Mode
-			MultiTextBox->GoTo(NewLoc);
+		{
+			SelectTextInRange(SlateApp, StartCursorLocationVisualMode, NewLoc);
+			FTextLocation NewCurrLoc = MultiTextBox->GetCursorLocation();
+			if (!NewCurrLoc.IsValid())
+				return;
 
-		VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+			// We still have a few more bugs to handle with whitespaces in new
+			// lines (moving from 1 line to another that has whitespaces at the
+			// front)
+			if (NewCurrLoc.GetLineIndex() == CurrLoc.GetLineIndex())
+				VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+		}
+		else // Normal Mode
+		{
+			MultiTextBox->GoTo(NewLoc);
+			if (NewAbs == Text.Len())
+				SetCursorSelectionToDefaultLocation(SlateApp /*Align Right*/);
+			else
+				VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+		}
 	}
 	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 	// {
@@ -2694,16 +2666,15 @@ void UVimTextEditorSubsystem::NavigateWordBackward(FSlateApplication& SlateApp, 
 			return;
 		TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 
-		// TODO: This should probably be more robust and have more checks
-		if (IsCursorAlignedRight(SlateApp))
-		{
-			VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
-		}
-
 		FTextLocation CurrLoc = MultiTextBox->GetCursorLocation();
 		if (!CurrLoc.IsValid())
 			return;
-		CurrentAbs = TextLocationToAbsoluteOffset(Text, CurrLoc);
+		if (CurrLoc.GetLineIndex() == 0 && CurrLoc.GetOffset() == 0)
+			return; // At beginning of document, thus can't move backwards.
+
+		CurrentAbs = IsCursorAlignedRight(SlateApp)
+			? TextLocationToAbsoluteOffset(Text, FTextLocation(CurrLoc.GetLineIndex(), CurrLoc.GetOffset() - 1 /*Comp for right align*/))
+			: TextLocationToAbsoluteOffset(Text, CurrLoc);
 
 		const int32 NewAbs = FindPreviousWordBoundary(Text, CurrentAbs, bBigWord);
 
@@ -2711,12 +2682,18 @@ void UVimTextEditorSubsystem::NavigateWordBackward(FSlateApplication& SlateApp, 
 		AbsoluteOffsetToTextLocation(Text, NewAbs, NewLoc);
 		if (!NewLoc.IsValid())
 			return;
-		if (CurrentVimMode == EVimMode::Visual)
-			SelectTextInRange(SlateApp, CurrLoc, NewLoc, false /*Don't Jump*/);
-		else // Normal Mode
-			MultiTextBox->GoTo(NewLoc);
 
-		VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+		if (CurrentVimMode == EVimMode::Visual)
+		{
+			SelectTextInRange(SlateApp, StartCursorLocationVisualMode, NewLoc);
+			// if (NewAbs != 0 && IsCursorAlignedRight(SlateApp))
+			// 	VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+		}
+		else // Normal Mode
+		{
+			MultiTextBox->GoTo(NewLoc);
+			VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+		}
 	}
 	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 	// {
