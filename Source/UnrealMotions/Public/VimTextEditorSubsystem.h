@@ -10,6 +10,16 @@
 #include "VimInputProcessor.h"
 #include "VimTextEditorSubsystem.generated.h"
 
+/**
+ * Character type enumeration used for word boundary detection
+ */
+enum class EUMCharType
+{
+	Word,	   // Alphanumeric or underscore
+	Symbol,	   // Non-word, non-whitespace (punctuation, etc.)
+	Whitespace // Space, tab, etc.
+};
+
 enum class EUMEditableWidgetsFocusState : uint8
 {
 	None,
@@ -122,12 +132,6 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void NavigateBigB(
 		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-
-	bool IsWordChar(TCHAR Char);
-
-	int32 FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
-
-	int32 FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
 
 	void AbsoluteOffsetToTextLocation(const FString& Text, int32 AbsoluteOffset, FTextLocation& OutLocation);
 
@@ -256,6 +260,126 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void AssignEditableBorder(bool bAssignDefaultBorder = false);
 
 	int32 GetMultiLineCount();
+
+	//							~ Word Navigation ~
+	//
+	bool IsWordChar(TCHAR Char);
+
+	// Public word boundary functions
+
+	/**
+	 * Returns the absolute offset (0-based) for the next word boundary.
+	 * bBigWord == false means using "small word" rules (w), where punctuation is a delimiter;
+	 * bBigWord == true means whitespace-delimited words (W).
+	 *
+	 * @param Text - The string to search
+	 * @param CurrentPos - The current position
+	 * @param bBigWord - Whether to use "big word" rules
+	 * @return The position of the next word boundary
+	 */
+	int32 FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	/**
+	 * Returns the absolute offset for the previous word boundary.
+	 *
+	 * @param Text - The string to search
+	 * @param CurrentPos - The current position
+	 * @param bBigWord - Whether to use "big word" rules
+	 * @return The position of the previous word boundary
+	 */
+	int32 FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	// Helper functions
+
+	/**
+	 * Determines the character type at a given position in text
+	 *
+	 * @param Text - The string to analyze
+	 * @param Position - The position to check
+	 * @return The character type
+	 */
+	EUMCharType GetCharType(const FString& Text, int32 Position);
+
+	/**
+	 * Skips consecutive characters of the specified type in the given direction
+	 *
+	 * @param Text - The string to traverse
+	 * @param StartPos - The starting position
+	 * @param Direction - 1 for forward, -1 for backward
+	 * @param TypeToSkip - The character type to skip
+	 * @return The new position after skipping
+	 */
+	int32 SkipCharType(const FString& Text, int32 StartPos, int32 Direction, EUMCharType TypeToSkip);
+
+	/**
+	 * Skips consecutive non-whitespace characters in the given direction
+	 *
+	 * @param Text - The string to traverse
+	 * @param StartPos - The starting position
+	 * @param Direction - 1 for forward, -1 for backward
+	 * @return The new position after skipping
+	 */
+	int32 SkipNonWhitespace(const FString& Text, int32 StartPos, int32 Direction);
+
+	/**
+	 * Skips whitespace in the given direction
+	 *
+	 * @param Text - The string to traverse
+	 * @param StartPos - The starting position
+	 * @param Direction - 1 for forward, -1 for backward
+	 * @return The new position after skipping whitespace
+	 */
+	int32 SkipWhitespace(const FString& Text, int32 StartPos, int32 Direction);
+
+	/**
+	 * Finds the next boundary of a "big word" (W)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the next big word boundary
+	 */
+	int32 FindNextBigWordBoundary(const FString& Text, int32 CurrentPos);
+
+	/**
+	 * Finds the previous boundary of a "big word" (W)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the previous big word boundary
+	 */
+	int32 FindPreviousBigWordBoundary(const FString& Text, int32 CurrentPos);
+
+	/**
+	 * Finds the next boundary of a "small word" (w)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the next small word boundary
+	 */
+	int32 FindNextSmallWordBoundary(const FString& Text, int32 CurrentPos);
+
+	/**
+	 * Finds the previous boundary of a "small word" (w)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the previous small word boundary
+	 */
+	int32 FindPreviousSmallWordBoundary(const FString& Text, int32 CurrentPos);
+	//
+	//							~ Word Navigation ~
+
+	/**
+	 * When we edit our text, then try to navigate it in its most recent form
+	 * without writing to disk; Our editable state seems to be confused sometimes
+	 * with an older edit of itself. To mitigate that we're enforcing pre-cache
+	 * (AFAIK) by setting text manually for the editable. That seems to "refresh"
+	 * itself to be up-to-date with the most recent edits and give us stable
+	 * navigation.
+	 *
+	 * TODO: Test on Single-Line Editable Text
+	 */
+	void RefreshActiveEditable(FSlateApplication& SlateApp);
 
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
