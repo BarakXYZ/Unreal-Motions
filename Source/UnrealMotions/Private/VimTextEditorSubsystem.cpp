@@ -2638,10 +2638,7 @@ void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, b
 			if (!NewCurrLoc.IsValid())
 				return;
 
-			// We still have a few more bugs to handle with whitespaces in new
-			// lines (moving from 1 line to another that has whitespaces at the
-			// front)
-			if (NewCurrLoc.GetLineIndex() == CurrLoc.GetLineIndex())
+			if (NewLoc.GetOffset() > 1 && IsCursorAlignedRight(SlateApp))
 				VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 		}
 		else // Normal Mode
@@ -2695,8 +2692,8 @@ void UVimTextEditorSubsystem::NavigateWordBackward(FSlateApplication& SlateApp, 
 		if (CurrentVimMode == EVimMode::Visual)
 		{
 			SelectTextInRange(SlateApp, StartCursorLocationVisualMode, NewLoc);
-			// if (NewAbs != 0 && IsCursorAlignedRight(SlateApp))
-			// 	VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+			if (NewLoc.GetOffset() > 1 && IsCursorAlignedRight(SlateApp))
+				VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 		}
 		else // Normal Mode
 		{
