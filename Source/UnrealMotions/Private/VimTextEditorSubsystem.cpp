@@ -62,12 +62,22 @@ void UVimTextEditorSubsystem::RefreshActiveEditable(FSlateApplication& SlateApp)
 				FTextLocation OriginLocation = MultiTextBox->GetCursorLocation();
 				if (!OriginLocation.IsValid())
 					return;
+
+				// if we were aligned left, we want to normalize the GoTo
+				// location 1 time to the right to properly select the character
+				// in Normal Mode.
+				bool bWasCursorAlignedLeft = !IsCursorAlignedRight(SlateApp);
+
 				// SetText to cache the most up-to-date input properly
 				// This is needed to navigate the text in its most recent form.
 				MultiTextBox->SetText(MultiTextBox->GetText());
 
 				// GoTo to the original location we've started at.
-				MultiTextBox->GoTo(OriginLocation);
+				MultiTextBox->GoTo(FTextLocation(
+					OriginLocation.GetLineIndex(),
+					bWasCursorAlignedLeft
+						? OriginLocation.GetOffset() + 1 // Normalize
+						: OriginLocation.GetOffset()));
 			}
 		}
 		default:
@@ -507,7 +517,8 @@ void UVimTextEditorSubsystem::HandleNormalModeOneChar()
 
 void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 {
-	FSlateApplication& SlateApp = FSlateApplication::Get();
+	FSlateApplication&			   SlateApp = FSlateApplication::Get();
+	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 	// This seems to be needed for first contact with MultiLine
 	// when navigating from outer panels and when the Multi has
 	// more than 1 character.
@@ -529,14 +540,16 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 
 		case (EUMSelectionState::ManyChars):
 		{
+			Logger.Print("I enter", true);
 			if ((!IsCurrentLineInMultiEmpty()
 					|| EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 				&& !IsCursorAlignedRight(SlateApp))
 			{
+				Logger.Print("I'm HERE", true);
 				ClearTextSelection();
 				ToggleReadOnly();
 
-				FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::Right, FUMInputHelpers::GetShiftDownModKeys());
+				VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 
 				return;
 			}
