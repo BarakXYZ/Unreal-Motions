@@ -2324,7 +2324,6 @@ void UVimTextEditorSubsystem::DebugSelectStartToEnd(const FTextLocation& StartLo
 		true);
 }
 
-// while (CurrentPos < Len && IsWordChar(Text[CurrentPos]))
 void UVimTextEditorSubsystem::NavigateW(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
@@ -2353,16 +2352,16 @@ void UVimTextEditorSubsystem::NavigateBigB(
 	NavigateWordBackward(SlateApp, true);
 }
 
+//------------------------------------------------------------------------------
+// Word Boundary Helper Implementations
+//------------------------------------------------------------------------------
+
 // Helper to determine what counts as a word character.
 // For "small word" motions (w, b) we treat alphanumeric and underscore as word characters.
 bool UVimTextEditorSubsystem::IsWordChar(TCHAR Char)
 {
 	return FChar::IsAlnum(Char) || Char == TEXT('_');
 }
-
-//------------------------------------------------------------------------------
-// Word Boundary Helper Implementations
-//------------------------------------------------------------------------------
 
 EUMCharType UVimTextEditorSubsystem::GetCharType(const FString& Text, int32 Position)
 {
@@ -2903,7 +2902,6 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::VimCommandSelectAll);
 
-	// Example key bindings for word motions:
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::W }, // 'w' for forward (small word)
@@ -2927,6 +2925,34 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EModifierKey::Shift, EKeys::B) }, // 'B' for backward (big word)
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::NavigateBigB);
+
+	// // E for next small word end
+	// VimInputProcessor->AddKeyBinding_Sequence(
+	// 	EUMBindingContext::TextEditing,
+	// 	{ EKeys::E },
+	// 	WeakTextSubsystem,
+	// 	&UVimTextEditorSubsystem::NavigateE);
+
+	// // E for next big word end
+	// VimInputProcessor->AddKeyBinding_Sequence(
+	// 	EUMBindingContext::TextEditing,
+	// 	{ FInputChord(EModifierKey::Shift, EKeys::E) },
+	// 	WeakTextSubsystem,
+	// 	&UVimTextEditorSubsystem::NavigateBigE);
+
+	// // ge for previous small word end
+	// VimInputProcessor->AddKeyBinding_Sequence(
+	// 	EUMBindingContext::TextEditing,
+	// 	{ EKeys::G, EKeys::E },
+	// 	WeakTextSubsystem,
+	// 	&UVimTextEditorSubsystem::NavigateGE);
+
+	// // gE for previous big word end
+	// VimInputProcessor->AddKeyBinding_Sequence(
+	// 	EUMBindingContext::TextEditing,
+	// 	{ EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
+	// 	WeakTextSubsystem,
+	// 	&UVimTextEditorSubsystem::NavigateGBigE);
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)

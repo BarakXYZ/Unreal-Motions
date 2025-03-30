@@ -366,6 +366,68 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	 * @return The position of the previous small word boundary
 	 */
 	int32 FindPreviousSmallWordBoundary(const FString& Text, int32 CurrentPos);
+
+	/**
+	 * Returns the absolute offset for the end of the current/next word.
+	 *
+	 * @param Text - The string to search
+	 * @param CurrentPos - The current position
+	 * @param bBigWord - Whether to use "big word" rules
+	 * @return The position of the end of the current/next word
+	 */
+	int32 FindWordEnd(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	/**
+	 * Returns the absolute offset for the end of the previous word.
+	 *
+	 * @param Text - The string to search
+	 * @param CurrentPos - The current position
+	 * @param bBigWord - Whether to use "big word" rules
+	 * @return The position of the end of the previous word
+	 */
+	int32 FindPreviousWordEnd(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	/**
+	 * Finds the end of a "big word" (E command)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the end of the current/next big word
+	 */
+	int32 FindBigWordEnd(const FString& Text, int32 CurrentPos);
+
+	/**
+	 * Finds the end of a "small word" (e command)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the end of the current/next small word
+	 */
+	int32 FindSmallWordEnd(const FString& Text, int32 CurrentPos);
+
+	/**
+	 * Finds the end of the previous "big word" (gE command)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the end of the previous big word
+	 */
+	int32 FindPreviousBigWordEnd(const FString& Text, int32 CurrentPos);
+
+	/**
+	 * Finds the end of the previous "small word" (ge command)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the end of the previous small word
+	 */
+	int32 FindPreviousSmallWordEnd(const FString& Text, int32 CurrentPos);
+
+	// Navigation command implementations
+	void NavigateE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateBigE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateGE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateGBigE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	//
 	//							~ Word Navigation ~
 
