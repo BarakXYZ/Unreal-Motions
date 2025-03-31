@@ -124,15 +124,6 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleLeftNavigationMulti(
 		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
-	void NavigateW(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void NavigateBigW(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void NavigateB(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void NavigateBigB(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-
 	void AbsoluteOffsetToTextLocation(const FString& Text, int32 AbsoluteOffset, FTextLocation& OutLocation);
 
 	int32 TextLocationToAbsoluteOffset(const FString& Text, const FTextLocation& Location);
@@ -140,8 +131,11 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	int32 GetCursorOffsetSingle();
 	void  SetCursorOffsetSingle(int32 NewOffset);
 
-	void NavigateWordForward(FSlateApplication& SlateApp, bool bBigWord);
-	void NavigateWordBackward(FSlateApplication& SlateApp, bool bBigWord);
+	void NavigateWord(
+		FSlateApplication& SlateApp,
+		bool			   bBigWord,
+		int32 (UVimTextEditorSubsystem::*FindWordBoundary)(
+			const FString& Text, int32 CurrentPos, bool bBigWord));
 
 	void ToggleCursorBlinkingOff();
 	bool IsEditableTextWithDefaultBuffer();
@@ -424,6 +418,12 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	int32 FindPreviousSmallWordEnd(const FString& Text, int32 CurrentPos);
 
 	// Navigation command implementations
+
+	void NavigateW(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateBigW(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateB(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void NavigateBigB(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
 	void NavigateE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void NavigateBigE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void NavigateGE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);

@@ -2328,28 +2328,48 @@ void UVimTextEditorSubsystem::NavigateW(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	// 'w' – forward word (small word).
-	NavigateWordForward(SlateApp, false);
+	NavigateWord(SlateApp, false,
+		&UVimTextEditorSubsystem::FindNextWordBoundary);
 }
 
 void UVimTextEditorSubsystem::NavigateBigW(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	// 'W' – forward word (big word).
-	NavigateWordForward(SlateApp, true);
+	NavigateWord(SlateApp, true,
+		&UVimTextEditorSubsystem::FindNextWordBoundary);
 }
 
 void UVimTextEditorSubsystem::NavigateB(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	// 'b' – backward word (small word).
-	NavigateWordBackward(SlateApp, false);
+	NavigateWord(SlateApp, false,
+		&UVimTextEditorSubsystem::FindPreviousWordBoundary);
 }
 
 void UVimTextEditorSubsystem::NavigateBigB(
 	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	// 'B' – backward word (big word).
-	NavigateWordBackward(SlateApp, true);
+	NavigateWord(SlateApp, true,
+		&UVimTextEditorSubsystem::FindPreviousWordBoundary);
+}
+
+void UVimTextEditorSubsystem::NavigateE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+}
+
+void UVimTextEditorSubsystem::NavigateBigE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+}
+
+void UVimTextEditorSubsystem::NavigateGE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+}
+
+void UVimTextEditorSubsystem::NavigateGBigE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
 }
 
 //------------------------------------------------------------------------------
@@ -2613,7 +2633,11 @@ void UVimTextEditorSubsystem::SetCursorOffsetSingle(int32 NewOffset)
 // These functions calculate a new cursor position (as an absolute offset)
 // and then update the editor accordingly (handling multi-line vs. single-line).
 
-void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, bool bBigWord)
+void UVimTextEditorSubsystem::NavigateWord(
+	FSlateApplication& SlateApp,
+	bool			   bBigWord,
+	int32 (UVimTextEditorSubsystem::*FindWordBoundary)(
+		const FString& Text, int32 CurrentPos, bool bBigWord))
 {
 	FString Text;
 	if (!GetActiveEditableTextContent(Text))
@@ -2630,25 +2654,23 @@ void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, b
 		FTextLocation CurrLoc = MultiTextBox->GetCursorLocation();
 		if (!CurrLoc.IsValid())
 			return;
-		if (IsCursorAlignedRight(SlateApp))
-			CurrLoc = FTextLocation(
-				CurrLoc.GetLineIndex(),
-				CurrLoc.GetOffset() - 1 /*Sub 1 to align left abs offset wise*/);
 
-		CurrentAbs = TextLocationToAbsoluteOffset(Text, CurrLoc);
+		CurrentAbs = IsCursorAlignedRight(SlateApp)
+			? TextLocationToAbsoluteOffset(Text,
+				  FTextLocation(CurrLoc.GetLineIndex(),
+					  CurrLoc.GetOffset() - 1 /*Comp for right align*/))
+			: TextLocationToAbsoluteOffset(Text, CurrLoc);
 
-		const int32 NewAbs = FindNextWordBoundary(Text, CurrentAbs, bBigWord);
+		const int32 NewAbs = (this->*FindWordBoundary)(Text, CurrentAbs, bBigWord);
 
 		FTextLocation NewLoc;
 		AbsoluteOffsetToTextLocation(Text, NewAbs, NewLoc);
 		if (!NewLoc.IsValid())
 			return;
+
 		if (CurrentVimMode == EVimMode::Visual)
 		{
 			SelectTextInRange(SlateApp, StartCursorLocationVisualMode, NewLoc);
-			FTextLocation NewCurrLoc = MultiTextBox->GetCursorLocation();
-			if (!NewCurrLoc.IsValid())
-				return;
 
 			if (NewLoc.GetOffset() > 1 && IsCursorAlignedRight(SlateApp))
 				VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
@@ -2656,69 +2678,12 @@ void UVimTextEditorSubsystem::NavigateWordForward(FSlateApplication& SlateApp, b
 		else // Normal Mode
 		{
 			MultiTextBox->GoTo(NewLoc);
-			if (NewAbs == Text.Len())
+			if (NewAbs == Text.Len()) // We're at end, sim Left, then Shift+Right
 				SetCursorSelectionToDefaultLocation(SlateApp /*Align Right*/);
 			else
 				VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 		}
 	}
-	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
-	// {
-	// 	CurrentAbs = GetCursorOffsetSingle();
-	// 	const int32 NewAbs = FindNextWordBoundary(Text, CurrentAbs, bBigWord);
-	// 	SetCursorOffsetSingle(NewAbs);
-	// }
-}
-
-void UVimTextEditorSubsystem::NavigateWordBackward(FSlateApplication& SlateApp, bool bBigWord)
-{
-	FString Text;
-	if (!GetActiveEditableTextContent(Text))
-		return;
-
-	int32 CurrentAbs = 0;
-	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
-	{
-		TSharedPtr<SMultiLineEditableTextBox> MultiTextBox = ActiveMultiLineEditableTextBox.Pin();
-		if (!MultiTextBox.IsValid())
-			return;
-		TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
-
-		FTextLocation CurrLoc = MultiTextBox->GetCursorLocation();
-		if (!CurrLoc.IsValid())
-			return;
-		if (CurrLoc.GetLineIndex() == 0 && CurrLoc.GetOffset() == 0)
-			return; // At beginning of document, thus can't move backwards.
-
-		CurrentAbs = IsCursorAlignedRight(SlateApp)
-			? TextLocationToAbsoluteOffset(Text, FTextLocation(CurrLoc.GetLineIndex(), CurrLoc.GetOffset() - 1 /*Comp for right align*/))
-			: TextLocationToAbsoluteOffset(Text, CurrLoc);
-
-		const int32 NewAbs = FindPreviousWordBoundary(Text, CurrentAbs, bBigWord);
-
-		FTextLocation NewLoc;
-		AbsoluteOffsetToTextLocation(Text, NewAbs, NewLoc);
-		if (!NewLoc.IsValid())
-			return;
-
-		if (CurrentVimMode == EVimMode::Visual)
-		{
-			SelectTextInRange(SlateApp, StartCursorLocationVisualMode, NewLoc);
-			if (NewLoc.GetOffset() > 1 && IsCursorAlignedRight(SlateApp))
-				VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
-		}
-		else // Normal Mode
-		{
-			MultiTextBox->GoTo(NewLoc);
-			VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
-		}
-	}
-	// else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
-	// {
-	// 	CurrentAbs = GetCursorOffsetSingle();
-	// 	const int32 NewAbs = FindPreviousWordBoundary(Text, CurrentAbs, bBigWord);
-	// 	SetCursorOffsetSingle(NewAbs);
-	// }
 }
 
 void UVimTextEditorSubsystem::BindCommands()
@@ -2926,33 +2891,33 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::NavigateBigB);
 
-	// // E for next small word end
-	// VimInputProcessor->AddKeyBinding_Sequence(
-	// 	EUMBindingContext::TextEditing,
-	// 	{ EKeys::E },
-	// 	WeakTextSubsystem,
-	// 	&UVimTextEditorSubsystem::NavigateE);
+	// E for next small word end
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::E },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::NavigateE);
 
-	// // E for next big word end
-	// VimInputProcessor->AddKeyBinding_Sequence(
-	// 	EUMBindingContext::TextEditing,
-	// 	{ FInputChord(EModifierKey::Shift, EKeys::E) },
-	// 	WeakTextSubsystem,
-	// 	&UVimTextEditorSubsystem::NavigateBigE);
+	// E for next big word end
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::E) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::NavigateBigE);
 
-	// // ge for previous small word end
-	// VimInputProcessor->AddKeyBinding_Sequence(
-	// 	EUMBindingContext::TextEditing,
-	// 	{ EKeys::G, EKeys::E },
-	// 	WeakTextSubsystem,
-	// 	&UVimTextEditorSubsystem::NavigateGE);
+	// ge for previous small word end
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::G, EKeys::E },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::NavigateGE);
 
-	// // gE for previous big word end
-	// VimInputProcessor->AddKeyBinding_Sequence(
-	// 	EUMBindingContext::TextEditing,
-	// 	{ EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
-	// 	WeakTextSubsystem,
-	// 	&UVimTextEditorSubsystem::NavigateGBigE);
+	// gE for previous big word end
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::NavigateGBigE);
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
