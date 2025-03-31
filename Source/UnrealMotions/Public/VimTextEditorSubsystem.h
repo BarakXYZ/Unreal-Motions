@@ -261,28 +261,6 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	// Public word boundary functions
 
-	/**
-	 * Returns the absolute offset (0-based) for the next word boundary.
-	 * bBigWord == false means using "small word" rules (w), where punctuation is a delimiter;
-	 * bBigWord == true means whitespace-delimited words (W).
-	 *
-	 * @param Text - The string to search
-	 * @param CurrentPos - The current position
-	 * @param bBigWord - Whether to use "big word" rules
-	 * @return The position of the next word boundary
-	 */
-	int32 FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
-
-	/**
-	 * Returns the absolute offset for the previous word boundary.
-	 *
-	 * @param Text - The string to search
-	 * @param CurrentPos - The current position
-	 * @param bBigWord - Whether to use "big word" rules
-	 * @return The position of the previous word boundary
-	 */
-	int32 FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
-
 	// Helper functions
 
 	/**
@@ -326,6 +304,28 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	int32 SkipWhitespace(const FString& Text, int32 StartPos, int32 Direction);
 
 	/**
+	 * Returns the absolute offset (0-based) for the next word boundary.
+	 * bBigWord == false means using "small word" rules (w), where punctuation is a delimiter;
+	 * bBigWord == true means whitespace-delimited words (W).
+	 *
+	 * @param Text - The string to search
+	 * @param CurrentPos - The current position
+	 * @param bBigWord - Whether to use "big word" rules
+	 * @return The position of the next word boundary
+	 */
+	int32 FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	/**
+	 * Returns the absolute offset for the previous word boundary.
+	 *
+	 * @param Text - The string to search
+	 * @param CurrentPos - The current position
+	 * @param bBigWord - Whether to use "big word" rules
+	 * @return The position of the previous word boundary
+	 */
+	int32 FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	/**
 	 * Finds the next boundary of a "big word" (W)
 	 *
 	 * @param Text - The string to traverse
@@ -335,7 +335,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	int32 FindNextBigWordBoundary(const FString& Text, int32 CurrentPos);
 
 	/**
-	 * Finds the previous boundary of a "big word" (W)
+	 * Finds the previous boundary of a "big word" (B)
 	 *
 	 * @param Text - The string to traverse
 	 * @param CurrentPos - The current position
@@ -353,7 +353,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	int32 FindNextSmallWordBoundary(const FString& Text, int32 CurrentPos);
 
 	/**
-	 * Finds the previous boundary of a "small word" (w)
+	 * Finds the previous boundary of a "small word" (b)
 	 *
 	 * @param Text - The string to traverse
 	 * @param CurrentPos - The current position
@@ -361,64 +361,67 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	 */
 	int32 FindPreviousSmallWordBoundary(const FString& Text, int32 CurrentPos);
 
-	/**
-	 * Returns the absolute offset for the end of the current/next word.
-	 *
-	 * @param Text - The string to search
-	 * @param CurrentPos - The current position
-	 * @param bBigWord - Whether to use "big word" rules
-	 * @return The position of the end of the current/next word
-	 */
-	int32 FindWordEnd(const FString& Text, int32 CurrentPos, bool bBigWord);
+	// New functions for word ending
 
 	/**
-	 * Returns the absolute offset for the end of the previous word.
+	 * Returns the absolute offset (0-based) for the next word end.
+	 * bBigWord == false means using "small word" rules (e), where punctuation is a delimiter;
+	 * bBigWord == true means whitespace-delimited words (E).
 	 *
 	 * @param Text - The string to search
 	 * @param CurrentPos - The current position
 	 * @param bBigWord - Whether to use "big word" rules
-	 * @return The position of the end of the previous word
+	 * @return The position of the next word end
+	 */
+	int32 FindNextWordEnd(const FString& Text, int32 CurrentPos, bool bBigWord);
+
+	/**
+	 * Returns the absolute offset for the previous word end.
+	 *
+	 * @param Text - The string to search
+	 * @param CurrentPos - The current position
+	 * @param bBigWord - Whether to use "big word" rules
+	 * @return The position of the previous word end
 	 */
 	int32 FindPreviousWordEnd(const FString& Text, int32 CurrentPos, bool bBigWord);
 
 	/**
-	 * Finds the end of a "big word" (E command)
+	 * Finds the next ending of a "big word" (E)
 	 *
 	 * @param Text - The string to traverse
 	 * @param CurrentPos - The current position
-	 * @return The position of the end of the current/next big word
+	 * @return The position of the next big word end
 	 */
-	int32 FindBigWordEnd(const FString& Text, int32 CurrentPos);
+	int32 FindNextBigWordEnd(const FString& Text, int32 CurrentPos);
 
 	/**
-	 * Finds the end of a "small word" (e command)
+	 * Finds the previous ending of a "big word" (gE)
 	 *
 	 * @param Text - The string to traverse
 	 * @param CurrentPos - The current position
-	 * @return The position of the end of the current/next small word
-	 */
-	int32 FindSmallWordEnd(const FString& Text, int32 CurrentPos);
-
-	/**
-	 * Finds the end of the previous "big word" (gE command)
-	 *
-	 * @param Text - The string to traverse
-	 * @param CurrentPos - The current position
-	 * @return The position of the end of the previous big word
+	 * @return The position of the previous big word end
 	 */
 	int32 FindPreviousBigWordEnd(const FString& Text, int32 CurrentPos);
 
 	/**
-	 * Finds the end of the previous "small word" (ge command)
+	 * Finds the next ending of a "small word" (e)
 	 *
 	 * @param Text - The string to traverse
 	 * @param CurrentPos - The current position
-	 * @return The position of the end of the previous small word
+	 * @return The position of the next small word end
+	 */
+	int32 FindNextSmallWordEnd(const FString& Text, int32 CurrentPos);
+
+	/**
+	 * Finds the previous ending of a "small word" (ge)
+	 *
+	 * @param Text - The string to traverse
+	 * @param CurrentPos - The current position
+	 * @return The position of the previous small word end
 	 */
 	int32 FindPreviousSmallWordEnd(const FString& Text, int32 CurrentPos);
 
-	// Navigation command implementations
-
+	// Vim Binding Functions Commands
 	void NavigateW(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void NavigateBigW(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void NavigateB(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);

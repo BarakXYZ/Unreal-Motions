@@ -2358,18 +2358,30 @@ void UVimTextEditorSubsystem::NavigateBigB(
 
 void UVimTextEditorSubsystem::NavigateE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
+	// 'e' – forward to end of word (small word)
+	NavigateWord(SlateApp, false,
+		&UVimTextEditorSubsystem::FindNextWordEnd);
 }
 
 void UVimTextEditorSubsystem::NavigateBigE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
+	// 'E' – forward to end of word (big word)
+	NavigateWord(SlateApp, true,
+		&UVimTextEditorSubsystem::FindNextWordEnd);
 }
 
 void UVimTextEditorSubsystem::NavigateGE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
+	// 'ge' – backward to end of word (small word)
+	NavigateWord(SlateApp, false,
+		&UVimTextEditorSubsystem::FindPreviousWordEnd);
 }
 
 void UVimTextEditorSubsystem::NavigateGBigE(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
+	// 'gE' – backward to end of word (big word)
+	NavigateWord(SlateApp, true,
+		&UVimTextEditorSubsystem::FindPreviousWordEnd);
 }
 
 //------------------------------------------------------------------------------
@@ -2441,6 +2453,22 @@ int32 UVimTextEditorSubsystem::SkipNonWhitespace(const FString& Text, int32 Star
 int32 UVimTextEditorSubsystem::SkipWhitespace(const FString& Text, int32 StartPos, int32 Direction)
 {
 	return SkipCharType(Text, StartPos, Direction, EUMCharType::Whitespace);
+}
+
+int32 UVimTextEditorSubsystem::FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord)
+{
+	if (bBigWord)
+		return FindNextBigWordBoundary(Text, CurrentPos);
+	else
+		return FindNextSmallWordBoundary(Text, CurrentPos);
+}
+
+int32 UVimTextEditorSubsystem::FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord)
+{
+	if (bBigWord)
+		return FindPreviousBigWordBoundary(Text, CurrentPos);
+	else
+		return FindPreviousSmallWordBoundary(Text, CurrentPos);
 }
 
 int32 UVimTextEditorSubsystem::FindNextBigWordBoundary(const FString& Text, int32 CurrentPos)
@@ -2551,20 +2579,230 @@ int32 UVimTextEditorSubsystem::FindPreviousSmallWordBoundary(const FString& Text
 	return NewPos;
 }
 
-int32 UVimTextEditorSubsystem::FindNextWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord)
+int32 UVimTextEditorSubsystem::FindNextWordEnd(const FString& Text, int32 CurrentPos, bool bBigWord)
 {
 	if (bBigWord)
-		return FindNextBigWordBoundary(Text, CurrentPos);
+		return FindNextBigWordEnd(Text, CurrentPos);
 	else
-		return FindNextSmallWordBoundary(Text, CurrentPos);
+		return FindNextSmallWordEnd(Text, CurrentPos);
 }
 
-int32 UVimTextEditorSubsystem::FindPreviousWordBoundary(const FString& Text, int32 CurrentPos, bool bBigWord)
+int32 UVimTextEditorSubsystem::FindPreviousWordEnd(const FString& Text, int32 CurrentPos, bool bBigWord)
 {
 	if (bBigWord)
-		return FindPreviousBigWordBoundary(Text, CurrentPos);
+		return FindPreviousBigWordEnd(Text, CurrentPos);
 	else
-		return FindPreviousSmallWordBoundary(Text, CurrentPos);
+		return FindPreviousSmallWordEnd(Text, CurrentPos);
+}
+
+int32 UVimTextEditorSubsystem::FindNextBigWordEnd(const FString& Text, int32 CurrentPos)
+{
+	const int32 Len = Text.Len();
+
+	// Handle boundary cases
+	if (CurrentPos >= Len - 1)
+		return Len - 1;
+
+	int32 NewPos = CurrentPos + 1; // Always make progress from current position
+
+	// Skip any whitespace ahead
+	NewPos = SkipWhitespace(Text, NewPos, 1);
+
+	// If we're not at the end of the text
+	if (NewPos < Len)
+	{
+		// Find the end of the next non-whitespace chunk
+		const int32 EndPos = SkipNonWhitespace(Text, NewPos, 1);
+
+		// If we found a non-whitespace chunk, position at its last character
+		if (EndPos > NewPos)
+			NewPos = EndPos - 1;
+	}
+	else
+	{
+		// If we're at the end, back up to the last non-whitespace character
+		NewPos = Len - 1;
+		while (NewPos > CurrentPos && FChar::IsWhitespace(Text[NewPos]))
+			NewPos--;
+	}
+
+	return NewPos;
+}
+
+int32 UVimTextEditorSubsystem::FindPreviousBigWordEnd(const FString& Text, int32 CurrentPos)
+{
+	// Handle boundary cases
+	if (CurrentPos <= 0)
+		return 0;
+
+	int32 NewPos = CurrentPos;
+
+	// Skip whitespace backward if we're currently in whitespace
+	if (NewPos < Text.Len() && FChar::IsWhitespace(Text[NewPos]))
+		NewPos = SkipWhitespace(Text, NewPos, -1);
+
+	// If we're at a non-whitespace character, we need to find the previous word
+	if (NewPos > 0)
+	{
+		// First go back to the beginning of the current word (if we're in a word)
+		if (NewPos < Text.Len() && !FChar::IsWhitespace(Text[NewPos]))
+		{
+			// If we're in a word, move to its beginning
+			int32 WordBegin = SkipNonWhitespace(Text, NewPos, -1);
+
+			// If we're already at the beginning of a word, we need to find the previous word
+			if (WordBegin == NewPos)
+			{
+				// Skip any whitespace backwards
+				NewPos = SkipWhitespace(Text, WordBegin, -1);
+
+				// Find the beginning of the previous word
+				if (NewPos > 0)
+				{
+					int32 PrevWordBegin = SkipNonWhitespace(Text, NewPos, -1);
+
+					// Now find the end of that word
+					NewPos = PrevWordBegin;
+					while (NewPos < Text.Len() - 1 && !FChar::IsWhitespace(Text[NewPos + 1]))
+						NewPos++;
+				}
+			}
+			else
+			{
+				// If we moved to the beginning, go back to find the previous word
+				NewPos = SkipWhitespace(Text, WordBegin, -1);
+
+				// Find the beginning of the previous word
+				if (NewPos > 0)
+				{
+					int32 PrevWordBegin = SkipNonWhitespace(Text, NewPos, -1);
+
+					// Now find the end of that word
+					NewPos = PrevWordBegin;
+					while (NewPos < Text.Len() - 1 && !FChar::IsWhitespace(Text[NewPos + 1]))
+						NewPos++;
+				}
+			}
+		}
+		else
+		{
+			// We're on whitespace or at end of string, find the previous non-whitespace character
+			NewPos = SkipWhitespace(Text, NewPos, -1);
+
+			// If we found non-whitespace, find the beginning of that word
+			if (NewPos > 0)
+			{
+				int32 WordBegin = SkipNonWhitespace(Text, NewPos, -1);
+
+				// Position at the end of this word
+				NewPos = WordBegin;
+				while (NewPos < Text.Len() - 1 && !FChar::IsWhitespace(Text[NewPos + 1]))
+					NewPos++;
+			}
+		}
+	}
+
+	return NewPos;
+}
+
+int32 UVimTextEditorSubsystem::FindNextSmallWordEnd(const FString& Text, int32 CurrentPos)
+{
+	const int32 Len = Text.Len();
+
+	// Handle boundary cases
+	if (CurrentPos >= Len - 1)
+		return Len - 1;
+
+	int32 NewPos = CurrentPos + 1; // Always make progress from current position
+
+	// Skip any whitespace ahead
+	NewPos = SkipWhitespace(Text, NewPos, 1);
+
+	// If we're not at the end of the text
+	if (NewPos < Len)
+	{
+		// Get the type of the character at our new position
+		EUMCharType CurrentType = GetCharType(Text, NewPos);
+
+		// Find the last character of this type
+		int32 EndPos = NewPos;
+		while (EndPos < Len - 1 && GetCharType(Text, EndPos + 1) == CurrentType)
+			EndPos++;
+
+		NewPos = EndPos;
+	}
+	else
+	{
+		// If we're at the end, back up to the last non-whitespace character
+		NewPos = Len - 1;
+		while (NewPos > CurrentPos && FChar::IsWhitespace(Text[NewPos]))
+			NewPos--;
+	}
+
+	return NewPos;
+}
+
+int32 UVimTextEditorSubsystem::FindPreviousSmallWordEnd(const FString& Text, int32 CurrentPos)
+{
+	if (CurrentPos <= 0)
+		return 0;
+
+	int32 Pos = CurrentPos;
+
+	// If the cursor is within the text and is on whitespace,
+	// or if we're at the very end, back up over any trailing whitespace.
+	if ((Pos < Text.Len() && FChar::IsWhitespace(Text[Pos])) || Pos == Text.Len())
+	{
+		Pos = SkipWhitespace(Text, Pos, -1);
+		if (Pos <= 0)
+			return 0;
+		return Pos - 1;
+	}
+
+	// Determine the start of the "current" word.
+	// If the character immediately left of the cursor is whitespace,
+	// then we are already at a word boundary.
+	int32 CurrentWordStart;
+	if (Pos > 0 && FChar::IsWhitespace(Text[Pos - 1]))
+	{
+		CurrentWordStart = Pos;
+	}
+	else
+	{
+		// We're in the middle or at the end of a word.
+		// Get the type of the character immediately left of pos.
+		EUMCharType LeftCharType = GetCharType(Text, Pos - 1);
+
+		// Get the type of the current char we're at, if it doesn't match the
+		// type to the left, that's a word boundary.
+		EUMCharType CurrCharType = GetCharType(Text, Pos);
+		if (LeftCharType != CurrCharType)
+			return Pos - 1;
+
+		// Move backward over characters of this same type.
+		CurrentWordStart = SkipCharType(Text, Pos, -1, LeftCharType);
+	}
+
+	// Now skip backwards over any whitespace preceding the current word.
+	int32 PrevBoundary = SkipWhitespace(Text, CurrentWordStart, -1);
+	if (PrevBoundary <= 0)
+		return 0;
+
+	// The previous word is the one whose last character is just before PrevBoundary.
+	// Get that word's type.
+	EUMCharType PrevType = GetCharType(Text, PrevBoundary - 1);
+	// Find the beginning of the previous word group.
+	int32 PrevWordStart = SkipCharType(Text, PrevBoundary, -1, PrevType);
+
+	// Scan forward from PrevWordStart until the character type changes to get its end.
+	int32 PrevWordEnd = PrevWordStart;
+	while (PrevWordEnd < Text.Len() && GetCharType(Text, PrevWordEnd) == PrevType)
+	{
+		PrevWordEnd++;
+	}
+
+	// Return the index of the last character of the previous word.
+	return PrevWordEnd - 1;
 }
 
 //------------------------------------------------------------------------------
