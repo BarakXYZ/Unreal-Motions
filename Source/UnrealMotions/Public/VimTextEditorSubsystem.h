@@ -185,6 +185,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void Delete(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void DeleteLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void DeleteLineVisualMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void DeleteLineSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void DeleteLineNormalModeSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void DeleteLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
@@ -198,6 +199,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void DeleteCurrentLineContent(FSlateApplication& SlateApp);
 	void DeleteCurrentSelection(FSlateApplication& SlateApp);
+	void DeleteToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void ChangeEntireLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void ChangeEntireLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);

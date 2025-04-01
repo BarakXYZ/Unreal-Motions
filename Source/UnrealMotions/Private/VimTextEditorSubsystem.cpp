@@ -2056,6 +2056,13 @@ void UVimTextEditorSubsystem::DeleteLine(FSlateApplication& SlateApp, const FKey
 			DeleteLineNormalModeMulti(SlateApp, InKeyEvent);
 	}
 }
+
+void UVimTextEditorSubsystem::DeleteLineVisualMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	DeleteLine(SlateApp, InKeyEvent);
+	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
+}
+
 void UVimTextEditorSubsystem::DeleteLineNormalModeSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	DeleteLineSingle(SlateApp, InKeyEvent);
@@ -2188,12 +2195,18 @@ int32 UVimTextEditorSubsystem::GetMultiLineCount()
 	return INDEX_NONE;
 }
 
+void UVimTextEditorSubsystem::DeleteToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	ChangeToEndOfLine(SlateApp, InKeyEvent);
+	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
+}
+
 void UVimTextEditorSubsystem::ChangeToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
 
 	// We wanna simulate one time to the left is we're aligned right to properly
-	// be inserted at the right offset.
+	// be inserted at the correct offset.
 	if (IsCursorAlignedRight(SlateApp)
 		&& !IsMultiLineCursorAtBeginningOfLine(true /*Zero Validation Offset*/))
 		InputProc->SimulateKeyPress(SlateApp, EKeys::Left);
@@ -2575,6 +2588,27 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteLine,
 		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::Four /*Shift+$*/) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteToEndOfLine,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::D) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteToEndOfLine,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::D) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteLineVisualMode,
+		EVimMode::Visual);
 
 	// Append New Line (After & Before the current Line)
 	//
