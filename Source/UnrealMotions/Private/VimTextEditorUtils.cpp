@@ -428,11 +428,25 @@ int32 FVimTextEditorUtils::FindPreviousSmallWordEnd(const FString& Text, int32 C
 // Text Location Helpers for Multi-line Editables
 //------------------------------------------------------------------------------
 
+// Convert a FTextLocation into an absolute offset.
+int32 FVimTextEditorUtils::TextLocationToAbsoluteOffset(const FString& Text, const FTextLocation& Location)
+{
+	TArray<FString> Lines;
+	Text.ParseIntoArray(Lines, TEXT("\n"), false /*Consider Empty Lines*/);
+	int32 Offset = 0;
+	for (int32 i = 0; i < Location.GetLineIndex(); ++i)
+	{
+		Offset += Lines[i].Len() + 1;
+	}
+	Offset += Location.GetOffset();
+	return Offset;
+}
+
 // Convert an absolute offset into a FTextLocation (line index and offset).
 void FVimTextEditorUtils::AbsoluteOffsetToTextLocation(const FString& Text, int32 AbsoluteOffset, FTextLocation& OutLocation)
 {
 	TArray<FString> Lines;
-	Text.ParseIntoArray(Lines, TEXT("\n"), false);
+	Text.ParseIntoArray(Lines, TEXT("\n"), false /*Consider Empty Lines*/);
 	int32 Offset = AbsoluteOffset;
 	for (int32 LineIndex = 0; LineIndex < Lines.Num(); ++LineIndex)
 	{
@@ -447,18 +461,4 @@ void FVimTextEditorUtils::AbsoluteOffsetToTextLocation(const FString& Text, int3
 	}
 	// Fallback: place at end of last line.
 	OutLocation = FTextLocation(Lines.Num() - 1, Lines.Last().Len());
-}
-
-// Convert a FTextLocation into an absolute offset.
-int32 FVimTextEditorUtils::TextLocationToAbsoluteOffset(const FString& Text, const FTextLocation& Location)
-{
-	TArray<FString> Lines;
-	Text.ParseIntoArray(Lines, TEXT("\n"), false);
-	int32 Offset = 0;
-	for (int32 i = 0; i < Location.GetLineIndex(); ++i)
-	{
-		Offset += Lines[i].Len() + 1;
-	}
-	Offset += Location.GetOffset();
-	return Offset;
 }

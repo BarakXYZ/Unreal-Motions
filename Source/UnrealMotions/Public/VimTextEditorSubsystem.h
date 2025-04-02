@@ -209,11 +209,25 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void AddDebuggingText(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	bool TrackVisualModeStartLocation();
+	bool TrackVisualModeStartLocation(FSlateApplication& SlateApp);
 
 	void AlignCursorToIndex(FSlateApplication& SlateApp, int32 CurrIndex, int32 AlignToIndex, bool bAlignRight);
 
-	bool SelectTextInRange(FSlateApplication& SlateApp, const FTextLocation& StartLocation, const FTextLocation& EndLocation, bool bJumpToStart = true);
+	bool SelectTextInRange(
+		FSlateApplication&	 SlateApp,
+		const FTextLocation& StartLocation,
+		const FTextLocation& EndLocation,
+		bool				 bJumpToStart = true);
+
+	bool GoToTextLocation(FSlateApplication& SlateApp, const FTextLocation& InTextLocation);
+
+	void GoToTextLocationSingleLine(
+		FSlateApplication&				   SlateApp,
+		const TSharedRef<SEditableTextBox> InTextBox,
+		const int32						   InGoToOffset);
+
+	bool  GetCursorLocation(FSlateApplication& SlateApp, FTextLocation& OutTextLocation);
+	int32 GetCursorLocationSingleLine(FSlateApplication& SlateApp, const TSharedRef<SEditableTextBox> InTextBox);
 
 	TSharedPtr<SMultiLineEditableText> GetMultilineEditableFromBox(
 		const TSharedRef<SMultiLineEditableTextBox> InMultiLineTextBox);
