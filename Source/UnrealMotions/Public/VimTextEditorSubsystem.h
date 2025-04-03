@@ -7,6 +7,7 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/SMultiLineEditableText.h"
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
+#include "UMYankData.h"
 #include "VimInputProcessor.h"
 #include "VimTextEditorSubsystem.generated.h"
 
@@ -270,6 +271,16 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	//
 	//							~ Word Navigation ~
 
+	//						~ Yanking & Pasting Commands ~
+	//
+
+	void YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void PasteVisualMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
+	//
+	//						~ Yanking & Pasting Commands ~
+
 	/**
 	 * When we edit our text, then try to navigate it in its most recent form
 	 * without writing to disk; Our editable state seems to be confused sometimes
@@ -297,6 +308,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	EUMEditableWidgetsFocusState		EditableWidgetsFocusState{ EUMEditableWidgetsFocusState::None };
 	FTextLocation						StartCursorLocationVisualMode;
 	FText								DefaultHintText = FText::GetEmpty();
+	FUMYankData							YankData;
 
 	const FText	  InsertModeHintText = FText::FromString("Start Typing... ('Esc'-> Normal Mode)");
 	const FText	  NormalModeHintText = FText::FromString("Press 'i' to Start Typing...");

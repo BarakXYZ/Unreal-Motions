@@ -2632,6 +2632,53 @@ int32 UVimTextEditorSubsystem::GetCursorLocationSingleLine(FSlateApplication& Sl
 	*/
 }
 
+void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::SingleLine:
+			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			{
+				YankData = FUMYankData(
+					EditTextBox->GetText().ToString() + "\n",
+					EUMYankType::Linewise);
+			}
+			break;
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				FString CurrentLine;
+				MultiTextBox->GetCurrentTextLine(CurrentLine);
+				CurrentLine += "\n";
+				YankData = FUMYankData(CurrentLine, EUMYankType::Linewise);
+			}
+			break;
+
+		default:
+			return;
+	}
+}
+
+void UVimTextEditorSubsystem::PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	const bool bIsSingleLine =
+		EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine;
+
+	FTextLocation TextLocation;
+	if (!GetCursorLocation(SlateApp, TextLocation))
+		return;
+
+	const FString TextToPaste = bIsSingleLine
+		? YankData.GetText().LeftChop(1) // Single-Line shouldn't have break \n
+		: YankData.GetText();
+
+	SetActiveEditableText(FText::FromString(TextToPaste));
+	GoToTextLocation(SlateApp, TextLocation);
+	SetCursorSelectionToDefaultLocation(SlateApp);
+}
+
 void UVimTextEditorSubsystem::BindCommands()
 {
 	TSharedRef<FVimInputProcessor> VimInputProcessor = FVimInputProcessor::Get();
@@ -2885,6 +2932,25 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::NavigateGBigE);
+
+	// Yanking / Pasting Related
+	//
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, EKeys::Y },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::YankLine,
+		EVimMode::Normal /* Only available in Normal Mode */);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::P },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::PasteNormalMode,
+		EVimMode::Normal /* Only available in Normal Mode */);
+
+	//
+	// Yanking / Pasting Related
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
