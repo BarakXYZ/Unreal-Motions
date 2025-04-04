@@ -821,11 +821,6 @@ void UVimTextEditorSubsystem::HandleLeftNavigation(
 	if (IsCurrentLineEmpty())
 		return;
 
-	// if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
-	// 	HandleLeftNavigationMulti(SlateApp, InSequence);
-	// else
-	// 	HandleLeftNavigationSingle(SlateApp, InSequence);
-
 	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
 	FKey						   Left = EKeys::Left;
 
@@ -2632,6 +2627,35 @@ int32 UVimTextEditorSubsystem::GetCursorLocationSingleLine(FSlateApplication& Sl
 	*/
 }
 
+void UVimTextEditorSubsystem::JumpToEndOrStartOfLine(FSlateApplication& SlateApp,
+	void (UVimTextEditorSubsystem::*HandleLeftOrRightNavigation)(FSlateApplication&, const TArray<FInputChord>&))
+{
+	FTextLocation		PrevTextLocation;
+	FTextLocation		CurrTextLocation;
+	TArray<FInputChord> DummyInput;
+	do
+	{
+		if (!GetCursorLocation(SlateApp, PrevTextLocation))
+			return;
+		(this->*HandleLeftOrRightNavigation)(SlateApp, DummyInput);
+		if (!GetCursorLocation(SlateApp, CurrTextLocation))
+			return;
+	}
+	while (CurrTextLocation != PrevTextLocation);
+}
+
+void UVimTextEditorSubsystem::JumpToStartOfLine(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	JumpToEndOrStartOfLine(SlateApp, &UVimTextEditorSubsystem::HandleLeftNavigation);
+}
+
+void UVimTextEditorSubsystem::JumpToEndOfLine(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	JumpToEndOrStartOfLine(SlateApp, &UVimTextEditorSubsystem::HandleRightNavigation);
+}
+
 void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	switch (EditableWidgetsFocusState)
@@ -2951,6 +2975,24 @@ void UVimTextEditorSubsystem::BindCommands()
 
 	//
 	// Yanking / Pasting Related
+
+	// Jump to Start of Line
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Zero },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::JumpToStartOfLine);
+
+	// TODO: Caret GoTo first char in line
+	// Should be very similar to JumpToStart just with checking if we've reached
+	// a whitespace or something in that nature?
+
+	// Jump to End of Line
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::Four) /* i.e. $ */ },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::JumpToEndOfLine);
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)

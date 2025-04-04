@@ -230,6 +230,12 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool  GetCursorLocation(FSlateApplication& SlateApp, FTextLocation& OutTextLocation);
 	int32 GetCursorLocationSingleLine(FSlateApplication& SlateApp, const TSharedRef<SEditableTextBox> InTextBox);
 
+	void JumpToEndOrStartOfLine(FSlateApplication& SlateApp,
+		void (UVimTextEditorSubsystem::*HandleLeftOrRightNavigation)(FSlateApplication&, const TArray<FInputChord>&));
+
+	void JumpToStartOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void JumpToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	TSharedPtr<SMultiLineEditableText> GetMultilineEditableFromBox(
 		const TSharedRef<SMultiLineEditableTextBox> InMultiLineTextBox);
 	TSharedPtr<SEditableText> GetSingleEditableFromBox(

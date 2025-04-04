@@ -481,7 +481,7 @@ bool FUMInputHelpers::GetDigitFromKey(const FKey& InKey, int32& OutDigit,
 	int32 MinClamp, int32 MaxClamp)
 {
 	static const TMap<FKey, int32> KeyToDigit = {
-		{ EKeys::Zero, 0 },
+		// { EKeys::Zero, 0 },  // Isn't useful and also collides with 0 JumpStart
 		{ EKeys::One, 1 },
 		{ EKeys::Two, 2 },
 		{ EKeys::Three, 3 },
