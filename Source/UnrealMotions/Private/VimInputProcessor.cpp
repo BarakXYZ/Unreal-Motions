@@ -94,17 +94,13 @@ bool FVimInputProcessor::TraverseTrieForContextAndVim(EUMBindingContext InContex
 
 	// If there's no trie roots for this context, no match is possible
 	if (!ContextTrieRoots.Contains(InContext))
-	{
 		return false;
-	}
 
 	const TMap<EVimMode, TSharedPtr<FKeyChordTrieNode>>& VimMap = ContextTrieRoots[InContext];
 
 	// If there's no trie root for this Vim mode in the context, no match
 	if (!VimMap.Contains(InVimMode))
-	{
 		return false;
-	}
 
 	// Get the root node for this context and Vim mode
 	TSharedPtr<FKeyChordTrieNode> Root = VimMap[InVimMode];
@@ -124,66 +120,64 @@ bool FVimInputProcessor::TraverseTrieForContextAndVim(EUMBindingContext InContex
 	return true;
 }
 
-// Process the current key sequence
-bool FVimInputProcessor::ProcessKeySequence(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+// Process the current Vim Key Sequence
+bool FVimInputProcessor::ProcessKeySequence(
+	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// 1) Add this key to current sequence
+	// Add this key to CurrentSequence
 	CurrentSequence.Add(FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent));
 
-	// 2) Try to traverse the trie in the following order:
-	//    (CurrentContext, VimMode) -> (CurrentContext, Any) ->
-	//    (Generic, VimMode) -> (Generic, Any)
+	// Traverse the trie to find Partial / Full Matches in the following order:
+	//    i.   (CurrentContext, VimMode) ->
+	//    ii.  (CurrentContext, Any)     ->
+	//    iii. (Generic, VimMode)        ->
+	//    iv.  (Generic, Any)
 	TSharedPtr<FKeyChordTrieNode> MatchedNode;
 	bool						  bMatchFound = false;
 
 	if (TraverseTrieForContextAndVim(CurrentContext, VimMode, MatchedNode))
-	{
 		bMatchFound = true;
-	}
-	else if (TraverseTrieForContextAndVim(CurrentContext, EVimMode::Any, MatchedNode))
-	{
-		bMatchFound = true;
-	}
-	else if (TraverseTrieForContextAndVim(EUMBindingContext::Generic, VimMode, MatchedNode))
-	{
-		bMatchFound = true;
-	}
-	else if (TraverseTrieForContextAndVim(EUMBindingContext::Generic, EVimMode::Any, MatchedNode))
-	{
-		bMatchFound = true;
-	}
 
-	// If no match was found, reset and return false
+	// Consider custom insert mode intervention? Too expensive?
+	// bool bRestrictToSpecificContextAndMode;
+	// if (bRestrictToSpecificContextAndMode)
+	// 	return bMatchFound;
+
+	else if (TraverseTrieForContextAndVim(CurrentContext, EVimMode::Any, MatchedNode))
+		bMatchFound = true;
+
+	else if (TraverseTrieForContextAndVim(EUMBindingContext::Generic, VimMode, MatchedNode))
+		bMatchFound = true;
+
+	else if (TraverseTrieForContextAndVim(EUMBindingContext::Generic, EVimMode::Any, MatchedNode))
+		bMatchFound = true;
+
+	// If no Partial-Match was found; Reset and return false.
 	if (!bMatchFound)
 	{
 		ResetSequence(SlateApp);
 		return false;
 	}
 
-	// 4) If we have a matched node, see if it has a callback
-	if (MatchedNode && MatchedNode->CallbackType != EUMKeyBindingCallbackType::None)
+	// If we have a matched node, see if it has a callback
+	if (MatchedNode
+		&& MatchedNode->CallbackType != EUMKeyBindingCallbackType::None)
 	{
 		switch (MatchedNode->CallbackType)
 		{
 			case EUMKeyBindingCallbackType::NoParam:
 				if (MatchedNode->NoParamCallback)
-				{
 					MatchedNode->NoParamCallback();
-				}
 				break;
 
 			case EUMKeyBindingCallbackType::KeyEventParam:
 				if (MatchedNode->KeyEventCallback)
-				{
 					MatchedNode->KeyEventCallback(SlateApp, InKeyEvent);
-				}
 				break;
 
 			case EUMKeyBindingCallbackType::SequenceParam:
 				if (MatchedNode->SequenceCallback)
-				{
 					MatchedNode->SequenceCallback(SlateApp, CurrentSequence);
-				}
 				break;
 
 			default:
@@ -306,6 +300,9 @@ bool FVimInputProcessor::HandleKeyDownEvent(
 	// We need to return false during that second pass to let Unreal Engine
 	// process the simulated key event.
 	// Otherwise, the simulated key press won't be handled by the engine.
+	// This mechanism is implemented as we sometimes need to simulate the native
+	// UE handling of keys while maintaining our Vim state; Practically
+	// allowing us to simulate native UE strokes from our Vim state.
 	if (bNativeInputHandling)
 	{
 		bNativeInputHandling = false; // Resume manual handling from next event
@@ -316,8 +313,10 @@ bool FVimInputProcessor::HandleKeyDownEvent(
 	if (IsSimulateEscapeKey(SlateApp, InKeyEvent))
 		return true;
 
-	// Should handle here if possessed as we want to handle generic inputs
-	// that may collide with other bindings (i.e. I for Insert, etc.);
+	// In case any outside class is currently possessing our Vim Processor to
+	// handle input manually (e.g. Vimium implementation in the Vim Navigation
+	// Subsystem); We'll return true and broadcast the InKeyEvent to them for
+	// manual processing.
 	if (Delegate_OnKeyDown.IsBound())
 	{
 		Delegate_OnKeyDown.Broadcast(SlateApp, InKeyEvent);
@@ -328,7 +327,12 @@ bool FVimInputProcessor::HandleKeyDownEvent(
 		return true;
 
 	if (VimMode == EVimMode::Insert)
-		return false; // Default: Pass on the handling to Unreal native.
+	{
+		// Have the option to handle some thing manually even in Insert mode?
+		// For example 'Enter' in MultiLines behaving very annoyingliy?
+
+		return false; // Pass the Input handling to Unreal native mode.
+	}
 
 	if (TrackCountPrefix(SlateApp, InKeyEvent)) // Return if currently counting.
 		return true;
@@ -338,45 +342,33 @@ bool FVimInputProcessor::HandleKeyDownEvent(
 	if (InKey.IsModifierKey()) // Simply ignore
 		return true;		   // or false?
 
-	// TODO: Add a small timer until actually showing the buffer
-	// and retrigger the timer upon keystrokes
+	// TODO: Add a small timer until actually showing the buffer &
+	// (retrigger timer upon keystrokes)
 	CheckCreateBufferVisualizer(SlateApp, InKey);
 	UpdateBufferAndVisualizer(InKey);
 
 	return ProcessKeySequence(SlateApp, InKeyEvent);
-	// return true;
 }
 
-// TODO:
-// Check this behavior; I think we must return up for the keys we're simulating!
-// That make sense, they essentially never return to be unpressed!
-// We're sending their input to Unreal native (for example, arrow)
-// but never actually sending the key-up, which makes them stay
-// down and continuously press(?) need to check.
-// We should also keep in mind that when trying ot navigate the viewport
-// when Normal mode is on we can't expend smooth traveling because we will have
-// hotkeys (like 'D') that are mapped to commands, which will block the navigation
-// So really navigation only can happen smoothly while in Insert mode.
-// Need to think about this more.
-// We should about giving navigation using different method so let's think about
-// that more. Maybe a specific mode desgined for navigation? TODO WIP OK THANK
+// NOTE:
+// Keep an eye on this handler. Returning Up is important to when we're simulating
+// things. Currently we're always returning Up, which seems to work fine.
+// The key reminder here is that if we're not returning Up, we will always keep
+// our keys Down, which cause issues.
 bool FVimInputProcessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	OnMouseButtonUpAlertTabForeground.Broadcast(); // Deprecated?
-
 	Delegate_OnKeyUpEvent.Broadcast(SlateApp, InKeyEvent);
-	// Logger.Print("Key up!");
-	// return true;
+	// Logger.Print("Key up", true);
 
-	// if (VimMode == EVimMode::Normal)
-	// 	return true; // ??  Not sure
-
-	return false; // Seems to work fine for now.
+	// Seems to work fine.
+	// We're essentially passing the handling to Unreal by returning false.
+	return false;
 }
 
 bool FVimInputProcessor::ShouldSwitchVimMode(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	// TODO:
 	// Give the user an option to configure entering Vim Modes via either Escape
 	// or Shift+Escape to keep the native Escape as expected.
 	if (InKeyEvent.GetKey() == EKeys::Escape)
@@ -477,14 +469,14 @@ bool FVimInputProcessor::IsSimulateEscapeKey(FSlateApplication& SlateApp, const 
 	// Because Escape is used to *enter* Vim Normal mode; We'll use Shift+Escape
 	// to simulate normal native Escape mode (which is sometimes needed in the
 	// UE editor).
-	// We may want to allow user to reverse this and have Escape stay native,
+	// We may want to allow the user to reverse this and have Escape stay native,
 	// while using Shift+Escape to enter Vim Mode. This should be a config option.
 	if (InKeyEvent.IsShiftDown() && InKeyEvent.GetKey() == EKeys::Escape)
 	{
 		static const FKey Escape = EKeys::Escape;
 		SimulateKeyPress(SlateApp, Escape); // Native Escape key simulation.
 
-		Logger.Print("Simulate Escape");
+		// Logger.Print("Simulate Escape");
 		return true;
 	}
 	return false;

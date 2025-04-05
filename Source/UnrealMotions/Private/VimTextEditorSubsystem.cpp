@@ -1,6 +1,7 @@
 #include "VimTextEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericApplication.h"
+#include "VimEditorSubsystem.h"
 #include "VimInputProcessor.h"
 #include "UMInputHelpers.h"
 #include "Editor.h"
@@ -25,6 +26,11 @@ void UVimTextEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	FCoreDelegates::OnPostEngineInit
 		.AddUObject(this, &UVimTextEditorSubsystem::RegisterSlateEvents);
+
+	// Handle KeyDown in Multis in a custom way to intercept and process 'Enter'
+	// manually.
+	OnEditableKeyDown.BindUObject(
+		this, &UVimTextEditorSubsystem::OnMultiLineKeyDown);
 }
 
 void UVimTextEditorSubsystem::Deinitialize()
@@ -220,6 +226,16 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 			TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 				StaticCastSharedPtr<SMultiLineEditableTextBox>(Parent);
 			ActiveMultiLineEditableTextBox = MultiTextBox;
+
+			// NOTE:
+			// In one hand this solves the annoying unexpected behavior of Enter
+			// in MultiLine text by intercepting the Enter key and sending a
+			// proper \n (break-line) instead of weird commit / select all.
+			// On the other hand, we do expect Enter to commit in Console Multis.
+			// So, either we'll need to detect when we're at a console vs. an
+			// editable, or...
+			// Are there any other places like Console that need this commision?
+			// MultiTextBox->SetOnKeyDownHandler(OnEditableKeyDown);
 
 			FText HintText = MultiTextBox->GetHintText();
 			if (!HintText.IsEmpty())
@@ -2532,6 +2548,8 @@ bool UVimTextEditorSubsystem::GetCursorLocation(FSlateApplication& SlateApp, FTe
 			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 					ActiveMultiLineEditableTextBox.Pin())
 			{
+				// MultiTextBox->SetOnKeyCharHandler();
+				// MultiTextBox->SetOnKeyDownHandler();
 				OutTextLocation = MultiTextBox->GetCursorLocation();
 				return OutTextLocation.IsValid();
 			}
@@ -2541,6 +2559,22 @@ bool UVimTextEditorSubsystem::GetCursorLocation(FSlateApplication& SlateApp, FTe
 			return false;
 	}
 	return false;
+}
+
+FReply UVimTextEditorSubsystem::OnMultiLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+{
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return FReply::Unhandled();
+
+	// Check if the pressed key is Enter/Return
+	if (InKeyEvent.GetKey() == EKeys::Enter)
+	{
+		MultiTextBox->InsertTextAtCursor(FText::FromString("\n"));
+		return FReply::Handled();
+	}
+	return FReply::Unhandled();
 }
 
 int32 UVimTextEditorSubsystem::GetCursorLocationSingleLine(FSlateApplication& SlateApp, const TSharedRef<SEditableTextBox> InTextBox)

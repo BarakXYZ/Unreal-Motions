@@ -299,6 +299,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	 */
 	void RefreshActiveEditable(FSlateApplication& SlateApp);
 
+	FReply OnMultiLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent);
+
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
 	EVimMode		   PreviousVimMode{ EVimMode::Insert };
@@ -315,6 +317,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	FTextLocation						StartCursorLocationVisualMode;
 	FText								DefaultHintText = FText::GetEmpty();
 	FUMYankData							YankData;
+	FOnKeyDown							OnEditableKeyDown;
 
 	const FText	  InsertModeHintText = FText::FromString("Start Typing... ('Esc'-> Normal Mode)");
 	const FText	  NormalModeHintText = FText::FromString("Press 'i' to Start Typing...");

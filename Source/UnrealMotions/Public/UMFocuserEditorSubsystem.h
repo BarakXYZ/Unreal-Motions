@@ -268,7 +268,6 @@ public:
 	TWeakPtr<SDockTab> ForegroundedProcessedTab;
 	bool			   bIsTabForegrounding{ false };
 	bool			   bIsDummyForegroundingCallbackCheck{ false };
-	FUMOnMouseButtonUp OnMouseButtonUp;
 
 	bool			  bHasFilteredAnIncomingNewWidget{ false };
 	bool			  bBypassAutoFocusLastActiveWidget{ false };

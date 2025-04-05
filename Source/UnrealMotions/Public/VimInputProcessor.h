@@ -54,11 +54,6 @@ DECLARE_MULTICAST_DELEGATE(FUMOnResetSequence);
  */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnVimModeChanged, const EVimMode);
 
-/**
- * Used in Focus Manager for handling foregrounded tabs correctly.
- */
-DECLARE_MULTICAST_DELEGATE(FUMOnMouseButtonUp);
-
 DECLARE_MULTICAST_DELEGATE_TwoParams(FUMOnKeyUpEvent,
 	FSlateApplication& /* SlateApp */, const FKeyEvent& /* InKeyEvent */);
 
@@ -629,7 +624,6 @@ public:
 	FOnVimModeChanged  OnVimModeChanged;
 	FUMOnCountPrefix   OnCountPrefix;
 	FUMOnResetSequence OnResetSequence;
-	FUMOnMouseButtonUp OnMouseButtonUpAlertTabForeground;
 	FUMOnKeyDown	   Delegate_OnKeyDown;
 	FUMOnKeyUpEvent	   Delegate_OnKeyUpEvent;
 
