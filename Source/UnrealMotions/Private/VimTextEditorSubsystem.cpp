@@ -235,7 +235,8 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 			// So, either we'll need to detect when we're at a console vs. an
 			// editable, or...
 			// Are there any other places like Console that need this commision?
-			// MultiTextBox->SetOnKeyDownHandler(OnEditableKeyDown);
+			bIsCurrMultiLineChildOfConsole = IsMultiChildOfConsole(MultiTextBox.ToSharedRef());
+			MultiTextBox->SetOnKeyDownHandler(OnEditableKeyDown);
 
 			FText HintText = MultiTextBox->GetHintText();
 			if (!HintText.IsEmpty())
@@ -2569,7 +2570,7 @@ FReply UVimTextEditorSubsystem::OnMultiLineKeyDown(const FGeometry& MyGeometry, 
 		return FReply::Unhandled();
 
 	// Check if the pressed key is Enter/Return
-	if (InKeyEvent.GetKey() == EKeys::Enter)
+	if (!bIsCurrMultiLineChildOfConsole && InKeyEvent.GetKey() == EKeys::Enter)
 	{
 		MultiTextBox->InsertTextAtCursor(FText::FromString("\n"));
 		return FReply::Handled();
@@ -2735,6 +2736,21 @@ void UVimTextEditorSubsystem::PasteNormalMode(FSlateApplication& SlateApp, const
 	SetActiveEditableText(FText::FromString(TextToPaste));
 	GoToTextLocation(SlateApp, TextLocation);
 	SetCursorSelectionToDefaultLocation(SlateApp);
+}
+
+bool UVimTextEditorSubsystem::IsMultiChildOfConsole(const TSharedRef<SMultiLineEditableTextBox> InMultiBox)
+{
+	const FString ConsoleType = "SConsoleInputBox";
+
+	TSharedPtr<SWidget> LookupWidget = InMultiBox;
+	while (LookupWidget->IsParentValid())
+	{
+		LookupWidget = LookupWidget->GetParentWidget();
+		if (LookupWidget.IsValid()
+			&& LookupWidget->GetTypeAsString().Equals(ConsoleType))
+			return true;
+	}
+	return false;
 }
 
 void UVimTextEditorSubsystem::BindCommands()

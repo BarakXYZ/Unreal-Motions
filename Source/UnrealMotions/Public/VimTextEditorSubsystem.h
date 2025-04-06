@@ -301,6 +301,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	FReply OnMultiLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent);
 
+	bool IsMultiChildOfConsole(const TSharedRef<SMultiLineEditableTextBox> InMultiBox);
+
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
 	EVimMode		   PreviousVimMode{ EVimMode::Insert };
@@ -318,6 +320,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	FText								DefaultHintText = FText::GetEmpty();
 	FUMYankData							YankData;
 	FOnKeyDown							OnEditableKeyDown;
+	bool								bIsCurrMultiLineChildOfConsole;
 
 	const FText	  InsertModeHintText = FText::FromString("Start Typing... ('Esc'-> Normal Mode)");
 	const FText	  NormalModeHintText = FText::FromString("Press 'i' to Start Typing...");
