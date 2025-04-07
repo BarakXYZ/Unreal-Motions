@@ -84,12 +84,11 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		{ "SChordEditor", &FUMFocusHelpers::ClickOnWidget }
 	};
 
-	// SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
-
 	const FString ClassType = InWidget->GetWidgetClass().GetWidgetType().ToString();
 	const FString WidgetType = InWidget->GetTypeAsString();
 	LogWidgetType(InWidget);
 
+	// LookUp both Class & Widget (specific) types inside our focus handling map.
 	if (auto* ExecFuncClass = WidgetExecMap.Find(ClassType))
 	{
 		(*ExecFuncClass)(SlateApp, InWidget);
@@ -101,7 +100,9 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		return true;
 	}
 
-	// Useful for catching all types of nodes & pins (and probably more in future)
+	// Useful for catching all types of BP Nodes & Pins (and more in the future)
+	// We still want to start with exect match (like we do previous to doing this)
+	// and then fallback to the StartsWith method.
 	for (const auto& Pair : WidgetExecMap)
 	{
 		if (ClassType.StartsWith(Pair.Key) || WidgetType.StartsWith(Pair.Key))
@@ -113,7 +114,13 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 
 	// Generic set focus & press fallback
 	SlateApp.SetAllUserFocus(InWidget, EFocusCause::Navigation);
-	FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, FKey(EKeys::Enter));
+	// Enter is a bit aggressive. I can't remember exactly why it was placed.
+	// Enter cause an issue in MultiLine Editable focusing - it'll clear the whole
+	// content due to the way MultiLines are being focus natively. So keeping this
+	// Enter line for reference in case we'll see any issues with focusing specifc
+	// widget. If we do face them, we should put them inside the Custom FuncExec
+	// map for custom handling with Enter.
+	// FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, FKey(EKeys::Enter));
 	return false;
 }
 
