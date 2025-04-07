@@ -2031,8 +2031,8 @@ void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const F
 		// NOTE:
 		// Because we're not actually pressing shift, for some reason, this isn't
 		// working. We aren't able to *simulate* shift down with enter. Not sure
-		// why. So created this helper function to inserts \n after we go to the
-		// end of the line, which essentially achieves the same goal of going
+		// why. So created this helper function to insert \n after we go to the
+		// end-of-the-line, which essentially achieves the same goal of going
 		// down a line.
 		// VimProc->SimulateKeyPress(SlateApp, EKeys::Enter, ModShiftDown);
 		AppendBreakMultiLine();
@@ -2048,6 +2048,52 @@ bool UVimTextEditorSubsystem::AppendBreakMultiLine()
 
 	MultiTextBox->InsertTextAtCursor(FText::FromString("\n"));
 	return true;
+}
+
+bool UVimTextEditorSubsystem::InsertTextAtCursor(FSlateApplication& SlateApp, const FText& InText)
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::SingleLine:
+			return InsertTextAtCursorSingleLine(SlateApp, InText);
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+					ActiveMultiLineEditableTextBox.Pin())
+			{
+				// TODO: Handle this properly
+				// We need to release from read only in for MultiLines
+				// MultiTextBox->SetIsReadOnly(false);
+				MultiTextBox->InsertTextAtCursor(InText);
+				// MultiTextBox->SetIsReadOnly(true);
+				return true;
+			}
+			break;
+
+		default:
+			break;
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::InsertTextAtCursorSingleLine(FSlateApplication& SlateApp, const FText& InText)
+{
+	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+	{
+		TSharedRef<SEditableTextBox> TextBoxRef = EditTextBox.ToSharedRef();
+		const int32					 CursorOffset = GetCursorLocationSingleLine(SlateApp, TextBoxRef);
+		Logger.Print(FString::Printf(TEXT("Cursor Offset: %d"), CursorOffset), true);
+
+		FString CurrText = EditTextBox->GetText().ToString();
+		if (CursorOffset > CurrText.Len())
+			return false;
+
+		const FString InTextStr = InText.ToString();
+		CurrText.InsertAt(CursorOffset, InTextStr);
+		EditTextBox->SetText(FText::FromString(CurrText));
+		return true;
+	}
+	return false;
 }
 
 void UVimTextEditorSubsystem::DeleteLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -2584,7 +2630,10 @@ int32 UVimTextEditorSubsystem::GetCursorLocationSingleLine(FSlateApplication& Sl
 {
 	const FString InitialTextContent = InTextBox->GetText().ToString();
 	if (InitialTextContent.IsEmpty())
+	{
+		// Logger.Print("GetCursorLocationSingleLine: 0 (Editable is Empty)", true);
 		return 0;
+	}
 
 	const FString OriginSelectedText = InTextBox->AnyTextSelected()
 		? InTextBox->GetSelectedText().ToString()
@@ -2701,7 +2750,7 @@ void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray
 			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
 			{
 				YankData = FUMYankData(
-					EditTextBox->GetText().ToString() + "\n",
+					EditTextBox->GetText().ToString(),
 					EUMYankType::Linewise);
 			}
 			break;
@@ -2712,7 +2761,6 @@ void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray
 			{
 				FString CurrentLine;
 				MultiTextBox->GetCurrentTextLine(CurrentLine);
-				CurrentLine += "\n";
 				YankData = FUMYankData(CurrentLine, EUMYankType::Linewise);
 			}
 			break;
@@ -2722,21 +2770,19 @@ void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray
 	}
 }
 
+// TODO: Handle MultiLine Pasting Properly
 void UVimTextEditorSubsystem::PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
-	const bool bIsSingleLine =
-		EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine;
-
 	FTextLocation TextLocation;
 	if (!GetCursorLocation(SlateApp, TextLocation))
 		return;
 
-	const FString TextToPaste = bIsSingleLine
-		? YankData.GetText().LeftChop(1) // Single-Line shouldn't have break \n
-		: YankData.GetText();
+	const FString TextToPaste = YankData.GetText(EditableWidgetsFocusState);
 
-	SetActiveEditableText(FText::FromString(TextToPaste));
-	GoToTextLocation(SlateApp, TextLocation);
+	InsertTextAtCursor(SlateApp, FText::FromString(TextToPaste));
+
+	GoToTextLocation(SlateApp, FTextLocation(TextLocation.GetLineIndex(), TextLocation.GetOffset() + TextToPaste.Len()));
+
 	SetCursorSelectionToDefaultLocation(SlateApp);
 }
 

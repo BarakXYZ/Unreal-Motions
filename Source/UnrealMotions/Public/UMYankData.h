@@ -1,3 +1,4 @@
+#include "VimTextTypes.h"
 #include "CoreMinimal.h"
 
 // Enum for yank types
@@ -27,9 +28,19 @@ struct FUMYankData
 	{
 	}
 
-	FString GetText()
+	FString GetText(const EUMEditableWidgetsFocusState InEditableType)
 	{
-		return Content;
+		switch (InEditableType)
+		{
+			case EUMEditableWidgetsFocusState::SingleLine:
+				return Content;
+
+			case EUMEditableWidgetsFocusState::MultiLine:
+				return Content + "\n";
+
+			default:
+				return "";
+		}
 	}
 
 	EUMYankType GetType()

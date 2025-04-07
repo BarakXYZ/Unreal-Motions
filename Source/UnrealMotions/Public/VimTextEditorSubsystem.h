@@ -9,27 +9,8 @@
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "UMYankData.h"
 #include "VimInputProcessor.h"
+#include "VimTextTypes.h"
 #include "VimTextEditorSubsystem.generated.h"
-
-enum class EUMEditableWidgetsFocusState : uint8
-{
-	None,
-	SingleLine,
-	MultiLine
-};
-
-enum class EUMSelectionState : uint8
-{
-	None,
-	OneChar,
-	ManyChars
-};
-
-struct FUMStringInfo
-{
-	int32 LineCount;
-	int32 LastCharIndex;
-};
 
 /**
  *
@@ -302,6 +283,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	FReply OnMultiLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent);
 
 	bool IsMultiChildOfConsole(const TSharedRef<SMultiLineEditableTextBox> InMultiBox);
+
+	bool InsertTextAtCursor(FSlateApplication& SlateApp, const FText& InText);
+	bool InsertTextAtCursorSingleLine(FSlateApplication& SlateApp, const FText& InText);
 
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
