@@ -2570,7 +2570,9 @@ FReply UVimTextEditorSubsystem::OnMultiLineKeyDown(const FGeometry& MyGeometry, 
 		return FReply::Unhandled();
 
 	// Check if the pressed key is Enter/Return
-	if (!bIsCurrMultiLineChildOfConsole && InKeyEvent.GetKey() == EKeys::Enter)
+	if (!bIsCurrMultiLineChildOfConsole
+		&& InKeyEvent.GetKey() == EKeys::Enter
+		&& !InKeyEvent.IsControlDown() /*if holding control, allow commission*/)
 	{
 		MultiTextBox->InsertTextAtCursor(FText::FromString("\n"));
 		return FReply::Handled();
