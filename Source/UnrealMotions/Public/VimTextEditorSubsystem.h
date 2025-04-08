@@ -286,6 +286,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool InsertTextAtCursor(FSlateApplication& SlateApp, const FText& InText);
 	bool InsertTextAtCursorSingleLine(FSlateApplication& SlateApp, const FText& InText);
+	bool InsertTextAtCursorMultiLine(FSlateApplication& SlateApp, const FText& InText);
 
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };

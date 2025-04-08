@@ -2058,17 +2058,7 @@ bool UVimTextEditorSubsystem::InsertTextAtCursor(FSlateApplication& SlateApp, co
 			return InsertTextAtCursorSingleLine(SlateApp, InText);
 
 		case EUMEditableWidgetsFocusState::MultiLine:
-			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-					ActiveMultiLineEditableTextBox.Pin())
-			{
-				// TODO: Handle this properly
-				// We need to release from read only in for MultiLines
-				// MultiTextBox->SetIsReadOnly(false);
-				MultiTextBox->InsertTextAtCursor(InText);
-				// MultiTextBox->SetIsReadOnly(true);
-				return true;
-			}
-			break;
+			return InsertTextAtCursorMultiLine(SlateApp, InText);
 
 		default:
 			break;
@@ -2091,6 +2081,28 @@ bool UVimTextEditorSubsystem::InsertTextAtCursorSingleLine(FSlateApplication& Sl
 		const FString InTextStr = InText.ToString();
 		CurrText.InsertAt(CursorOffset, InTextStr);
 		EditTextBox->SetText(FText::FromString(CurrText));
+		return true;
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::InsertTextAtCursorMultiLine(FSlateApplication& SlateApp, const FText& InText)
+{
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+		const TSharedPtr<SMultiLineEditableText> MultiText = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+		if (!MultiText.IsValid())
+			return false;
+
+		const bool bIsInitReadOnly = MultiText->IsTextReadOnly();
+		if (bIsInitReadOnly)
+			MultiTextBox->SetIsReadOnly(false);
+
+		MultiTextBox->InsertTextAtCursor(InText);
+		// Revert ReadOnly state to origin or stay off if originall none.
+		MultiTextBox->SetIsReadOnly(bIsInitReadOnly);
+
 		return true;
 	}
 	return false;
