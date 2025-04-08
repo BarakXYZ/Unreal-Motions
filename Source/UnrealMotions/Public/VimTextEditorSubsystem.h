@@ -120,7 +120,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	//////////////////////////////////////////////////////////////////////////
 	// ~			GoTo Start or End (gg + Shift + G)				~
 	//
-	void GotoStartOrEnd(
+	void GoToStartOrEnd(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void HandleGoToStartMultiLine(FSlateApplication& SlateApp);
@@ -128,6 +128,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleVisualModeGoToStartOrEndMultiLine(FSlateApplication& SlateApp, bool bGoToStart);
 
 	void HandleGoToStartOrEndSingleLine(FSlateApplication& SlateApp, bool bGoToEnd);
+
+	void HandleGoToStartOrEndOfLine(FSlateApplication& SlateApp, bool bGoToEnd);
 	//
 	//
 	//////////////////////////////////////////////////////////////////////////
@@ -263,6 +265,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandlePasteNormalModeLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void PasteVisualMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
 	//

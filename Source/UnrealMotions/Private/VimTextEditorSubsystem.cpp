@@ -8,6 +8,7 @@
 #include "UMConfig.h"
 #include "VimTextEditorUtils.h"
 #include "UMSlateHelpers.h"
+#include "VimTextTypes.h"
 
 // DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, NoLogging, All);
 DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorSubsystem, Log, All);
@@ -1034,7 +1035,7 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 }
 
 // TODO: Update practice to conform with new methods for Multiline
-void UVimTextEditorSubsystem::GotoStartOrEnd(
+void UVimTextEditorSubsystem::GoToStartOrEnd(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	if (IsEditableTextWithDefaultBuffer())
@@ -1169,6 +1170,27 @@ void UVimTextEditorSubsystem::HandleGoToStartOrEndSingleLine(FSlateApplication& 
 		else
 			InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 	}
+}
+
+void UVimTextEditorSubsystem::HandleGoToStartOrEndOfLine(FSlateApplication& SlateApp, bool bGoToEnd)
+{
+	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+	const auto					   Navigate = bGoToEnd
+							? &UVimTextEditorSubsystem::HandleRightNavigation
+							: &UVimTextEditorSubsystem::HandleLeftNavigation;
+	const TArray<FInputChord>	   DummyInput;
+	int32						   CurrOffset = INDEX_NONE;
+	int32						   PrevOffset = INDEX_NONE;
+	FTextLocation				   CurrentTextLocation;
+	do
+	{
+		PrevOffset = CurrOffset;
+		if (!GetCursorLocation(SlateApp, CurrentTextLocation))
+			return;
+		CurrOffset = CurrentTextLocation.GetOffset();
+		(this->*Navigate)(SlateApp, DummyInput);
+	}
+	while (CurrOffset != PrevOffset);
 }
 
 void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight)
@@ -2013,8 +2035,8 @@ void UVimTextEditorSubsystem::ShiftDeleteNormalMode(FSlateApplication& SlateApp,
 
 void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	if (EditableWidgetsFocusState != EUMEditableWidgetsFocusState::MultiLine)
-		return; // In Single-Line editables there's no option to go down a line.
+	// Only in MultiLine we want to simulate \n (break line)
+	const bool bIsMultiLine = EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine;
 
 	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 	VimProc->SetVimMode(SlateApp, EVimMode::Insert);
@@ -2022,8 +2044,12 @@ void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const F
 	if (InKeyEvent.IsShiftDown())
 	{
 		VimProc->SimulateKeyPress(SlateApp, EKeys::Home);
-		VimProc->SimulateKeyPress(SlateApp, EKeys::Enter, ModShiftDown);
-		VimProc->SimulateKeyPress(SlateApp, EKeys::Up);
+
+		if (bIsMultiLine)
+		{
+			VimProc->SimulateKeyPress(SlateApp, EKeys::Enter, ModShiftDown);
+			VimProc->SimulateKeyPress(SlateApp, EKeys::Up);
+		}
 	}
 	else
 	{
@@ -2035,7 +2061,8 @@ void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const F
 		// end-of-the-line, which essentially achieves the same goal of going
 		// down a line.
 		// VimProc->SimulateKeyPress(SlateApp, EKeys::Enter, ModShiftDown);
-		AppendBreakMultiLine();
+		if (bIsMultiLine)
+			AppendBreakMultiLine();
 	}
 }
 
@@ -2782,20 +2809,47 @@ void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray
 	}
 }
 
-// TODO: Handle MultiLine Pasting Properly
 void UVimTextEditorSubsystem::PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
-	FTextLocation TextLocation;
-	if (!GetCursorLocation(SlateApp, TextLocation))
-		return;
+
+	switch (YankData.GetType())
+	{
+		case EUMYankType::Characterwise:
+			break;
+
+		case EUMYankType::Linewise:
+			HandlePasteNormalModeLinewise(SlateApp, InSequence);
+			break;
+
+		default:
+			break;
+	}
+}
+
+void UVimTextEditorSubsystem::HandlePasteNormalModeLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	const TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+	const FInputChord					 LastChord = InSequence.Last();
+	const bool							 bIsShiftDown = LastChord.bShift;
+
+	AppendNewLine(SlateApp,
+		FUMInputHelpers::GetKeyEventFromKey(FKey(), bIsShiftDown));
 
 	const FString TextToPaste = YankData.GetText(EditableWidgetsFocusState);
 
 	InsertTextAtCursor(SlateApp, FText::FromString(TextToPaste));
 
-	GoToTextLocation(SlateApp, FTextLocation(TextLocation.GetLineIndex(), TextLocation.GetOffset() + TextToPaste.Len()));
+	InputProc->SetVimMode(SlateApp, EVimMode::Normal);
 
-	SetCursorSelectionToDefaultLocation(SlateApp);
+	// In SingleLine, the reasonable UX, I think, is to go to the end-of-the-line
+	// if pasting a Linewise.
+	// For MultiLine, it'll always be false (i.e. go-to-start of line)
+	// because we're actually appending new lines.
+	const bool bIsSingleLine = EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine;
+	const bool bGoToEnd = bIsSingleLine && !bIsShiftDown;
+	HandleGoToStartOrEndSingleLine(SlateApp, bGoToEnd);
+
+	ToggleReadOnly(); // Seems to be needed to handle the blinking situation.
 }
 
 bool UVimTextEditorSubsystem::IsMultiChildOfConsole(const TSharedRef<SMultiLineEditableTextBox> InMultiBox)
@@ -2887,13 +2941,13 @@ void UVimTextEditorSubsystem::BindCommands()
 		EUMBindingContext::TextEditing,
 		{ EKeys::G, EKeys::G },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::GotoStartOrEnd);
+		&UVimTextEditorSubsystem::GoToStartOrEnd);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::G) },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::GotoStartOrEnd);
+		&UVimTextEditorSubsystem::GoToStartOrEnd);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
@@ -3079,6 +3133,13 @@ void UVimTextEditorSubsystem::BindCommands()
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::P },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::PasteNormalMode,
+		EVimMode::Normal /* Only available in Normal Mode */);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::P) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::PasteNormalMode,
 		EVimMode::Normal /* Only available in Normal Mode */);

@@ -36,7 +36,8 @@ struct FUMYankData
 				return Content;
 
 			case EUMEditableWidgetsFocusState::MultiLine:
-				return Content + "\n";
+				// return Content + "\n";
+				return Content;
 
 			default:
 				return "";
