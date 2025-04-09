@@ -138,11 +138,6 @@ bool FVimInputProcessor::ProcessKeySequence(
 	if (TraverseTrieForContextAndVim(CurrentContext, VimMode, MatchedNode))
 		bMatchFound = true;
 
-	// Consider custom insert mode intervention? Too expensive?
-	// bool bRestrictToSpecificContextAndMode;
-	// if (bRestrictToSpecificContextAndMode)
-	// 	return bMatchFound;
-
 	else if (TraverseTrieForContextAndVim(CurrentContext, EVimMode::Any, MatchedNode))
 		bMatchFound = true;
 

@@ -228,6 +228,13 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 				StaticCastSharedPtr<SMultiLineEditableTextBox>(Parent);
 			ActiveMultiLineEditableTextBox = MultiTextBox;
 
+			const TSharedPtr<SMultiLineEditableText>
+				MultiText = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+			if (MultiText.IsValid())
+			{
+				MultiText->SetClearTextSelectionOnFocusLoss(false);
+			}
+
 			// NOTE:
 			// In one hand this solves the annoying unexpected behavior of Enter
 			// in MultiLine text by intercepting the Enter key and sending a
@@ -1230,7 +1237,7 @@ bool UVimTextEditorSubsystem::DoesActiveEditableHasAnyTextSelected()
 	return false;
 }
 
-bool UVimTextEditorSubsystem::GetActiveEditableTextContent(FString& OutText)
+bool UVimTextEditorSubsystem::GetActiveEditableTextContent(FString& OutText, const bool bIfMultiCurrLine)
 {
 	switch (EditableWidgetsFocusState)
 	{
@@ -1248,7 +1255,10 @@ bool UVimTextEditorSubsystem::GetActiveEditableTextContent(FString& OutText)
 			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 					ActiveMultiLineEditableTextBox.Pin())
 			{
-				OutText = MultiTextBox->GetText().ToString();
+				if (bIfMultiCurrLine)
+					MultiTextBox->GetCurrentTextLine(OutText);
+				else
+					OutText = MultiTextBox->GetText().ToString();
 				return true;
 			}
 	}
@@ -1259,11 +1269,8 @@ bool UVimTextEditorSubsystem::GetSelectedText(FString& OutText)
 {
 	switch (EditableWidgetsFocusState)
 	{
-		case EUMEditableWidgetsFocusState::None:
-			break; // Theoretically not reachable
-
 		case EUMEditableWidgetsFocusState::SingleLine:
-			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
+			if (const TSharedPtr<SEditableTextBox> EditTextBox = ActiveEditableTextBox.Pin())
 			{
 				OutText = EditTextBox->GetSelectedText().ToString();
 				return true;
@@ -1276,8 +1283,92 @@ bool UVimTextEditorSubsystem::GetSelectedText(FString& OutText)
 				OutText = MultiTextBox->GetSelectedText().ToString();
 				return true;
 			}
+		default:
+			break;
 	}
 	return false;
+}
+
+bool UVimTextEditorSubsystem::GetSelectionRange(FSlateApplication& SlateApp, FTextSelection& OutSelectionRange)
+{
+	switch (EditableWidgetsFocusState)
+	{
+		case EUMEditableWidgetsFocusState::SingleLine:
+			return GetSelectionRangeSingleLine(SlateApp, OutSelectionRange);
+
+		case EUMEditableWidgetsFocusState::MultiLine:
+			return GetSelectionRangeMultiLine(SlateApp, OutSelectionRange);
+
+		default:
+			break;
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::GetSelectionRangeSingleLine(FSlateApplication& SlateApp, FTextSelection& OutSelectionRange)
+{
+	if (const TSharedPtr<SEditableTextBox> EditTextBox = ActiveEditableTextBox.Pin())
+	{
+		if (!EditTextBox->AnyTextSelected())
+			return false;
+
+		const bool bIsCursorAlignedRight = IsCursorAlignedRight(SlateApp);
+
+		const int32 SelectedTextLen = EditTextBox->GetSelectedText().ToString().Len();
+
+		FTextLocation EndTextLocation; // i.e. Current Text Location
+		GetCursorLocation(SlateApp, EndTextLocation);
+
+		const FTextLocation BeginningTextLocation =
+			bIsCursorAlignedRight
+			? FTextLocation(0, EndTextLocation.GetOffset() - SelectedTextLen)
+			: FTextLocation(0, EndTextLocation.GetOffset() + SelectedTextLen);
+
+		OutSelectionRange = FTextSelection(BeginningTextLocation, EndTextLocation);
+		return true;
+	}
+	return false;
+}
+
+bool UVimTextEditorSubsystem::GetSelectionRangeMultiLine(FSlateApplication& SlateApp, FTextSelection& OutSelectionRange)
+{
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+		if (!MultiTextBox->AnyTextSelected())
+			return false;
+
+		const TSharedPtr<SMultiLineEditableText> MultiText = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+		if (MultiText.IsValid())
+		{
+			OutSelectionRange = MultiText->GetSelection();
+
+			// const FTextSelection SelectionRange = MultiText->GetSelection();
+			// const FTextLocation	 Beg = SelectionRange.GetBeginning();
+			// const FTextLocation	 End = SelectionRange.GetEnd();
+
+			// if (IsCursorAlignedRight(SlateApp))
+			// 	OutSelectionRange = FTextSelection(Beg, End);
+			// else
+			// 	OutSelectionRange = FTextSelection(End, Beg);
+
+			return true;
+		}
+	}
+	return false;
+}
+
+void UVimTextEditorSubsystem::DebugSelectionRange(const FTextSelection& InSelectionRange)
+{
+	// NOTE:
+	// We're directly fetching using LocationA & LocationB because internally
+	// Unreal will retrieve the End & Beginning location by calculating who's
+	// bigger. This is really not what we want because we care about true begin
+	// and end position in Vim.
+	const FTextLocation Beg = InSelectionRange.LocationA;
+	const FTextLocation End = InSelectionRange.LocationB;
+
+	Logger.Print(FString::Printf(TEXT("Selection Range:\nStart Location: Line(%d), Offset(%d)\nEnd Location: Line(%d), Offset(%d)"), Beg.GetLineIndex(), Beg.GetOffset(), End.GetLineIndex(), End.GetOffset()), true);
 }
 
 bool UVimTextEditorSubsystem::SetActiveEditableText(const FText& InText)
@@ -2184,9 +2275,6 @@ void UVimTextEditorSubsystem::DeleteLineNormalModeMulti(FSlateApplication& Slate
 	if (!OriginLocation.IsValid())
 		return;
 
-	// const TSharedPtr<SMultiLineEditableText> MultiText = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
-	// MultiText->DeleteSelectedText();
-
 	DeleteLineMulti(SlateApp, FKeyEvent());
 
 	// Check if we can keep the same cursor index or (second best alternative)
@@ -2578,11 +2666,13 @@ bool UVimTextEditorSubsystem::GoToTextLocation(FSlateApplication& SlateApp, cons
 		case EUMEditableWidgetsFocusState::SingleLine:
 			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
 			{
-				GoToTextLocationSingleLine(
-					SlateApp,
-					EditTextBox.ToSharedRef(),
-					InTextLocation.GetOffset());
-				return true;
+				const TSharedPtr<SEditableText> EditableText = GetSingleEditableFromBox(EditTextBox.ToSharedRef());
+				if (EditableText.IsValid())
+				{
+					EditableText->GoTo(FTextLocation(0, InTextLocation.GetOffset()));
+					return true;
+				}
+				return false;
 			}
 			break;
 
@@ -2601,6 +2691,8 @@ bool UVimTextEditorSubsystem::GoToTextLocation(FSlateApplication& SlateApp, cons
 	return false;
 }
 
+/** DEPRECATED - Discovered that we have a built-in GoTo method also for Single
+ * Line Editable Text */
 void UVimTextEditorSubsystem::GoToTextLocationSingleLine(
 	FSlateApplication&				   SlateApp,
 	const TSharedRef<SEditableTextBox> InTextBox,
@@ -2697,16 +2789,19 @@ int32 UVimTextEditorSubsystem::GetCursorLocationSingleLine(FSlateApplication& Sl
 	}
 
 	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	// Select until the end or beginning of the line (via Home or End)
 	VimProc->SimulateKeyPress(SlateApp, MeasureDirection, ModShiftDown);
 
+	// Fetch the new selection to compare against the original selection.
 	const FString NewSelectedText = InTextBox->GetSelectedText().ToString();
 	const int32	  NewSelTextLen = NewSelectedText.Len();
 
+	// Calculate the offset for Right & Left aligned cursors
 	const int32 CursorOffset = bIsCursorAlignedRight
 		? InitTextLen - NewSelTextLen + OriginSelTextLen
 		: NewSelTextLen - OriginSelTextLen;
 
-	// Reverse Offset to the Original Location
+	// Reverse Offset to the Original Location to retain things as they were
 	for (int32 i{ 0 }; i < (NewSelTextLen - OriginSelTextLen); ++i)
 		VimProc->SimulateKeyPress(SlateApp, ReverseDirection, ModShiftDown);
 
@@ -2781,32 +2876,26 @@ void UVimTextEditorSubsystem::JumpToEndOfLine(
 	JumpToEndOrStartOfLine(SlateApp, &UVimTextEditorSubsystem::HandleRightNavigation);
 }
 
+void UVimTextEditorSubsystem::YankCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	FString Text = "";
+	GetSelectedText(Text);
+	YankData = FUMYankData(Text, EUMYankType::Characterwise);
+
+	FTextSelection SelectionRange;
+	if (GetSelectionRange(SlateApp, SelectionRange))
+	{
+		DebugSelectionRange(SelectionRange);
+	}
+
+	// TODO: Finish this up
+}
+
 void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
-	switch (EditableWidgetsFocusState)
-	{
-		case EUMEditableWidgetsFocusState::SingleLine:
-			if (const auto EditTextBox = ActiveEditableTextBox.Pin())
-			{
-				YankData = FUMYankData(
-					EditTextBox->GetText().ToString(),
-					EUMYankType::Linewise);
-			}
-			break;
-
-		case EUMEditableWidgetsFocusState::MultiLine:
-			if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-					ActiveMultiLineEditableTextBox.Pin())
-			{
-				FString CurrentLine;
-				MultiTextBox->GetCurrentTextLine(CurrentLine);
-				YankData = FUMYankData(CurrentLine, EUMYankType::Linewise);
-			}
-			break;
-
-		default:
-			return;
-	}
+	FString Text = "";
+	if (GetActiveEditableTextContent(Text, true /*GetCurrLine if Multi*/))
+		YankData = FUMYankData(Text, EUMYankType::Linewise);
 }
 
 void UVimTextEditorSubsystem::PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
@@ -2824,6 +2913,10 @@ void UVimTextEditorSubsystem::PasteNormalMode(FSlateApplication& SlateApp, const
 		default:
 			break;
 	}
+}
+
+void UVimTextEditorSubsystem::HandlePasteNormalModeCharacterwise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
 }
 
 void UVimTextEditorSubsystem::HandlePasteNormalModeLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
@@ -3129,6 +3222,13 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::YankLine,
 		EVimMode::Normal /* Only available in Normal Mode */);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::YankCharacter,
+		EVimMode::Visual /* Only available in Visual Mode */);
 
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,

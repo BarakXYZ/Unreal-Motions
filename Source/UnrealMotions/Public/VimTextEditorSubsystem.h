@@ -54,8 +54,13 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void HandleEditableUX();
 
-	bool GetActiveEditableTextContent(FString& OutText);
+	bool GetActiveEditableTextContent(FString& OutText, const bool bIfMultiCurrLine = false);
 	bool GetSelectedText(FString& OutText);
+
+	bool GetSelectionRange(FSlateApplication& SlateApp, FTextSelection& OutSelectionRange);
+	bool GetSelectionRangeSingleLine(FSlateApplication& SlateApp, FTextSelection& OutSelectionRange);
+	bool GetSelectionRangeMultiLine(FSlateApplication& SlateApp, FTextSelection& OutSelectionRange);
+	void DebugSelectionRange(const FTextSelection& InSelectionRange);
 
 	bool IsCursorAlignedRight(FSlateApplication& SlateApp);
 
@@ -205,6 +210,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool GoToTextLocation(FSlateApplication& SlateApp, const FTextLocation& InTextLocation);
 
+	/** DEPRECATED - Discovered that we have a built-in GoTo method also
+	 * for Single-Line Editable Text */
 	void GoToTextLocationSingleLine(
 		FSlateApplication&				   SlateApp,
 		const TSharedRef<SEditableTextBox> InTextBox,
@@ -263,8 +270,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	//						~ Yanking & Pasting Commands ~
 	//
 
+	void YankCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandlePasteNormalModeCharacterwise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void HandlePasteNormalModeLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void PasteVisualMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
