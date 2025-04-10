@@ -272,9 +272,21 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void YankCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void HandlePasteNormalModeCharacterwise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void HandlePasteNormalModeLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void Paste(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
+	void HandlePasteCharacterwise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandlePasteCharacterwiseNormalMode(
+		FSlateApplication&					 SlateApp,
+		const TArray<FInputChord>&			 InSequence,
+		const FText&						 TextToPaste,
+		const TSharedRef<FVimInputProcessor> InputProc);
+	void HandlePasteCharacterwiseVisualMode(
+		FSlateApplication&					 SlateApp,
+		const TArray<FInputChord>&			 InSequence,
+		const FText&						 TextToPaste,
+		const TSharedRef<FVimInputProcessor> InputProc);
+
+	void HandlePasteLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void PasteVisualMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
 	//

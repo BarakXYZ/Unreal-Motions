@@ -1342,16 +1342,6 @@ bool UVimTextEditorSubsystem::GetSelectionRangeMultiLine(FSlateApplication& Slat
 		if (MultiText.IsValid())
 		{
 			OutSelectionRange = MultiText->GetSelection();
-
-			// const FTextSelection SelectionRange = MultiText->GetSelection();
-			// const FTextLocation	 Beg = SelectionRange.GetBeginning();
-			// const FTextLocation	 End = SelectionRange.GetEnd();
-
-			// if (IsCursorAlignedRight(SlateApp))
-			// 	OutSelectionRange = FTextSelection(Beg, End);
-			// else
-			// 	OutSelectionRange = FTextSelection(End, Beg);
-
 			return true;
 		}
 	}
@@ -2885,10 +2875,17 @@ void UVimTextEditorSubsystem::YankCharacter(FSlateApplication& SlateApp, const T
 	FTextSelection SelectionRange;
 	if (GetSelectionRange(SlateApp, SelectionRange))
 	{
-		DebugSelectionRange(SelectionRange);
-	}
+		// DebugSelectionRange(SelectionRange);
 
-	// TODO: Finish this up
+		// Per Vim rules; After yanking, we should jump to the leftmost selected
+		// text available.
+		GoToTextLocation(SlateApp, SelectionRange.GetBeginning());
+
+		TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+		// We wanna sim one time to the right to compensate and align right.
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Right);
+		VimProc->SetVimMode(SlateApp, EVimMode::Normal); // Visual -> Normal
+	}
 }
 
 void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
@@ -2898,16 +2895,16 @@ void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray
 		YankData = FUMYankData(Text, EUMYankType::Linewise);
 }
 
-void UVimTextEditorSubsystem::PasteNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+void UVimTextEditorSubsystem::Paste(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
-
 	switch (YankData.GetType())
 	{
 		case EUMYankType::Characterwise:
+			HandlePasteCharacterwise(SlateApp, InSequence);
 			break;
 
 		case EUMYankType::Linewise:
-			HandlePasteNormalModeLinewise(SlateApp, InSequence);
+			HandlePasteLinewise(SlateApp, InSequence);
 			break;
 
 		default:
@@ -2915,11 +2912,54 @@ void UVimTextEditorSubsystem::PasteNormalMode(FSlateApplication& SlateApp, const
 	}
 }
 
-void UVimTextEditorSubsystem::HandlePasteNormalModeCharacterwise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+void UVimTextEditorSubsystem::HandlePasteCharacterwise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
+	const TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+	const FText							 TextToPaste = FText::FromString(YankData.GetText(EditableWidgetsFocusState));
+
+	switch (CurrentVimMode)
+	{
+		case EVimMode::Normal:
+		{
+			HandlePasteCharacterwiseNormalMode(SlateApp, InSequence, TextToPaste, InputProc);
+			break;
+		}
+		// In Visual Mode, we should replace the selected text.
+		case EVimMode::Visual:
+		{
+			HandlePasteCharacterwiseVisualMode(SlateApp, InSequence, TextToPaste, InputProc);
+			break;
+		}
+		default:
+			break;
+	}
 }
 
-void UVimTextEditorSubsystem::HandlePasteNormalModeLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+void UVimTextEditorSubsystem::HandlePasteCharacterwiseNormalMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence, const FText& TextToPaste, const TSharedRef<FVimInputProcessor> InputProc)
+{
+	const FInputChord LastChord = InSequence.Last();
+	const bool		  bIsShiftDown = LastChord.bShift;
+
+	ClearTextSelection(false);
+
+	if (bIsShiftDown) // Insert *before* the currently selected char
+		InputProc->SimulateKeyPress(SlateApp, EKeys::Left);
+
+	InsertTextAtCursor(SlateApp, TextToPaste);
+	ToggleReadOnly();
+	SetCursorSelectionToDefaultLocation(SlateApp);
+}
+
+void UVimTextEditorSubsystem::HandlePasteCharacterwiseVisualMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence, const FText& TextToPaste, const TSharedRef<FVimInputProcessor> InputProc)
+{
+	DeleteCurrentSelection(SlateApp);
+	ClearTextSelection(false);
+	InsertTextAtCursor(SlateApp, TextToPaste);
+	InputProc->SetVimMode(SlateApp, EVimMode::Normal);
+}
+
+// TODO: Fix bug in end of document Visual Mode nav
+void UVimTextEditorSubsystem::HandlePasteLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	const TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
 	const FInputChord					 LastChord = InSequence.Last();
@@ -3234,15 +3274,13 @@ void UVimTextEditorSubsystem::BindCommands()
 		EUMBindingContext::TextEditing,
 		{ EKeys::P },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::PasteNormalMode,
-		EVimMode::Normal /* Only available in Normal Mode */);
+		&UVimTextEditorSubsystem::Paste);
 
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::P) },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::PasteNormalMode,
-		EVimMode::Normal /* Only available in Normal Mode */);
+		&UVimTextEditorSubsystem::Paste);
 
 	//
 	// Yanking / Pasting Related
