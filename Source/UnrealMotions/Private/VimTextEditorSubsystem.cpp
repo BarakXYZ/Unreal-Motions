@@ -849,7 +849,8 @@ void UVimTextEditorSubsystem::HandleLeftNavigation(
 	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
 	FKey						   Left = EKeys::Left;
 
-	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine && IsMultiLineCursorAtBeginningOfLine())
+	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine
+		&& IsMultiLineCursorAtBeginningOfLine())
 		return; // Shouldn't continue navigation per Vim rules
 
 	if (CurrentVimMode == EVimMode::Visual)
@@ -858,11 +859,13 @@ void UVimTextEditorSubsystem::HandleLeftNavigation(
 		{
 			case (EUMSelectionState::None):
 			{
+				// Logger.Print("NONE", true);
 				SetCursorSelectionToDefaultLocation(SlateApp);
 				break;
 			}
 			case (EUMSelectionState::OneChar):
 			{
+				// Logger.Print("ONE CHAR", true);
 				// We will need to align left to retain the anchor
 				// selection and also highlight the next left char.
 				// Thus, we're breaking, then aligning left, then
@@ -1649,7 +1652,10 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(
 	// Get current text location
 	FTextLocation StartTextLocation = InMultiLine->GetCursorLocation();
 	if (!StartTextLocation.IsValid())
+	{
+		Logger.Print("Cannot determine if at End-of-Document - Invalid Cursor Location", true);
 		return false;
+	}
 
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
 
@@ -1684,7 +1690,10 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(
 	// char at this line (i.e. the end of the doc)
 	FString LineText;
 	InMultiLine->GetCurrentTextLine(LineText);
-	return LineText.Len() == StartTextLocation.GetOffset();
+	// Logger.Print(FString::Printf(TEXT("Line Text Length: %d\nStart Text Location Offset: %d"), LineText.Len(), StartTextLocation.GetOffset()), true);
+	// It looks like we will need to compensate with +1 for some reason. Keep
+	// an eye on this.
+	return LineText.Len() == StartTextLocation.GetOffset() + 1;
 }
 
 bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfDocument()
@@ -1922,10 +1931,14 @@ bool UVimTextEditorSubsystem::IsCursorAlignedRight(FSlateApplication& SlateApp)
 	{
 		// Logger.Print("Cursor Aligned Left: Initially some text was selected, then none when simulated to the Right", true);
 
-		// Because we know some text was selected (per previous check) and if
-		// not text is selected we've unselected something, meaning it was
-		// selected and aligned to the left
+		// If we initially had text selected, but after moving right we have
+		// no selection, this means our cursor was aligned to the left side of
+		// the selection.
+		// Example: Given text "abc" with "b" selected:
+		// Left-aligned:  a[b]c -> moving right breaks selection -> ab|c
+		// Right-aligned: ab[c] -> moving right keeps selection -> ab[c]
 		// Revert: return to origin selection
+
 		VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
 		return false; // Aligned Left
 	}
@@ -1935,15 +1948,18 @@ bool UVimTextEditorSubsystem::IsCursorAlignedRight(FSlateApplication& SlateApp)
 	// more or less text selected to determine if we're aligned to the left
 	// or to the right.
 
-	// Revert: return to origin selection
-	VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
-	const bool bIsCursorAlignedRight = NewSelText.Len() >= OriginSelText.Len();
-
+	const int32 NewSelTextLen = NewSelText.Len();
+	const int32 OriginSelTextLen = OriginSelText.Len();
+	if (NewSelTextLen != OriginSelTextLen)
+	{
+		// if any mutations were introduced - revert: return to origin selection
+		VimProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
+	}
+	const bool bIsCursorAlignedRight = NewSelTextLen >= OriginSelTextLen;
 	// const FString CursorAlignmentDebug = bIsCursorAlignedRight
 	// 	? "Cursor Aligned Right: New Selection is Bigger than Prev Selection."
 	// 	: "Cursor Aligned Left: New Selection is Smaller than Prev Selection.";
 	// Logger.Print(CursorAlignmentDebug, true);
-
 	return bIsCursorAlignedRight;
 }
 
@@ -2924,7 +2940,6 @@ void UVimTextEditorSubsystem::HandlePasteCharacterwise(FSlateApplication& SlateA
 			HandlePasteCharacterwiseNormalMode(SlateApp, InSequence, TextToPaste, InputProc);
 			break;
 		}
-		// In Visual Mode, we should replace the selected text.
 		case EVimMode::Visual:
 		{
 			HandlePasteCharacterwiseVisualMode(SlateApp, InSequence, TextToPaste, InputProc);
