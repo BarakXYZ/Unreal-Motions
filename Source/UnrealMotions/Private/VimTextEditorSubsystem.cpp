@@ -122,6 +122,11 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 	const TSharedPtr<SWidget>& OldWidget, const FWidgetPath& NewWidgetPath,
 	const TSharedPtr<SWidget>& NewWidget)
 {
+	static bool bAlreadyProcessingFocusChange = false;
+	// Guard against recursion (stack overflow issues)
+	if (bAlreadyProcessingFocusChange)
+		return;
+
 	// TODO: Might wanna do an early return if we're in Insert mode.
 
 	// Logger.ToggleLogging(true);
@@ -202,6 +207,8 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 	// as Multi/SingleEditText, but by some other wrappers like "SSearchBox",
 	// "SFilterSearchBoxImpl", etc. But they inherit from these Box types.
 
+	// Flag we're not free to digest any new focus change until finish processing
+	bAlreadyProcessingFocusChange = true;
 	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 	{
 		if (Parent->GetWidgetClass().GetWidgetType().IsEqual("SBorder"))
@@ -257,6 +264,9 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 	SetEditableUnifiedStyle();
 	AssignEditableBorder();
 	HandleEditableUX(); // We early return if Non-Editables, so this is safe.
+
+	// After finishing all setup, we're now free to digest a new focus change
+	bAlreadyProcessingFocusChange = false;
 }
 
 void UVimTextEditorSubsystem::SetEditableUnifiedStyle(const float InDelay)
@@ -526,28 +536,24 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 	// more than 1 character.
 	ForceFocusActiveEditable(SlateApp);
 
-	// This is important in order to mitigate a potential
-	// Stack Overflow that seems to occur in Preferences
-	// SearchBox
-	if (SlateApp.IsProcessingInput())
-		return;
-
 	switch (GetSelectionState())
 	{
 		case (EUMSelectionState::None):
-			break;
+			break; // Continue with the flow at the bottom
 
 		case (EUMSelectionState::OneChar):
-			return; // No need to do anything
+			// Logger.Print("One Char", true);
+			ToggleReadOnly();
+			return; // No need to do anything as we're already selecting 1 char
 
 		case (EUMSelectionState::ManyChars):
 		{
-			Logger.Print("I enter", true);
+			// Logger.Print("Many Chars", true);
 			if ((!IsCurrentLineInMultiEmpty()
 					|| EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 				&& !IsCursorAlignedRight(SlateApp))
 			{
-				Logger.Print("I'm HERE", true);
+				// Logger.Print("Many Chars Inner", true);
 				ClearTextSelection();
 				ToggleReadOnly();
 
@@ -558,6 +564,7 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 		}
 	}
 
+	// Logger.Print("None || Cannot GetSelectionState", true);
 	ClearTextSelection();
 	ToggleReadOnly();
 
@@ -566,18 +573,6 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 		SwitchInsertToNormalMultiLine(SlateApp);
 	else // Align cursor to the right in all other scenarios
 		SetCursorSelectionToDefaultLocation(SlateApp);
-}
-
-void UVimTextEditorSubsystem::HandleNormalModeMultipleChars(float InDelay)
-{
-	// We need the delay to process and select correctly.
-	FTimerHandle TimerHandle;
-	GEditor->GetTimerManager()->SetTimer(
-		TimerHandle,
-		[this]() {
-			HandleNormalModeMultipleChars();
-		},
-		InDelay, false);
 }
 
 void UVimTextEditorSubsystem::HandleEditableUX()
@@ -609,7 +604,7 @@ void UVimTextEditorSubsystem::HandleEditableUX()
 		HandleNormalModeOneChar();
 
 	else // Multi Chars
-		HandleNormalModeMultipleChars(0.025f);
+		HandleNormalModeMultipleChars();
 }
 
 bool UVimTextEditorSubsystem::ForceFocusActiveEditable(FSlateApplication& SlateApp)
@@ -1744,7 +1739,8 @@ bool UVimTextEditorSubsystem::SelectTextInRange(
 	FSlateApplication&	 SlateApp,
 	const FTextLocation& StartLocation,
 	const FTextLocation& EndLocation,
-	bool				 bJumpToStart)
+	bool				 bJumpToStart,
+	bool				 bIgnoreSetCursorToDefault)
 {
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
 
@@ -1766,12 +1762,11 @@ bool UVimTextEditorSubsystem::SelectTextInRange(
 			&& StartOffset < EndOffset);
 
 	if (bJumpToStart) // vs. moving from where we're currently at
-		// MultiTextBox->GoTo(StartLocation);
 		GoToTextLocation(SlateApp, StartLocation);
 	const bool bIsAtBeginningOfLine = IsMultiLineCursorAtBeginningOfLine();
 
 	if (bShouldAlignRight)
-		if (bIsAtBeginningOfLine)
+		if (bIsAtBeginningOfLine || bIgnoreSetCursorToDefault)
 			InputProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 		else
 			SetCursorSelectionToDefaultLocation(SlateApp);
@@ -2234,6 +2229,12 @@ bool UVimTextEditorSubsystem::InsertTextAtCursorMultiLine(FSlateApplication& Sla
 
 void UVimTextEditorSubsystem::DeleteLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	FString CurrentLine;
+	if (GetActiveEditableTextContent(CurrentLine, true /*Only Current Line*/))
+		YankData.SetData(CurrentLine, EUMYankType::Linewise);
+	else
+		return;
+
 	switch (EditableWidgetsFocusState)
 	{
 		case EUMEditableWidgetsFocusState::None:
@@ -2388,6 +2389,15 @@ void UVimTextEditorSubsystem::DeleteToEndOfLine(FSlateApplication& SlateApp, con
 	FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
 }
 
+void UVimTextEditorSubsystem::DeleteInsideWord(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	if (SelectInsideWord(SlateApp))
+	{
+		DeleteCurrentSelection(SlateApp);
+		FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
+	}
+}
+
 void UVimTextEditorSubsystem::ChangeToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
@@ -2408,6 +2418,12 @@ void UVimTextEditorSubsystem::ChangeVisualMode(FSlateApplication& SlateApp, cons
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
 	DeleteCurrentSelection(SlateApp);
 	InputProc->SetVimMode(SlateApp, EVimMode::Insert);
+}
+
+void UVimTextEditorSubsystem::ChangeInsideWord(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	if (SelectInsideWord(SlateApp))
+		ChangeVisualMode(SlateApp, FKeyEvent());
 }
 
 FUMStringInfo UVimTextEditorSubsystem::GetFStringInfo(const FString& InputString)
@@ -2664,6 +2680,50 @@ void UVimTextEditorSubsystem::NavigateWord(
 			VimProc->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 	}
 }
+void UVimTextEditorSubsystem::SelectInsideWord()
+{
+	SelectInsideWord(FSlateApplication::Get());
+}
+
+bool UVimTextEditorSubsystem::SelectInsideWord(FSlateApplication& SlateApp)
+{
+	FString Text;
+	if (!GetActiveEditableTextContent(Text))
+		return false;
+
+	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	FTextLocation				   OriginCursorLocation;
+	if (!GetCursorLocation(SlateApp, OriginCursorLocation))
+		return false;
+
+	int32 CurrentAbs = FVimTextEditorUtils::TextLocationToAbsoluteOffset(
+		Text,
+		FTextLocation(
+			OriginCursorLocation.GetLineIndex(),
+			OriginCursorLocation.GetOffset()
+				- (IsCursorAlignedRight(SlateApp) ? 1 /*Comp-RightAlign*/ : 0)));
+
+	TPair<int32, int32> WordBoundaries;
+	if (!FVimTextEditorUtils::GetAbsWordBoundaries(Text, CurrentAbs, WordBoundaries, false))
+		return false;
+
+	// Get Beginning & End Text Locations
+	FTextLocation WordStart;
+	FVimTextEditorUtils::AbsoluteOffsetToTextLocation(Text, WordBoundaries.Key, WordStart);
+	if (!WordStart.IsValid())
+		return false;
+	FTextLocation WordEnd;
+	FVimTextEditorUtils::AbsoluteOffsetToTextLocation(Text, WordBoundaries.Value, WordEnd);
+	if (!WordEnd.IsValid())
+		return false;
+
+	VimProc->SetVimMode(SlateApp, EVimMode::Visual);
+	SelectTextInRange(SlateApp, WordStart, WordEnd,
+		true, /* Jump to Start of Boundary */
+		true /*Ignore Set Cursor to Default to Align properly*/);
+
+	return true;
+}
 
 bool UVimTextEditorSubsystem::GoToTextLocation(FSlateApplication& SlateApp, const FTextLocation& InTextLocation)
 {
@@ -2886,7 +2946,7 @@ void UVimTextEditorSubsystem::YankCharacter(FSlateApplication& SlateApp, const T
 {
 	FString Text = "";
 	GetSelectedText(Text);
-	YankData = FUMYankData(Text, EUMYankType::Characterwise);
+	YankData.SetData(Text, EUMYankType::Characterwise);
 
 	FTextSelection SelectionRange;
 	if (GetSelectionRange(SlateApp, SelectionRange))
@@ -2908,7 +2968,7 @@ void UVimTextEditorSubsystem::YankLine(FSlateApplication& SlateApp, const TArray
 {
 	FString Text = "";
 	if (GetActiveEditableTextContent(Text, true /*GetCurrLine if Multi*/))
-		YankData = FUMYankData(Text, EUMYankType::Linewise);
+		YankData.SetData(Text, EUMYankType::Linewise);
 }
 
 void UVimTextEditorSubsystem::Paste(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
@@ -2997,7 +3057,7 @@ void UVimTextEditorSubsystem::HandlePasteLinewise(FSlateApplication& SlateApp, c
 	const bool bGoToEnd = bIsSingleLine && !bIsShiftDown;
 	HandleGoToStartOrEndSingleLine(SlateApp, bGoToEnd);
 
-	ToggleReadOnly(); // Seems to be needed to handle the blinking situation.
+	InputProc->SetVimMode(SlateApp, EVimMode::Normal);
 }
 
 bool UVimTextEditorSubsystem::IsMultiChildOfConsole(const TSharedRef<SMultiLineEditableTextBox> InMultiBox)
@@ -3013,6 +3073,12 @@ bool UVimTextEditorSubsystem::IsMultiChildOfConsole(const TSharedRef<SMultiLineE
 			return true;
 	}
 	return false;
+}
+
+void UVimTextEditorSubsystem::YankInsideWord(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	if (SelectInsideWord(SlateApp))
+		YankCharacter(SlateApp, InSequence);
 }
 
 void UVimTextEditorSubsystem::BindCommands()
@@ -3147,6 +3213,13 @@ void UVimTextEditorSubsystem::BindCommands()
 		&UVimTextEditorSubsystem::DeleteLineVisualMode,
 		EVimMode::Visual);
 
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::I, EKeys::W },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteInsideWord,
+		EVimMode::Normal);
+
 	// Append New Line (After & Before the current Line)
 	//
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -3180,6 +3253,13 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ChangeVisualMode,
 		EVimMode::Visual);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, EKeys::I, EKeys::W },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ChangeInsideWord,
+		EVimMode::Normal);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
@@ -3297,8 +3377,24 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::Paste);
 
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, EKeys::I, EKeys::W },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::YankInsideWord,
+		EVimMode::Normal);
+
 	//
 	// Yanking / Pasting Related
+
+	VimInputProcessor->AddKeyBinding_NoParam(
+		EUMBindingContext::TextEditing,
+		// Not V + I + W because it will collide with entering Visual Mode +
+		// we're already restricted to visual mode for this so it's ok.
+		{ EKeys::I, EKeys::W },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::SelectInsideWord,
+		EVimMode::Visual);
 
 	// Jump to Start of Line
 	VimInputProcessor->AddKeyBinding_KeyEvent(

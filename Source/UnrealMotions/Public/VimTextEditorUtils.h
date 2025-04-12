@@ -181,6 +181,8 @@ public:
 	 */
 	static int32 FindPreviousSmallWordEnd(const FString& Text, int32 CurrentPos);
 
+	static bool GetAbsWordBoundaries(const FString& Text, int32 CurrentPos, TPair<int32, int32>& OutWordBoundaries, const bool bIncludeTrailingSpaces);
+
 	static void AbsoluteOffsetToTextLocation(const FString& Text, int32 AbsoluteOffset, FTextLocation& OutLocation);
 
 	static int32 TextLocationToAbsoluteOffset(const FString& Text, const FTextLocation& Location);

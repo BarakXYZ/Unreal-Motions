@@ -44,6 +44,12 @@ struct FUMYankData
 		}
 	}
 
+	void SetData(const FString& InContent, EUMYankType InType)
+	{
+		Content = InContent;
+		Type = InType;
+	}
+
 	EUMYankType GetType()
 	{
 		return Type;

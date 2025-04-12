@@ -1,4 +1,5 @@
 #include "VimTextEditorUtils.h"
+#include "VimEditorSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVimTextEditorUtils, Log, All); // Dev
 FUMLogger FVimTextEditorUtils::Logger(&LogVimTextEditorUtils);
@@ -422,6 +423,41 @@ int32 FVimTextEditorUtils::FindPreviousSmallWordEnd(const FString& Text, int32 C
 
 	// Return the index of the last character of the previous word.
 	return PrevWordEnd - 1;
+}
+
+bool FVimTextEditorUtils::GetAbsWordBoundaries(const FString& Text, int32 CurrentPos, TPair<int32, int32>& OutWordBoundaries, const bool bIncludeTrailingSpaces)
+{
+	const int32 TextLen = Text.Len();
+	if (CurrentPos <= 0 || CurrentPos > TextLen || TextLen <= 0)
+		return false;
+
+	int32 Pos = CurrentPos;
+
+	// if currently on whitespace, the boundaries are until the next and previous
+	// non-space characters
+	if (FChar::IsWhitespace(Text[Pos]))
+	{
+		const int32 BoundaryStart = SkipWhitespace(Text, Pos, -1);
+		const int32 BoundaryEnd = SkipWhitespace(Text, Pos, 1);
+		OutWordBoundaries = TPair<int32, int32>(BoundaryStart, BoundaryEnd);
+		return true;
+	}
+	else if (FChar::IsAlnum(Text[Pos]))
+	{
+		const int32 BoundaryStart = SkipCharType(Text, Pos, -1, EUMCharType::Word);
+		const int32 BoundaryEnd = SkipCharType(Text, Pos, 1, EUMCharType::Word);
+		OutWordBoundaries = TPair<int32, int32>(BoundaryStart, BoundaryEnd);
+		return true;
+	}
+	else if (FChar::IsPunct(Text[Pos]))
+	{
+		const int32 BoundaryStart = SkipCharType(Text, Pos, -1, EUMCharType::Symbol);
+		const int32 BoundaryEnd = SkipCharType(Text, Pos, 1, EUMCharType::Symbol);
+		OutWordBoundaries = TPair<int32, int32>(BoundaryStart, BoundaryEnd);
+		return true;
+	}
+
+	return true;
 }
 
 //------------------------------------------------------------------------------

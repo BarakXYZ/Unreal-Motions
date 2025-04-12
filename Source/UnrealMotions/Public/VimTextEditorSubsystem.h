@@ -116,7 +116,6 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleInsertMode(const FString& InCurrentText);
 	void HandleNormalModeOneChar();
 	void HandleNormalModeMultipleChars();
-	void HandleNormalModeMultipleChars(float InDelay);
 	bool TrySetHintTextForVimMode();
 
 	void InsertAndAppend(
@@ -190,11 +189,14 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void DeleteCurrentSelection(FSlateApplication& SlateApp);
 	void DeleteToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	void DeleteInsideWord(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
 	void ChangeEntireLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void ChangeEntireLineMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void ChangeToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void ChangeVisualMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void ChangeInsideWord(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
 	void AddDebuggingText(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
@@ -206,7 +208,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 		FSlateApplication&	 SlateApp,
 		const FTextLocation& StartLocation,
 		const FTextLocation& EndLocation,
-		bool				 bJumpToStart = true);
+		bool				 bJumpToStart = true,
+		bool				 bIgnoreSetCursorToDefault = false);
 
 	bool GoToTextLocation(FSlateApplication& SlateApp, const FTextLocation& InTextLocation);
 
@@ -273,6 +276,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void YankCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void Paste(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void YankInsideWord(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+
+	bool SelectInsideWord(FSlateApplication& SlateApp);
+	void SelectInsideWord();
 
 	void HandlePasteCharacterwise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void HandlePasteCharacterwiseNormalMode(
