@@ -548,12 +548,12 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 
 		case (EUMSelectionState::ManyChars):
 		{
-			// Logger.Print("Many Chars", true);
+			Logger.Print("Many Chars", true);
 			if ((!IsCurrentLineInMultiEmpty()
 					|| EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 				&& !IsCursorAlignedRight(SlateApp))
 			{
-				// Logger.Print("Many Chars Inner", true);
+				Logger.Print("Many Chars Inner", true);
 				ClearTextSelection();
 				ToggleReadOnly();
 
@@ -564,7 +564,7 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 		}
 	}
 
-	// Logger.Print("None || Cannot GetSelectionState", true);
+	Logger.Print("None || Cannot GetSelectionState", true);
 	ClearTextSelection();
 	ToggleReadOnly();
 
@@ -2064,11 +2064,7 @@ EUMSelectionState UVimTextEditorSubsystem::GetSelectionState()
 
 void UVimTextEditorSubsystem::SwitchInsertToNormalMultiLine(FSlateApplication& SlateApp)
 {
-	if (IsMultiLineCursorAtBeginningOfDocument())
-		SetCursorSelectionToDefaultLocation(SlateApp,
-			false /*Must Align Cursor to the Left*/);
-
-	else if (IsMultiLineCursorAtBeginningOfLine())
+	if (IsMultiLineCursorAtBeginningOfLine())
 	{
 		if (IsCurrentLineInMultiEmpty())
 			SetCursorSelectionToDefaultLocation(SlateApp,
