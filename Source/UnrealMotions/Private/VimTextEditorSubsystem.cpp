@@ -304,22 +304,10 @@ void UVimTextEditorSubsystem::SetEditableUnifiedStyle()
 void UVimTextEditorSubsystem::SetEditableUnifiedStyleSingleLine(
 	const TSharedRef<SEditableTextBox> InTextBox)
 {
-	FSlateColor CurrFGColor = InTextBox->GetForegroundColor();
-	if (CurrFGColor.GetSpecifiedColor() == FLinearColor::White)
-		InTextBox->SetTextBoxBackgroundColor(
-			FSlateColor(FLinearColor::Black));
-	else if (CurrFGColor.GetSpecifiedColor() == FLinearColor::Black)
-		InTextBox->SetTextBoxBackgroundColor(
-			FSlateColor(FLinearColor::White));
-	else // Seems to be needed for first time focus as GetFG won't work
-		InTextBox->SetTextBoxBackgroundColor(
-			FSlateColor(FLinearColor::Black));
-
 	InTextBox->SetTextBoxBackgroundColor(
 		FSlateColor(FLinearColor::Black));
-
-	// Override ReadOnly color text with the foreground regular one.
-	InTextBox->SetReadOnlyForegroundColor(InTextBox->GetForegroundColor());
+	InTextBox->SetForegroundColor(FSlateColor(FLinearColor::White));
+	InTextBox->SetReadOnlyForegroundColor(FSlateColor(FLinearColor::White));
 }
 
 void UVimTextEditorSubsystem::SetEditableUnifiedStyleMultiLine(
@@ -2083,11 +2071,9 @@ void UVimTextEditorSubsystem::Delete(FSlateApplication& SlateApp, const FKeyEven
 	if (IsCurrentLineEmpty())
 		return;
 
-	ToggleReadOnly(true, false /*Skip handle blinking to not clear selection*/);
+	DeleteCurrentSelection(SlateApp, true /* Yank Currently Selected Text*/);
 
 	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
-	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete);
-
 	if (!IsCurrentLineEmpty()
 		&& !IsCursorAtEndOfLine(SlateApp))
 		VimProc->SimulateKeyPress(SlateApp, EKeys::Right);
@@ -2327,8 +2313,12 @@ void UVimTextEditorSubsystem::DeleteCurrentLineContent(FSlateApplication& SlateA
 	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete); // Delete selection
 }
 
-void UVimTextEditorSubsystem::DeleteCurrentSelection(FSlateApplication& SlateApp)
+void UVimTextEditorSubsystem::DeleteCurrentSelection(FSlateApplication& SlateApp, const bool bYankSelection)
 {
+	// if paste with shift; Don't copy the replaced text, else copy.
+	if (bYankSelection)
+		YankCurrentlySelectedText();
+
 	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 	ToggleReadOnly(true, false /*Don't Clear Selection*/);
 	VimProc->SimulateKeyPress(SlateApp, EKeys::Delete);
@@ -2389,7 +2379,7 @@ void UVimTextEditorSubsystem::DeleteInsideWord(FSlateApplication& SlateApp, cons
 {
 	if (SelectInsideWord(SlateApp))
 	{
-		DeleteCurrentSelection(SlateApp);
+		DeleteCurrentSelection(SlateApp, true /*Yank Deleted Text*/);
 		FVimInputProcessor::Get()->SetVimMode(SlateApp, EVimMode::Normal);
 	}
 }
@@ -2412,7 +2402,7 @@ void UVimTextEditorSubsystem::ChangeToEndOfLine(FSlateApplication& SlateApp, con
 void UVimTextEditorSubsystem::ChangeVisualMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-	DeleteCurrentSelection(SlateApp);
+	DeleteCurrentSelection(SlateApp, true /*Yank Deleted Text*/);
 	InputProc->SetVimMode(SlateApp, EVimMode::Insert);
 }
 
@@ -2938,6 +2928,15 @@ void UVimTextEditorSubsystem::JumpToEndOfLine(
 	JumpToEndOrStartOfLine(SlateApp, &UVimTextEditorSubsystem::HandleRightNavigation);
 }
 
+void UVimTextEditorSubsystem::YankCurrentlySelectedText()
+{
+	FString SelectedText;
+	if (GetSelectedText(SelectedText))
+	{
+		YankData.SetData(SelectedText, EUMYankType::Characterwise);
+	}
+}
+
 void UVimTextEditorSubsystem::YankCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	FString Text = "";
@@ -3023,7 +3022,7 @@ void UVimTextEditorSubsystem::HandlePasteCharacterwiseNormalMode(FSlateApplicati
 
 void UVimTextEditorSubsystem::HandlePasteCharacterwiseVisualMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence, const FText& TextToPaste, const TSharedRef<FVimInputProcessor> InputProc)
 {
-	DeleteCurrentSelection(SlateApp);
+	DeleteCurrentSelection(SlateApp, true /*Yank Deleted Text*/);
 	ClearTextSelection(false);
 	InsertTextAtCursor(SlateApp, TextToPaste);
 	InputProc->SetVimMode(SlateApp, EVimMode::Normal);

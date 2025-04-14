@@ -186,7 +186,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	EUMSelectionState GetSelectionState();
 
 	void DeleteCurrentLineContent(FSlateApplication& SlateApp);
-	void DeleteCurrentSelection(FSlateApplication& SlateApp);
+	void DeleteCurrentSelection(FSlateApplication& SlateApp, const bool bYankSelection);
 	void DeleteToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void DeleteInsideWord(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
@@ -273,6 +273,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	//						~ Yanking & Pasting Commands ~
 	//
 
+	void YankCurrentlySelectedText();
 	void YankCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void YankLine(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void Paste(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
