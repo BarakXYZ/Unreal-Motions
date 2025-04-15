@@ -303,8 +303,11 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	if (!ActiveWindow.IsValid())
 		return false;
 
-	return FUMSlateHelpers::TraverseFindWidget(ActiveWindow.ToSharedRef(),
-		OutWidgets, FUMSlateHelpers::GetInteractableWidgetTypes());
+	return FUMSlateHelpers::TraverseFindWidget(
+		ActiveWindow.ToSharedRef(),
+		OutWidgets,
+		FUMSlateHelpers::GetInteractableWidgetTypes(),
+		FUMSlateHelpers::GetStartsWithInteractableWidgetTypes());
 }
 
 bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
@@ -321,8 +324,11 @@ bool UVimNavigationEditorSubsystem::CollectInteractableWidgets(
 	for (const TSharedRef<SWindow>& Win : VisibleWindows)
 	{
 		TArray<TSharedRef<SWidget>> InteractableWidgets;
-		if (FUMSlateHelpers::TraverseFindWidget(Win,
-				InteractableWidgets, FUMSlateHelpers::GetInteractableWidgetTypes()))
+		if (FUMSlateHelpers::TraverseFindWidget(
+				Win,
+				InteractableWidgets,
+				FUMSlateHelpers::GetInteractableWidgetTypes(),
+				FUMSlateHelpers::GetStartsWithInteractableWidgetTypes()))
 		{
 			// Need to check Overlay Support to avoid errors!
 			// if (Win->IsRegularWindow() && Win->HasOverlay())

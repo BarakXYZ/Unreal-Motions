@@ -73,7 +73,7 @@ void FUMFocusHelpers::SetWidgetFocusWithDelay(const TSharedRef<SWidget> InWidget
 
 bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
-	const TMap<FString, TFunction<void(FSlateApplication&, TSharedRef<SWidget>)>> WidgetExecMap = {
+	static const TMap<FString, TFunction<void(FSlateApplication&, TSharedRef<SWidget>)>> WidgetExecMap = {
 		{ "SButton", &FUMFocusHelpers::ClickSButton },
 		{ "SCheckBox", &FUMFocusHelpers::ClickSCheckBox },
 		{ "SPropertyValueWidget", &FUMFocusHelpers::ClickSPropertyValueWidget },
@@ -81,7 +81,8 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 		{ "SLevelOfDetailBranchNode", &FUMFocusHelpers::ClickSNodeSPin },
 		{ "SGraphNode", &FUMFocusHelpers::ClickSNode },
 		{ "SGraphPin", &FUMFocusHelpers::ClickSPin },
-		{ "SChordEditor", &FUMFocusHelpers::ClickOnWidget }
+		{ "SChordEditor", &FUMFocusHelpers::ClickOnWidget },
+		{ "STableRow", &FUMFocusHelpers::ClickOnWidget }
 	};
 
 	const FString ClassType = InWidget->GetWidgetClass().GetWidgetType().ToString();
@@ -102,7 +103,7 @@ bool FUMFocusHelpers::HandleWidgetExecution(FSlateApplication& SlateApp, const T
 
 	// Useful for catching all types of BP Nodes & Pins (and more in the future)
 	// We still want to start with exect match (like we do previous to doing this)
-	// and then fallback to the StartsWith method.
+	// and then fallback to the *StartsWith* method.
 	for (const auto& Pair : WidgetExecMap)
 	{
 		if (ClassType.StartsWith(Pair.Key) || WidgetType.StartsWith(Pair.Key))

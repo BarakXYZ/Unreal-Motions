@@ -111,6 +111,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 	const TSharedRef<SWidget>	 BaseWidget,
 	TArray<TSharedRef<SWidget>>& OutWidgets,
 	const TSet<FString>&		 TargetTypes,
+	const TArray<FString>&		 StartsWithTargetTypes,
 	int32 SearchCount, int32 Depth)
 {
 	bool bFoundAllRequested = false;
@@ -123,7 +124,8 @@ bool FUMSlateHelpers::TraverseFindWidget(
 
 	if (TargetTypes.Contains(GetCleanWidgetType(BaseWidget->GetTypeAsString()))
 		|| TargetTypes.Contains(GetCleanWidgetType(
-			BaseWidget->GetWidgetClass().GetWidgetType().ToString())))
+			BaseWidget->GetWidgetClass().GetWidgetType().ToString()))
+		|| IsWidgetTargetType(BaseWidget, StartsWithTargetTypes, true))
 	{
 		// LogTraverseFoundWidget(Depth, BaseWidget, TargetTypes);
 		OutWidgets.Add(BaseWidget);
@@ -144,7 +146,7 @@ bool FUMSlateHelpers::TraverseFindWidget(
 		{
 			const TSharedRef<SWidget> Child = Children->GetChildAt(i);
 			bool					  bChildFound = TraverseFindWidget(
-				 Child, OutWidgets, TargetTypes, SearchCount, Depth + 1);
+				 Child, OutWidgets, TargetTypes, StartsWithTargetTypes, SearchCount, Depth + 1);
 
 			// If SearchCount is -1, accumulate the "found" status
 			if (SearchCount == -1)
@@ -345,6 +347,7 @@ bool FUMSlateHelpers::TraverseFindWidgetUpwards(
 	const TSharedRef<SWidget>	 BaseWidget,
 	TArray<TSharedRef<SWidget>>& OutWidgets,
 	const TSet<FString>&		 TargetTypes,
+	const TArray<FString>&		 StartsWithTargetTypes,
 	const bool					 bTraverseDownOnceBeforeUp)
 {
 	if (bTraverseDownOnceBeforeUp) // Collect Widgets Downwards
@@ -356,7 +359,7 @@ bool FUMSlateHelpers::TraverseFindWidgetUpwards(
 	while (Parent.IsValid()) // Collect Widgets Upwards
 	{
 		TraverseFindWidget(Parent.ToSharedRef(), OutWidgets,
-			TargetTypes, IgnoreWidgetId);
+			TargetTypes, StartsWithTargetTypes, IgnoreWidgetId);
 
 		// Update the ignore parent ID, as we've just traversed all its children.
 		IgnoreWidgetId = Parent->GetId();
@@ -1198,6 +1201,7 @@ const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 		// "SNode",  // Need to check the base class for this
 		// "SGraphNodeK2Event",  // Might need a more robust way to actually
 		// set focus on found nodes
+		"SAssetListViewRow",
 		"SAssetTileView",
 		"SSceneOutlinerTreeView",
 		"STreeView",
@@ -1281,9 +1285,22 @@ const TSet<FString>& FUMSlateHelpers::GetInteractableWidgetTypes()
 
 		// ~ SGraphNode types ~  //
 
+		// ~ Test Table Rows ~ //
+		// "STableRow<TSharedPtr<IMoviePipelineSettingTreeItem>>",
+		// "STableRow< TSharedPtr<FTreeItem> >",
+
 	};
 
 	return InteractableWidgetTypes;
+}
+
+const TArray<FString>& FUMSlateHelpers::GetStartsWithInteractableWidgetTypes()
+{
+	static const TArray<FString> StartsWithInteractableWidgetTypes = {
+		"STableRow",
+		// TBC
+	};
+	return StartsWithInteractableWidgetTypes;
 }
 
 bool FUMSlateHelpers::DoesWidgetResidesInRegularWindow(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
@@ -1324,6 +1341,34 @@ bool FUMSlateHelpers::IsWidgetTargetType(
 
 		: (InWidget->GetTypeAsString().Equals(TargetType)
 			  || InWidget->GetWidgetClass().GetWidgetType().ToString().Equals(TargetType));
+}
+
+bool FUMSlateHelpers::IsWidgetTargetType(const TSharedRef<SWidget> InWidget, const TArray<FString>& TargetTypes, bool bSearchStartsWith)
+{
+	const FString InWidgetType = InWidget->GetTypeAsString();
+	const FString InWidgetClassType = InWidget->GetWidgetClass().GetWidgetType().ToString();
+
+	if (bSearchStartsWith)
+	{
+		for (const auto& Type : TargetTypes)
+		{
+			if (InWidgetType.StartsWith(Type))
+				return true;
+			else if (InWidgetClassType.StartsWith(Type))
+				return true;
+		}
+	}
+	else
+	{
+		for (const auto& Type : TargetTypes)
+		{
+			if (InWidgetType.Equals(Type))
+				return true;
+			else if (InWidgetClassType.Equals(Type))
+				return true;
+		}
+	}
+	return false;
 }
 
 bool FUMSlateHelpers::IsLastTabInTabWell(const TSharedRef<SDockTab> InTab)

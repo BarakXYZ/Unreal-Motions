@@ -66,6 +66,7 @@ public:
 		const TSharedRef<SWidget>	 BaseWidget,
 		TArray<TSharedRef<SWidget>>& OutWidgets,
 		const TSet<FString>&		 TargetTypes,
+		const TArray<FString>&		 StartsWithTargetTypes = TArray<FString>(),
 		int32						 SearchCount = -1,
 		int32						 Depth = 0);
 
@@ -106,6 +107,7 @@ public:
 		const TSharedRef<SWidget>	 BaseWidget,
 		TArray<TSharedRef<SWidget>>& OutWidgets,
 		const TSet<FString>&		 TargetTypes,
+		const TArray<FString>&		 StartsWithTargetTypes = TArray<FString>(),
 		const bool					 bTraverseDownOnceBeforeUp = false);
 
 	static void LogTraversalSearch(const int32 Depth,
@@ -266,7 +268,8 @@ public:
 
 	static void DebugClimbUpFromWidget(const TSharedRef<SWidget> InWidget, int32 TimesToClimb = INDEX_NONE);
 
-	static const TSet<FString>& GetInteractableWidgetTypes();
+	static const TSet<FString>&	  GetInteractableWidgetTypes();
+	static const TArray<FString>& GetStartsWithInteractableWidgetTypes();
 
 	static bool CollectAllViewableInteractableWidgets(
 		TArray<TSharedPtr<SWidget>>& OutInteractableWidgets);
@@ -276,6 +279,7 @@ public:
 	static TSharedPtr<SGraphPanel> TryGetActiveGraphPanel(FSlateApplication& SlateApp);
 
 	static bool IsWidgetTargetType(const TSharedRef<SWidget> InWidget, const FString& TargetType, bool bSearchStartsWith);
+	static bool IsWidgetTargetType(const TSharedRef<SWidget> InWidget, const TArray<FString>& TargetType, bool bSearchStartsWith);
 
 	static TSharedPtr<SWidget> GetActiveWindowTabWell();
 
