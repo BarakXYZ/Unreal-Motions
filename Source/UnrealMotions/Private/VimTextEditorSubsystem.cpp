@@ -1,3 +1,6 @@
+//
+//
+//
 #include "VimTextEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericApplication.h"
@@ -2107,6 +2110,38 @@ void UVimTextEditorSubsystem::ShiftDeleteNormalMode(FSlateApplication& SlateApp,
 	HandleEditableUX();
 }
 
+void UVimTextEditorSubsystem::DeleteUpOrDown(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+		ActiveMultiLineEditableTextBox.Pin();
+	if (!MultiTextBox.IsValid())
+		return;
+
+	const TSharedPtr<SMultiLineEditableText> MultiLine = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+	if (!MultiLine.IsValid())
+		return;
+
+	const FTextLocation TextLocation = MultiLine->GetCursorLocation();
+	if (!TextLocation.IsValid())
+		return;
+	const int32 LineIndex = TextLocation.GetLineIndex();
+	const int32 LineCount = MultiLine->GetTextLineCount();
+
+	// Logger.Print(FString::Printf(TEXT("Line Index: %d\nLine Count: %d"), LineIndex, LineCount), true);
+
+	const bool bIsUp = InSequence.Last().Key == EKeys::K;
+	if (bIsUp && LineIndex == 0)
+		return; // Invalid: At the first line
+	else if (!bIsUp && LineIndex + 1 == LineCount)
+		return; // Invalid: At the last line.
+
+	if (bIsUp)
+		HandleUpDownMultiLineNormalMode(SlateApp, EKeys::Up);
+
+	DeleteLine(SlateApp, FKeyEvent());
+	DeleteLine(SlateApp, FKeyEvent());
+}
+
 void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// Only in MultiLine we want to simulate \n (break line)
@@ -3213,6 +3248,20 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, EKeys::I, EKeys::W },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteInsideWord,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::K },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteUpOrDown,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::J },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteUpOrDown,
 		EVimMode::Normal);
 
 	// Append New Line (After & Before the current Line)
