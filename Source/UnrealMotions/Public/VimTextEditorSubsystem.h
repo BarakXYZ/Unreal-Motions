@@ -298,6 +298,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandlePasteLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 	void PasteVisualMode(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
+	void ReplaceCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void ReplaceCharacterSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
 	//
 	//						~ Yanking & Pasting Commands ~
 

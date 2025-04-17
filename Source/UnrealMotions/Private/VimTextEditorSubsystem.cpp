@@ -3111,6 +3111,33 @@ void UVimTextEditorSubsystem::YankInsideWord(FSlateApplication& SlateApp, const 
 		YankCharacter(SlateApp, InSequence);
 }
 
+void UVimTextEditorSubsystem::ReplaceCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	VimProc->Possess(this, &UVimTextEditorSubsystem::ReplaceCharacterSingle);
+}
+
+void UVimTextEditorSubsystem::ReplaceCharacterSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+
+	const FKey InKey = InKeyEvent.GetKey();
+	if (InKey != EKeys::Escape && InKey != EKeys::BackSpace)
+	{
+		DeleteCurrentSelection(SlateApp, false /*Don't yank*/);
+
+		FString InChar = FString::Chr(InKeyEvent.GetCharacter());
+		if (!InKeyEvent.IsShiftDown())
+			InChar = InChar.ToLower();
+		InsertTextAtCursor(SlateApp, FText::FromString(InChar));
+
+		ToggleReadOnly();
+		SetCursorSelectionToDefaultLocation(SlateApp);
+	}
+
+	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	VimProc->Unpossess(this);
+}
+
 void UVimTextEditorSubsystem::BindCommands()
 {
 	TSharedRef<FVimInputProcessor> VimInputProcessor = FVimInputProcessor::Get();
@@ -3457,6 +3484,13 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EModifierKey::Shift, EKeys::Four) /* i.e. $ */ },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::JumpToEndOfLine);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::R },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ReplaceCharacter,
+		EVimMode::Normal);
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)
