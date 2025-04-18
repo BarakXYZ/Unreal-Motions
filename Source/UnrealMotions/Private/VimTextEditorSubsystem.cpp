@@ -1,10 +1,6 @@
-//
-//
-//
 #include "VimTextEditorSubsystem.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericApplication.h"
-#include "VimEditorSubsystem.h"
 #include "VimInputProcessor.h"
 #include "UMInputHelpers.h"
 #include "Editor.h"
@@ -1189,6 +1185,22 @@ void UVimTextEditorSubsystem::HandleGoToStartOrEndOfLine(FSlateApplication& Slat
 	while (CurrOffset != PrevOffset);
 }
 
+void UVimTextEditorSubsystem::JumpUpOrDown(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	if (const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
+			ActiveMultiLineEditableTextBox.Pin())
+	{
+		const FKey NavUpOrDownKey = InSequence.Last().Key == EKeys::U
+			? EKeys::Up
+			: EKeys::Down;
+
+		const int32 NumOfLinesToJump = 6;
+
+		for (int32 i{ 0 }; i < NumOfLinesToJump; ++i)
+			HandleUpDownMultiLine(SlateApp, NavUpOrDownKey);
+	}
+}
+
 void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight)
 {
 	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
@@ -1495,7 +1507,7 @@ bool UVimTextEditorSubsystem::HandleUpDownMultiLine(FSlateApplication& SlateApp,
 {
 	if (CurrentVimMode == EVimMode::Visual)
 		return HandleUpDownMultiLineVisualMode(SlateApp, InKeyDir);
-	else
+	else // Normal Mode
 		return HandleUpDownMultiLineNormalMode(SlateApp, InKeyDir);
 }
 
@@ -3219,6 +3231,18 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EModifierKey::Shift, EKeys::G) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::GoToStartOrEnd);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Control, EKeys::D) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::JumpUpOrDown);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Control, EKeys::U) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::JumpUpOrDown);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,

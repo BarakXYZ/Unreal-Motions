@@ -118,14 +118,12 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleNormalModeMultipleChars();
 	bool TrySetHintTextForVimMode();
 
-	void InsertAndAppend(
-		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void InsertAndAppend(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	//////////////////////////////////////////////////////////////////////////
 	// ~			GoTo Start or End (gg + Shift + G)				~
 	//
-	void GoToStartOrEnd(
-		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void GoToStartOrEnd(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	void HandleGoToStartMultiLine(FSlateApplication& SlateApp);
 	void HandleGoToEndMultiLine(FSlateApplication& SlateApp);
@@ -137,6 +135,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	//
 	//
 	//////////////////////////////////////////////////////////////////////////
+
+	void JumpUpOrDown(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
 	void SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight = true);
 
