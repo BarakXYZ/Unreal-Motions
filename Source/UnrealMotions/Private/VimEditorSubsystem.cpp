@@ -70,20 +70,6 @@ void UVimEditorSubsystem::WrapAndSetCustomMessageHandler()
 	PlatformApp->SetMessageHandler(UMGenericAppMessageHandler.ToSharedRef());
 }
 
-// TODO: move this to the VimInputProcessor
-void UVimEditorSubsystem::OnResetSequence()
-{
-	CountBuffer.Empty();
-}
-
-// TODO: move this to the VimInputProcessor
-void UVimEditorSubsystem::OnCountPrefix(FString AddedCount)
-{
-	// Building the buffer -> "1" + "7" + "3" == "173"
-	CountBuffer += AddedCount;
-	// Logger.Print(FString::Printf(TEXT("On Count Prefix: %s"), *CountBuffer));
-}
-
 void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 {
 	PreviousVimMode = CurrentVimMode;
@@ -119,6 +105,8 @@ void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 			CaptureAnchorTreeViewItemSelectionAndIndex(SlateApp);
 			break;
 		}
+		default:
+			break;
 	}
 }
 
@@ -303,14 +291,9 @@ void UVimEditorSubsystem::HandleArrowKeysNavigation(
 	FUMInputHelpers::MapVimToArrowNavigation(InKeyEvent, OutKeyEvent,
 		CurrentVimMode == EVimMode::Visual /* bIsShiftDown true if Visual */);
 
-	const int32 Count{ GetPracticalCountBuffer() };
-
-	for (int32 i{ 0 }; i < Count; ++i)
-	{
-		FVimInputProcessor::ToggleNativeInputHandling(true);
-		SlateApp.ProcessKeyDownEvent(OutKeyEvent);
-		SlateApp.ProcessKeyUpEvent(OutKeyEvent);
-	}
+	FVimInputProcessor::ToggleNativeInputHandling(true);
+	SlateApp.ProcessKeyDownEvent(OutKeyEvent);
+	SlateApp.ProcessKeyUpEvent(OutKeyEvent);
 
 	// This is cool to visualize selection but will introduce some issues in
 	// navigating menus (once reached an entry with a sub-menu; will go inside
@@ -333,32 +316,15 @@ bool UVimEditorSubsystem::HandleListViewNavigation(
 		InKeyEvent, NavEvent,
 		CurrentVimMode == EVimMode::Visual /* Shift-Down in Visual Mode */);
 
-	const int32 Count{ GetPracticalCountBuffer() };
+	const FNavigationReply NavReply =
+		FocusedWidget->OnNavigation( // Navigate to the next or previous item
+			FocusedWidget->GetCachedGeometry(), NavEvent);
 
-	for (int32 i{ 0 }; i < Count; ++i)
-	{
-		const FNavigationReply NavReply =
-			FocusedWidget->OnNavigation( // Navigate to the next or previous item
-				FocusedWidget->GetCachedGeometry(), NavEvent);
-
-		// Useful fallback for escaping lists, etc.
-		if (NavReply.GetBoundaryRule() == EUINavigationRule::Escape)
-			// Regular arrow navigation
-			HandleArrowKeysNavigation(SlateApp, InKeyEvent);
-	}
+	// Useful fallback for escaping lists, etc.
+	if (NavReply.GetBoundaryRule() == EUINavigationRule::Escape)
+		// Regular arrow navigation
+		HandleArrowKeysNavigation(SlateApp, InKeyEvent);
 	return true;
-}
-
-int32 UVimEditorSubsystem::GetPracticalCountBuffer()
-{
-	if (!CountBuffer.IsEmpty())
-	{
-		return FMath::Clamp(
-			FCString::Atoi(*CountBuffer),
-			MIN_REPEAT_COUNT,
-			MAX_REPEAT_COUNT);
-	}
-	return MIN_REPEAT_COUNT;
 }
 
 bool UVimEditorSubsystem::IsTreeViewVertical(
@@ -480,13 +446,6 @@ void UVimEditorSubsystem::BindCommands()
 
 	TSharedRef<FVimInputProcessor> Input = FVimInputProcessor::Get();
 	VimSubWeak = this;
-
-	// Input PreProcessor Listeners
-	Input->OnResetSequence.AddUObject(
-		this, &VimSub::OnResetSequence);
-
-	Input->OnCountPrefix.AddUObject(
-		this, &VimSub::OnCountPrefix);
 
 	Input->OnVimModeChanged.AddUObject(
 		this, &VimSub::OnVimModeChanged);

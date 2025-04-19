@@ -572,6 +572,8 @@ public:
 
 	void Unpossess(UObject* InObject);
 
+	int32 GetCountBuffer();
+
 	//
 	/////////////////////////////////////////////////////////////////////////
 
@@ -637,6 +639,10 @@ public:
 	FUMLogger	 Logger;
 
 	FTimerHandle TimerHandle_LinearPress;
+
+	FString		CountBuffer;
+	const int32 MIN_REPEAT_COUNT = 1;
+	const int32 MAX_REPEAT_COUNT = 999;
 
 	/** Input mode state */
 	static EVimMode VimMode;

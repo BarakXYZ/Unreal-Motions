@@ -80,22 +80,6 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 	void HandleArrowKeysNavigation(
 		FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	int32 GetPracticalCountBuffer();
-
-	/**
-	 * @brief Resets the count sequence buffer.
-	 *
-	 * @details Clears any stored count prefix when.
-	 */
-	void OnResetSequence();
-
-	/**
-	 * Handles count prefix input for command repetition.
-	 * Manages numeric prefix accumulation - Appends new digit to existing buffer
-	 * @param AddedCount The new digit to add to count buffer
-	 */
-	void OnCountPrefix(FString AddedCount);
-
 	/**
 	 * @brief Handles dummy key character events for input suppression.
 	 *
@@ -254,13 +238,10 @@ class UNREALMOTIONS_API UVimEditorSubsystem : public UEditorSubsystem
 
 	TWeakObjectPtr<UVimEditorSubsystem> VimSubWeak{ nullptr };
 	FDelegateHandle						PreInputKeyDownDelegateHandle;
-	FString								CountBuffer;
 	EVimMode							CurrentVimMode{ EVimMode::Insert };
 	EVimMode							PreviousVimMode{ EVimMode::Insert };
 	FKeyEvent							LastNavigationDirection;
 	int32								VisualNavOffsetIndicator{ 0 };
-	const int32							MIN_REPEAT_COUNT = 1;
-	const int32							MAX_REPEAT_COUNT = 999;
 
 	TSharedPtr<FUMGenericAppMessageHandler> UMGenericAppMessageHandler;
 

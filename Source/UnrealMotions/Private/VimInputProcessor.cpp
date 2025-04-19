@@ -128,10 +128,10 @@ bool FVimInputProcessor::ProcessKeySequence(
 	CurrentSequence.Add(FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent));
 
 	// Traverse the trie to find Partial / Full Matches in the following order:
-	//    i.   (CurrentContext, VimMode) ->
-	//    ii.  (CurrentContext, Any)     ->
-	//    iii. (Generic, VimMode)        ->
-	//    iv.  (Generic, Any)
+	//    1. (CurrentContext, VimMode) ->
+	//    2. (CurrentContext, Any)     ->
+	//    3. (Generic, VimMode)        ->
+	//    4. (Generic, Any)
 	TSharedPtr<FKeyChordTrieNode> MatchedNode;
 	bool						  bMatchFound = false;
 
@@ -158,21 +158,25 @@ bool FVimInputProcessor::ProcessKeySequence(
 	if (MatchedNode
 		&& MatchedNode->CallbackType != EUMKeyBindingCallbackType::None)
 	{
+		const int32 CountPrefix = GetCountBuffer();
 		switch (MatchedNode->CallbackType)
 		{
 			case EUMKeyBindingCallbackType::NoParam:
 				if (MatchedNode->NoParamCallback)
-					MatchedNode->NoParamCallback();
+					for (int32 i{ 0 }; i < CountPrefix; ++i)
+						MatchedNode->NoParamCallback();
 				break;
 
 			case EUMKeyBindingCallbackType::KeyEventParam:
 				if (MatchedNode->KeyEventCallback)
-					MatchedNode->KeyEventCallback(SlateApp, InKeyEvent);
+					for (int32 i{ 0 }; i < CountPrefix; ++i)
+						MatchedNode->KeyEventCallback(SlateApp, InKeyEvent);
 				break;
 
 			case EUMKeyBindingCallbackType::SequenceParam:
 				if (MatchedNode->SequenceCallback)
-					MatchedNode->SequenceCallback(SlateApp, CurrentSequence);
+					for (int32 i{ 0 }; i < CountPrefix; ++i)
+						MatchedNode->SequenceCallback(SlateApp, CurrentSequence);
 				break;
 
 			default:
@@ -191,6 +195,7 @@ bool FVimInputProcessor::ProcessKeySequence(
 void FVimInputProcessor::ResetSequence(FSlateApplication& SlateApp)
 {
 	OnResetSequence.Broadcast();
+	CountBuffer.Empty();
 	CurrentSequence.Empty();
 	CurrentBuffer.Empty();
 	bIsCounting = false;
@@ -425,6 +430,7 @@ bool FVimInputProcessor::TrackCountPrefix(FSlateApplication& SlateApp, const FKe
 		{
 			bIsCounting = true;
 			OnCountPrefix.Broadcast(OutStr);
+			CountBuffer += OutStr;
 			return true;
 		}
 		// Reject additional digits after initial input
@@ -611,6 +617,18 @@ void FVimInputProcessor::Unpossess(UObject* InObject)
 		// Remove the object from the map
 		PossessedObjects.Remove(InObject);
 	}
+}
+
+int32 FVimInputProcessor::GetCountBuffer()
+{
+	if (!CountBuffer.IsEmpty())
+	{
+		return FMath::Clamp(
+			FCString::Atoi(*CountBuffer),
+			MIN_REPEAT_COUNT,
+			MAX_REPEAT_COUNT);
+	}
+	return MIN_REPEAT_COUNT;
 }
 
 void FVimInputProcessor::DebugInvalidWeakPtr(EUMKeyBindingCallbackType CallbackType)

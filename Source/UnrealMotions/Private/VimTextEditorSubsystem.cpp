@@ -723,8 +723,7 @@ bool UVimTextEditorSubsystem::IsDefaultEditableBuffer(const FString& InBuffer)
 	return (InBuffer.Len() == 2 && InBuffer == "  ");
 }
 
-void UVimTextEditorSubsystem::HandleVimTextNavigation(
-	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+void UVimTextEditorSubsystem::HandleVimTextNavigation(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	if (CurrentVimMode == EVimMode::Insert
 		|| IsEditableTextWithDefaultBuffer()) // Preserve default buffer sel
@@ -733,7 +732,7 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	// DebugMultiLineCursorLocation(true /*Pre-Navigation*/);
 
 	FKey ArrowKeyToSimulate;
-	FUMInputHelpers::GetArrowKeyFromVimKey(InSequence.Last().Key, ArrowKeyToSimulate);
+	FUMInputHelpers::GetArrowKeyFromVimKey(InKeyEvent.GetKey(), ArrowKeyToSimulate);
 
 	// NOTE:
 	// We're processing and simulating in a very specifc order because we need
@@ -744,10 +743,9 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	// require custom alignment (left-align) for proper selection.
 
 	if (ArrowKeyToSimulate == EKeys::Left)
-		HandleLeftNavigation(SlateApp, InSequence);
-
+		HandleLeftNavigation(SlateApp);
 	else if (ArrowKeyToSimulate == EKeys::Right)
-		HandleRightNavigation(SlateApp, InSequence);
+		HandleRightNavigation(SlateApp);
 
 	else
 	{
@@ -762,8 +760,7 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(
 	// DebugMultiLineCursorLocation(false /*Post-Navigation*/);
 }
 
-void UVimTextEditorSubsystem::HandleRightNavigation(
-	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+void UVimTextEditorSubsystem::HandleRightNavigation(FSlateApplication& SlateApp)
 {
 	if (IsCurrentLineEmpty())
 		return;
@@ -812,18 +809,7 @@ void UVimTextEditorSubsystem::HandleRightNavigation(
 	Input->SimulateKeyPress(SlateApp, Right, ModShiftDown); // Sel
 }
 
-void UVimTextEditorSubsystem::HandleRightNavigationSingle(
-	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
-{
-}
-
-void UVimTextEditorSubsystem::HandleRightNavigationMulti(
-	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
-{
-}
-
-void UVimTextEditorSubsystem::HandleLeftNavigation(
-	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+void UVimTextEditorSubsystem::HandleLeftNavigation(FSlateApplication& SlateApp)
 {
 	if (IsCurrentLineEmpty())
 		return;
@@ -877,16 +863,6 @@ void UVimTextEditorSubsystem::HandleLeftNavigation(
 		// GoTo previous char, highlight it (and align to the right)
 		SetCursorSelectionToDefaultLocation(SlateApp);
 	}
-}
-
-void UVimTextEditorSubsystem::HandleLeftNavigationSingle(
-	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
-{
-}
-
-void UVimTextEditorSubsystem::HandleLeftNavigationMulti(
-	FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
-{
 }
 
 void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
@@ -1132,9 +1108,9 @@ void UVimTextEditorSubsystem::HandleGoToStartOrEndSingleLine(FSlateApplication& 
 		// Lambda to choose the correct navigation based on bGoToEnd.
 		auto Navigate = [&]() {
 			if (bGoToEnd)
-				HandleRightNavigation(SlateApp, TArray<FInputChord>{ FInputChord(EKeys::Right) });
+				HandleRightNavigation(SlateApp);
 			else
-				HandleLeftNavigation(SlateApp, TArray<FInputChord>{ FInputChord(EKeys::Left) });
+				HandleLeftNavigation(SlateApp);
 		};
 
 		// Loop until the selection length remains unchanged.
@@ -1170,7 +1146,6 @@ void UVimTextEditorSubsystem::HandleGoToStartOrEndOfLine(FSlateApplication& Slat
 	const auto					   Navigate = bGoToEnd
 							? &UVimTextEditorSubsystem::HandleRightNavigation
 							: &UVimTextEditorSubsystem::HandleLeftNavigation;
-	const TArray<FInputChord>	   DummyInput;
 	int32						   CurrOffset = INDEX_NONE;
 	int32						   PrevOffset = INDEX_NONE;
 	FTextLocation				   CurrentTextLocation;
@@ -1180,7 +1155,7 @@ void UVimTextEditorSubsystem::HandleGoToStartOrEndOfLine(FSlateApplication& Slat
 		if (!GetCursorLocation(SlateApp, CurrentTextLocation))
 			return;
 		CurrOffset = CurrentTextLocation.GetOffset();
-		(this->*Navigate)(SlateApp, DummyInput);
+		(this->*Navigate)(SlateApp);
 	}
 	while (CurrOffset != PrevOffset);
 }
@@ -1803,19 +1778,18 @@ bool UVimTextEditorSubsystem::SelectTextInRange(
 			CurrLineIndex = CurrentTextLocation.GetLineIndex();
 		}
 
-	int32					  CurrOffset = CurrentTextLocation.GetOffset();
-	const bool				  bShouldGoRight = CurrOffset < EndOffset;
-	const auto				  Navigate = bShouldGoRight
-					   ? &UVimTextEditorSubsystem::HandleRightNavigation
-					   : &UVimTextEditorSubsystem::HandleLeftNavigation;
-	const TArray<FInputChord> DummyInput;
-	int32					  PrevOffset = INDEX_NONE;
+	int32	   CurrOffset = CurrentTextLocation.GetOffset();
+	const bool bShouldGoRight = CurrOffset < EndOffset;
+	const auto Navigate = bShouldGoRight
+		? &UVimTextEditorSubsystem::HandleRightNavigation
+		: &UVimTextEditorSubsystem::HandleLeftNavigation;
+	int32	   PrevOffset = INDEX_NONE;
 
 	while (CurrOffset != EndOffset && CurrOffset != PrevOffset)
 	{
 		PrevOffset = CurrOffset;
 
-		(this->*Navigate)(SlateApp, DummyInput);
+		(this->*Navigate)(SlateApp);
 
 		if (!GetCursorLocation(SlateApp, CurrentTextLocation))
 			return false;
@@ -2947,16 +2921,15 @@ int32 UVimTextEditorSubsystem::GetCursorLocationSingleLine(FSlateApplication& Sl
 }
 
 void UVimTextEditorSubsystem::JumpToEndOrStartOfLine(FSlateApplication& SlateApp,
-	void (UVimTextEditorSubsystem::*HandleLeftOrRightNavigation)(FSlateApplication&, const TArray<FInputChord>&))
+	void (UVimTextEditorSubsystem::*HandleLeftOrRightNavigation)(FSlateApplication&))
 {
-	FTextLocation		PrevTextLocation;
-	FTextLocation		CurrTextLocation;
-	TArray<FInputChord> DummyInput;
+	FTextLocation PrevTextLocation;
+	FTextLocation CurrTextLocation;
 	do
 	{
 		if (!GetCursorLocation(SlateApp, PrevTextLocation))
 			return;
-		(this->*HandleLeftOrRightNavigation)(SlateApp, DummyInput);
+		(this->*HandleLeftOrRightNavigation)(SlateApp);
 		if (!GetCursorLocation(SlateApp, CurrTextLocation))
 			return;
 	}
@@ -3162,28 +3135,28 @@ void UVimTextEditorSubsystem::BindCommands()
 	//				~ HJKL Navigate Pins & Nodes ~
 	//
 	// H: Go to Left Pin / Node:
-	VimInputProcessor->AddKeyBinding_Sequence(
+	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ EKeys::H },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
 
 	// J: Go Down to Next Pin:
-	VimInputProcessor->AddKeyBinding_Sequence(
+	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ EKeys::J },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
 
 	// K: Go Up to Previous Pin:
-	VimInputProcessor->AddKeyBinding_Sequence(
+	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ EKeys::K },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::HandleVimTextNavigation);
 
 	// L: Go to Right Pin / Node:
-	VimInputProcessor->AddKeyBinding_Sequence(
+	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ EKeys::L },
 		WeakTextSubsystem,

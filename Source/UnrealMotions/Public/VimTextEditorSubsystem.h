@@ -84,22 +84,10 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void ClearTextSelection(bool bKeepInputInNormalMode = true);
 
-	void HandleVimTextNavigation(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandleVimTextNavigation(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
-	void HandleRightNavigation(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void HandleRightNavigationSingle(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void HandleRightNavigationMulti(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-
-	void HandleLeftNavigation(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void HandleLeftNavigationSingle(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void HandleLeftNavigationMulti(
-		FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void HandleRightNavigation(FSlateApplication& SlateApp);
+	void HandleLeftNavigation(FSlateApplication& SlateApp);
 
 	int32 GetCursorOffsetSingle();
 	void  SetCursorOffsetSingle(int32 NewOffset);
@@ -225,7 +213,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	int32 GetCursorLocationSingleLine(FSlateApplication& SlateApp, const TSharedRef<SEditableTextBox> InTextBox);
 
 	void JumpToEndOrStartOfLine(FSlateApplication& SlateApp,
-		void (UVimTextEditorSubsystem::*HandleLeftOrRightNavigation)(FSlateApplication&, const TArray<FInputChord>&));
+		void (UVimTextEditorSubsystem::*HandleLeftOrRightNavigation)(FSlateApplication&));
 
 	void JumpToStartOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void JumpToEndOfLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
