@@ -242,7 +242,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	const FSlateRoundedBoxBrush& GetBorderBrush(EVimMode InVimMode);
 
-	void AssignEditableBorder(bool bAssignDefaultBorder = false);
+	void AssignEditableBorder(bool bAssignDefaultBorder = false, const EVimMode OptVimModeOverride = EVimMode::Any);
 
 	int32 GetMultiLineCount();
 

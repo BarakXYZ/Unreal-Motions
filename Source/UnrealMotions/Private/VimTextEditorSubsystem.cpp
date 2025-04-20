@@ -78,10 +78,14 @@ void UVimTextEditorSubsystem::RefreshActiveEditable(FSlateApplication& SlateApp)
 								  : OriginLocation.GetOffset()));
 }
 
-void UVimTextEditorSubsystem::AssignEditableBorder(bool bAssignDefaultBorder)
+void UVimTextEditorSubsystem::AssignEditableBorder(bool bAssignDefaultBorder, const EVimMode OptVimModeOverride)
 {
 	const EVimMode VimMode =
-		bAssignDefaultBorder ? EVimMode::Any /*OnFocusLost*/ : CurrentVimMode;
+		bAssignDefaultBorder
+		? EVimMode::Any /*OnFocusLost*/
+		: OptVimModeOverride == EVimMode::Any
+		? CurrentVimMode
+		: OptVimModeOverride;
 
 	switch (EditableWidgetsFocusState)
 	{
@@ -635,6 +639,7 @@ void UVimTextEditorSubsystem::OnEditableFocusLost()
 {
 	ResetEditableHintText(true /*Clear Tracked Hint Text for next run*/);
 	AssignEditableBorder(true /*Assign Default Border -> Focus Lost*/);
+	FVimInputProcessor::Get()->Unpossess(this); // In case aborting while replace
 
 	switch (EditableWidgetsFocusState)
 	{
@@ -3099,28 +3104,32 @@ void UVimTextEditorSubsystem::YankInsideWord(FSlateApplication& SlateApp, const 
 void UVimTextEditorSubsystem::ReplaceCharacter(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+	AssignEditableBorder(false, EVimMode::Insert); // Sim Insert border
 	VimProc->Possess(this, &UVimTextEditorSubsystem::ReplaceCharacterSingle);
 }
 
 void UVimTextEditorSubsystem::ReplaceCharacterSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
+	const int32 IntChar = InKeyEvent.GetCharacter();
+	if (InKeyEvent.GetModifierKeys().AnyModifiersDown() && IntChar == 0)
+		return; // Ignore Modifiers as standalones (i.e. only shift, ctrl, etc.)
 
-	const FKey InKey = InKeyEvent.GetKey();
-	if (InKey != EKeys::Escape && InKey != EKeys::BackSpace)
+	const TCHAR Char = IntChar;
+	if (FChar::IsPrint(Char)) // Ignore and abort if none-printable like Escape.
 	{
 		DeleteCurrentSelection(SlateApp, false /*Don't yank*/);
 
-		FString InChar = FString::Chr(InKeyEvent.GetCharacter());
+		FString CharStr = FString::Chr(Char);
 		if (!InKeyEvent.IsShiftDown())
-			InChar = InChar.ToLower();
-		InsertTextAtCursor(SlateApp, FText::FromString(InChar));
+			CharStr = CharStr.ToLower();
+		InsertTextAtCursor(SlateApp, FText::FromString(CharStr));
 
 		ToggleReadOnly();
 		SetCursorSelectionToDefaultLocation(SlateApp);
 	}
 
-	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
-	VimProc->Unpossess(this);
+	AssignEditableBorder(); // Return to default per Vim Mode border
+	FVimInputProcessor::Get()->Unpossess(this);
 }
 
 void UVimTextEditorSubsystem::BindCommands()
