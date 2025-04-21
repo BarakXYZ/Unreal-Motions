@@ -737,4 +737,16 @@ void UVimNavigationEditorSubsystem::BindVimCommands()
 		{ FInputChord(EModifierKey::Shift, EKeys::F) },
 		WeakNavigationSubsystem,
 		&UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::Generic,
+		{ EKeys::SpaceBar, EKeys::F },
+		WeakNavigationSubsystem,
+		&UVimNavigationEditorSubsystem::FlashHintMarkers);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::Generic,
+		{ EKeys::SpaceBar, FInputChord(EModifierKey::Shift, EKeys::F) },
+		WeakNavigationSubsystem,
+		&UVimNavigationEditorSubsystem::FlashHintMarkersMultiWindow);
 }
