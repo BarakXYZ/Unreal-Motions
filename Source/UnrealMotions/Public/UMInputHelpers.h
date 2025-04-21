@@ -147,6 +147,10 @@ public:
 
 	static FKeyEvent GetKeyEventFromKey(const FKey& InKey, bool bIsShiftDown);
 
+	static bool IsKeyEventModifierOnly(const FKeyEvent& InKeyEvent);
+
+	static TCHAR GetCharFromKeyEvent(const FKeyEvent& InKeyEvent);
+
 	static FUMLogger			   Logger;
 	static FUMOnSimulateRightClick OnSimulateRightClick;
 };

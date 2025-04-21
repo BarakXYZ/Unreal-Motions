@@ -3110,11 +3110,10 @@ void UVimTextEditorSubsystem::ReplaceCharacter(FSlateApplication& SlateApp, cons
 
 void UVimTextEditorSubsystem::ReplaceCharacterSingle(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	const int32 IntChar = InKeyEvent.GetCharacter();
-	if (InKeyEvent.GetModifierKeys().AnyModifiersDown() && IntChar == 0)
-		return; // Ignore Modifiers as standalones (i.e. only shift, ctrl, etc.)
+	if (FUMInputHelpers::IsKeyEventModifierOnly(InKeyEvent))
+		return;
 
-	const TCHAR Char = IntChar;
+	const TCHAR Char = InKeyEvent.GetCharacter();
 	if (FChar::IsPrint(Char)) // Ignore and abort if none-printable like Escape.
 	{
 		DeleteCurrentSelection(SlateApp, false /*Don't yank*/);
@@ -3130,6 +3129,97 @@ void UVimTextEditorSubsystem::ReplaceCharacterSingle(FSlateApplication& SlateApp
 
 	AssignEditableBorder(); // Return to default per Vim Mode border
 	FVimInputProcessor::Get()->Unpossess(this);
+}
+
+void UVimTextEditorSubsystem::BeginFindChar(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	bFindPreviousChar = InKeyEvent.IsShiftDown();
+	FVimInputProcessor::Get()->Possess(this, &UVimTextEditorSubsystem::HandleFindChar);
+}
+
+void UVimTextEditorSubsystem::HandleFindChar(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	// Early exit if only modifier keys were pressed
+	if (FUMInputHelpers::IsKeyEventModifierOnly(InKeyEvent))
+		return;
+
+	// Get the character to find
+	const TCHAR CharToFind = FUMInputHelpers::GetCharFromKeyEvent(InKeyEvent);
+
+	// Ignore none-prinatble characters like Escape, BackSpace, etc.
+	if (!FChar::IsPrint(CharToFind))
+	{
+		Logger.Print("None Printable", true);
+		FVimInputProcessor::Get()->Unpossess(this);
+		return;
+	}
+
+	if (TryFindAndMoveToCursor(SlateApp, CharToFind))
+	{
+		Logger.Print("Found Char", true);
+		// SetCursorSelectionToDefaultLocation(SlateApp);
+		FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+	}
+
+	FVimInputProcessor::Get()->Unpossess(this); // Release
+}
+
+int32 UVimTextEditorSubsystem::GetOffsetAdjustmentForFind(FSlateApplication& SlateApp)
+{
+	const bool bIsCursorAlignedRight = IsCursorAlignedRight(SlateApp);
+
+	if (bFindPreviousChar && bIsCursorAlignedRight)
+		return -1;
+
+	if (!bFindPreviousChar && !bIsCursorAlignedRight)
+		return 1;
+
+	return 0;
+}
+
+bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp, TCHAR CharToFind)
+{
+	FString CurrentLineText;
+	if (!GetActiveEditableTextContent(CurrentLineText, true /* CurrLine-Only */))
+		return false;
+
+	FTextLocation CursorLocation;
+	if (!GetCursorLocation(SlateApp, CursorLocation)
+		|| !CursorLocation.IsValid())
+		return false;
+
+	const int32 FoundPosition = FindCharacterPosition(CurrentLineText, CharToFind, CursorLocation.GetOffset() + GetOffsetAdjustmentForFind(SlateApp));
+
+	if (FoundPosition != INDEX_NONE) // Move cursor if character was found
+	{
+		GoToTextLocation(SlateApp, FTextLocation(CursorLocation.GetLineIndex(), FoundPosition));
+		return true;
+	}
+
+	Logger.Print("TryFindAndMoveToCursor: INDEX_NONE", true);
+	return false;
+}
+
+int32 UVimTextEditorSubsystem::FindCharacterPosition(const FString& Text, TCHAR CharToFind, int32 CursorOffset)
+{
+	const int32 TextLength = Text.Len();
+
+	// Validate cursor position is within text bounds
+	// When searching forward, ensure we have room to search ahead
+	if (bFindPreviousChar)
+	{
+		if (CursorOffset <= 0)
+			return INDEX_NONE;
+
+		return FVimTextEditorUtils::FindCharacterBackward(Text, CharToFind, CursorOffset);
+	}
+	else // Find Next Char
+	{
+		if (CursorOffset >= TextLength)
+			return INDEX_NONE;
+
+		return FVimTextEditorUtils::FindCharacterForward(Text, CharToFind, CursorOffset);
+	}
 }
 
 void UVimTextEditorSubsystem::BindCommands()
@@ -3497,6 +3587,18 @@ void UVimTextEditorSubsystem::BindCommands()
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ReplaceCharacter,
 		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::F },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::BeginFindChar);
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::F) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::BeginFindChar);
 }
 
 void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay)

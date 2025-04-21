@@ -312,6 +312,36 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool InsertTextAtCursorSingleLine(FSlateApplication& SlateApp, const FText& InText);
 	bool InsertTextAtCursorMultiLine(FSlateApplication& SlateApp, const FText& InText);
 
+	void BeginFindChar(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	/**
+	 * Processes a key event to find a specific character in the current line of text
+	 *
+	 * @param SlateApp Reference to the Slate application
+	 * @param InKeyEvent The key event containing the character to find
+	 */
+	void HandleFindChar(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+
+	int32 GetOffsetAdjustmentForFind(FSlateApplication& SlateApp);
+
+	/**
+	 * Attempts to find the specified character in the current line and move the cursor to it
+	 *
+	 * @param SlateApp Reference to the Slate application
+	 * @param CharToFind The character to search for
+	 * @return True if the character was found and the cursor was moved, false otherwise
+	 */
+	bool TryFindAndMoveToCursor(FSlateApplication& SlateApp, TCHAR CharToFind);
+
+	/**
+	 * Finds the position of a character in text, searching forward or backward based on bFindPreviousChar
+	 *
+	 * @param Text The text to search in
+	 * @param CharToFind The character to search for
+	 * @param CursorOffset The current cursor position to start searching from
+	 * @return The index of the found character, or INDEX_NONE if not found
+	 */
+	int32 FindCharacterPosition(const FString& Text, TCHAR CharToFind, int32 CursorOffset);
+
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
 	EVimMode		   PreviousVimMode{ EVimMode::Insert };
@@ -330,6 +360,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	FUMYankData							YankData;
 	FOnKeyDown							OnEditableKeyDown;
 	bool								bIsCurrMultiLineChildOfConsole;
+	bool								bFindPreviousChar{ false };
 
 	const FText	  InsertModeHintText = FText::FromString("Start Typing... ('Esc'-> Normal Mode)");
 	const FText	  NormalModeHintText = FText::FromString("Press 'i' to Start Typing...");

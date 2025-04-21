@@ -498,3 +498,33 @@ void FVimTextEditorUtils::AbsoluteOffsetToTextLocation(const FString& Text, int3
 	// Fallback: place at end of last line.
 	OutLocation = FTextLocation(Lines.Num() - 1, Lines.Last().Len());
 }
+
+int32 FVimTextEditorUtils::FindCharacterForward(const FString& Text, TCHAR CharToFind, int32 StartOffset)
+{
+	const int32 TextLen = Text.Len();
+	if (StartOffset < 0)
+		StartOffset = 0;
+
+	// Logger.Print(FString::Printf(TEXT("Searching backward for '%c' in '%s' from position %d"), CharToFind, *Text, StartOffset), true);
+
+	for (int32 i = StartOffset; i < TextLen; ++i)
+		if (Text[i] == CharToFind)
+			return i;
+
+	return INDEX_NONE;
+}
+
+int32 FVimTextEditorUtils::FindCharacterBackward(const FString& Text, TCHAR CharToFind, int32 StartOffset)
+{
+	const int32 TextLen = Text.Len();
+	if (StartOffset >= TextLen)
+		StartOffset = TextLen - 1;
+
+	// Logger.Print(FString::Printf(TEXT("Searching backward for '%c' in '%s' from position %d"), CharToFind, *Text, StartOffset), true);
+
+	for (int32 i = StartOffset - 1 /*Skip char we're at*/; i >= 0; --i)
+		if (Text[i] == CharToFind)
+			return i;
+
+	return INDEX_NONE;
+}

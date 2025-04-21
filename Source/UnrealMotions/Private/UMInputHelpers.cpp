@@ -796,3 +796,80 @@ FKeyEvent FUMInputHelpers::GetKeyEventFromKey(
 		ModKeys,
 		0, false, 0, 0);
 }
+
+bool FUMInputHelpers::IsKeyEventModifierOnly(const FKeyEvent& InKeyEvent)
+{
+	const int32 IntChar = InKeyEvent.GetCharacter();
+	if (InKeyEvent.GetModifierKeys().AnyModifiersDown() && IntChar == 0)
+		return true; // Ignore Modifiers as standalones (i.e. solo shift/ctrl etc)
+	return false;
+}
+
+TCHAR FUMInputHelpers::GetCharFromKeyEvent(const FKeyEvent& InKeyEvent)
+{
+	// Get the raw character from the key event
+	TCHAR Character = InKeyEvent.GetCharacter();
+
+	// Handle special cases for number keys when Shift is pressed
+	if (InKeyEvent.IsShiftDown())
+	{
+		// Map for shifted number keys (US keyboard layout)
+		switch (Character)
+		{
+			case '1':
+				return '!';
+			case '2':
+				return '@';
+			case '3':
+				return '#';
+			case '4':
+				return '$';
+			case '5':
+				return '%';
+			case '6':
+				return '^';
+			case '7':
+				return '&';
+			case '8':
+				return '*';
+			case '9':
+				return '(';
+			case '0':
+				return ')';
+			case '-':
+				return '_';
+			case '=':
+				return '+';
+			case '[':
+				return '{';
+			case ']':
+				return '}';
+			case '\\':
+				return '|';
+			case ';':
+				return ':';
+			case '\'':
+				return '"';
+			case ',':
+				return '<';
+			case '.':
+				return '>';
+			case '/':
+				return '?';
+			case '`':
+				return '~';
+			default:
+				// For alphabetic characters, keep them uppercase when Shift is down
+				if (FChar::IsAlpha(Character))
+				{
+					return FChar::ToUpper(Character);
+				}
+				return Character;
+		}
+	}
+	else
+	{
+		// No Shift - lowercase alphabetic characters, keep others as is
+		return FChar::IsAlpha(Character) ? FChar::ToLower(Character) : Character;
+	}
+}
