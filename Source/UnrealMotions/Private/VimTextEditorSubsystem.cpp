@@ -3183,16 +3183,37 @@ bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp
 	if (!GetActiveEditableTextContent(CurrentLineText, true /* CurrLine-Only */))
 		return false;
 
-	FTextLocation CursorLocation;
-	if (!GetCursorLocation(SlateApp, CursorLocation)
-		|| !CursorLocation.IsValid())
-		return false;
+	FTextLocation  OriginCursorLocation;
+	FTextSelection OriginSelectionRange;
+	int32		   CursorOffset;
+	if (CurrentVimMode == EVimMode::Visual)
+	{
+		if (!GetSelectionRange(SlateApp, OriginSelectionRange))
+			return false;
+		CursorOffset = OriginSelectionRange.LocationB.GetOffset();
+	}
+	else
+	{
+		if (!GetCursorLocation(SlateApp, OriginCursorLocation)
+			|| !OriginCursorLocation.IsValid())
+			return false;
+		CursorOffset = OriginCursorLocation.GetOffset();
+	}
 
-	const int32 FoundPosition = FindCharacterPosition(CurrentLineText, CharToFind, CursorLocation.GetOffset() + GetOffsetAdjustmentForFind(SlateApp));
+	int32 FoundPosition = FindCharacterPosition(CurrentLineText, CharToFind, CursorOffset + GetOffsetAdjustmentForFind(SlateApp));
 
+	// TODO: Fix visual mode bugs
 	if (FoundPosition != INDEX_NONE) // Move cursor if character was found
 	{
-		GoToTextLocation(SlateApp, FTextLocation(CursorLocation.GetLineIndex(), FoundPosition));
+		if (CurrentVimMode == EVimMode::Visual)
+		{
+			SelectTextInRange(SlateApp,
+				OriginSelectionRange.LocationA,
+				FTextLocation(OriginSelectionRange.LocationA.GetLineIndex(), FoundPosition));
+		}
+
+		else
+			GoToTextLocation(SlateApp, FTextLocation(OriginCursorLocation.GetLineIndex(), FoundPosition));
 		return true;
 	}
 
