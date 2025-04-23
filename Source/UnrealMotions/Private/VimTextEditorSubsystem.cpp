@@ -1734,7 +1734,6 @@ bool UVimTextEditorSubsystem::SelectTextInRange(
 
 	if (StartLocation == EndLocation)
 	{
-		// MultiTextBox->GoTo(StartLocation);
 		GoToTextLocation(SlateApp, StartLocation);
 		HandleEditableUX();
 		return true;
@@ -1761,28 +1760,46 @@ bool UVimTextEditorSubsystem::SelectTextInRange(
 			InputProc->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
 	}
 
-	FTextLocation CurrentTextLocation;
+	FTextLocation CurrentTextLocation; // We gonna mutate this and pass it around
 	if (!GetCursorLocation(SlateApp, CurrentTextLocation))
 		return false;
 
+	// Vertical Selection: Up or Down (Moving between lines)
+	if (!SelectTextToLineIndex(SlateApp, CurrentTextLocation, EndLineIndex))
+		return false;
+
+	// Horizontal Selection: Left or Right (Moving between characters)
+	return SelectTextToOffset(SlateApp, CurrentTextLocation, EndOffset);
+}
+
+bool UVimTextEditorSubsystem::SelectTextToLineIndex(FSlateApplication& SlateApp, FTextLocation& CurrentTextLocation, const int32 EndLineIndex)
+{
+	// Only in MultiLines we want to perform the Up & Down selection
+	if (EditableWidgetsFocusState != EUMEditableWidgetsFocusState::MultiLine)
+		return true; // Should return true as this isn't an error for SingleLine
+
+	const TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+
 	int32	   CurrLineIndex = CurrentTextLocation.GetLineIndex();
-	const bool bShouldGoUp = StartLineIndex > EndLineIndex;
+	const bool bShouldGoUp = CurrLineIndex > EndLineIndex;
 	const FKey NavDirVertical = bShouldGoUp ? EKeys::Up : EKeys::Down;
 	int32	   PrevLineIndex = INDEX_NONE;
 
-	// Only in MultiLines we want to perform the Up & Down selection
-	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
-		while (CurrLineIndex != EndLineIndex && CurrLineIndex != PrevLineIndex)
-		{
-			PrevLineIndex = CurrLineIndex;
+	while (CurrLineIndex != EndLineIndex && CurrLineIndex != PrevLineIndex)
+	{
+		PrevLineIndex = CurrLineIndex;
 
-			InputProc->SimulateKeyPress(SlateApp, NavDirVertical, ModShiftDown);
+		InputProc->SimulateKeyPress(SlateApp, NavDirVertical, ModShiftDown);
 
-			if (!GetCursorLocation(SlateApp, CurrentTextLocation))
-				return false;
-			CurrLineIndex = CurrentTextLocation.GetLineIndex();
-		}
+		if (!GetCursorLocation(SlateApp, CurrentTextLocation))
+			return false;
+		CurrLineIndex = CurrentTextLocation.GetLineIndex();
+	}
+	return true;
+}
 
+bool UVimTextEditorSubsystem::SelectTextToOffset(FSlateApplication& SlateApp, FTextLocation& CurrentTextLocation, const int32 EndOffset)
+{
 	int32	   CurrOffset = CurrentTextLocation.GetOffset();
 	const bool bShouldGoRight = CurrOffset < EndOffset;
 	const auto Navigate = bShouldGoRight
@@ -3202,18 +3219,27 @@ bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp
 
 	int32 FoundPosition = FindCharacterPosition(CurrentLineText, CharToFind, CursorOffset + GetOffsetAdjustmentForFind(SlateApp));
 
-	// TODO: Fix visual mode bugs
 	if (FoundPosition != INDEX_NONE) // Move cursor if character was found
 	{
+		Logger.Print(FString::Printf(TEXT("TryFindAndMoveToCursor: Found Position %d"), FoundPosition), true);
+
+		Logger.Print(FString::Printf(TEXT("TryFindAndMoveToCursor: Found Position %d\nLocationA Offset: %d\nLocationB Offset: %d"),
+						 FoundPosition,
+						 OriginSelectionRange.LocationA.GetOffset(),
+						 OriginSelectionRange.LocationB.GetOffset()),
+			true);
+
 		if (CurrentVimMode == EVimMode::Visual)
 		{
 			SelectTextInRange(SlateApp,
 				OriginSelectionRange.LocationA,
-				FTextLocation(OriginSelectionRange.LocationA.GetLineIndex(), FoundPosition));
+				FTextLocation(OriginSelectionRange.LocationA.GetLineIndex(), FoundPosition),
+				true, /* Jump to Start of Boundary */
+				true /*Ignore Set Cursor to Default to Align properly*/);
 		}
-
 		else
-			GoToTextLocation(SlateApp, FTextLocation(OriginCursorLocation.GetLineIndex(), FoundPosition));
+			GoToTextLocation(SlateApp,
+				FTextLocation(OriginCursorLocation.GetLineIndex(), FoundPosition));
 		return true;
 	}
 

@@ -200,6 +200,9 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 		bool				 bJumpToStart = true,
 		bool				 bIgnoreSetCursorToDefault = false);
 
+	bool SelectTextToLineIndex(FSlateApplication& SlateApp, FTextLocation& CurrentTextLocation, const int32 EndLineIndex);
+	bool SelectTextToOffset(FSlateApplication& SlateApp, FTextLocation& CurrentTextLocation, const int32 EndOffset);
+
 	bool GoToTextLocation(FSlateApplication& SlateApp, const FTextLocation& InTextLocation);
 
 	/** DEPRECATED - Discovered that we have a built-in GoTo method also
