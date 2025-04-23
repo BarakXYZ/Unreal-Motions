@@ -678,4 +678,6 @@ void FVimInputProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
 		InKeyEvent.IsPointerEvent() ? TEXT("true") : TEXT("false"),
 		*EventPath,
 		InKeyEvent.GetInputDeviceId().GetId());
+
+	Logger.Print(LogStr, true);
 }
