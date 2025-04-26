@@ -1816,6 +1816,7 @@ bool UVimTextEditorSubsystem::SelectTextToOffset(FSlateApplication& SlateApp, FT
 		if (!GetCursorLocation(SlateApp, CurrentTextLocation))
 			return false;
 		CurrOffset = CurrentTextLocation.GetOffset();
+		Logger.Print(FString::Printf(TEXT("Current Offset: %d\nPrevious Offset: %d\nTarget End Offset: %d"), CurrOffset, PrevOffset, EndOffset), true);
 	}
 	return true;
 }
@@ -3174,8 +3175,6 @@ void UVimTextEditorSubsystem::HandleFindChar(FSlateApplication& SlateApp, const 
 	if (TryFindAndMoveToCursor(SlateApp, CharToFind))
 	{
 		Logger.Print("Found Char", true);
-		// SetCursorSelectionToDefaultLocation(SlateApp);
-		FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 	}
 
 	FVimInputProcessor::Get()->Unpossess(this); // Release
@@ -3185,88 +3184,72 @@ int32 UVimTextEditorSubsystem::GetOffsetAdjustmentForFind(FSlateApplication& Sla
 {
 	const bool bIsCursorAlignedRight = IsCursorAlignedRight(SlateApp);
 
-	if (bFindPreviousChar && bIsCursorAlignedRight)
-		return -1;
-
-	if (!bFindPreviousChar && !bIsCursorAlignedRight)
-		return 1;
-
-	return 0;
+	if (bIsCursorAlignedRight)
+	{
+		if (bFindPreviousChar)
+			return -1;
+		else
+			return 1;
+	}
+	else
+	{
+		if (bFindPreviousChar)
+			return 0; // Our cursor index should already be in the aligned place.
+		else
+			return 1; // We always need to move 1 forward to not get stuck in
+					  // scenearios of the same chars 1 after the other
+	}
 }
 
+// TODO Fix Bugs:
+// 1. When trying to find the char closest to the char currently selected with f,
+// we'll stay stuck in place.
+// 2. Bugs in Visual Mode finding both in previous and next
 bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp, TCHAR CharToFind)
 {
 	FString CurrentLineText;
 	if (!GetActiveEditableTextContent(CurrentLineText, true /* CurrLine-Only */))
 		return false;
 
-	FTextLocation  OriginCursorLocation;
-	FTextSelection OriginSelectionRange;
-	int32		   CursorOffset;
-	if (CurrentVimMode == EVimMode::Visual)
-	{
-		if (!GetSelectionRange(SlateApp, OriginSelectionRange))
-			return false;
-		CursorOffset = OriginSelectionRange.LocationB.GetOffset();
-	}
-	else
-	{
-		if (!GetCursorLocation(SlateApp, OriginCursorLocation)
-			|| !OriginCursorLocation.IsValid())
-			return false;
-		CursorOffset = OriginCursorLocation.GetOffset();
-	}
+	FTextLocation OriginCursorLocation;
+	if (!GetCursorLocation(SlateApp, OriginCursorLocation)
+		|| !OriginCursorLocation.IsValid())
+		return false;
+	const int32 OriginCursorOffset = OriginCursorLocation.GetOffset();
+	Logger.Print(FString::Printf(TEXT("Origin Cursor Offset: %d"), OriginCursorOffset), true);
 
-	int32 FoundPosition = FindCharacterPosition(CurrentLineText, CharToFind, CursorOffset + GetOffsetAdjustmentForFind(SlateApp));
+	Logger.Print(FString::Printf(TEXT("Adjustments: %d"), GetOffsetAdjustmentForFind(SlateApp)), true);
+
+	int32 FoundPosition = CurrentLineText.Find(
+		FString::Chr(CharToFind),
+		ESearchCase::CaseSensitive,
+		bFindPreviousChar ? ESearchDir::FromEnd : ESearchDir::FromStart,
+		OriginCursorOffset + GetOffsetAdjustmentForFind(SlateApp));
+	// OriginCursorOffset);
+
+	Logger.Print(FString::Printf(TEXT("Found Char Position: %d"), FoundPosition), true);
 
 	if (FoundPosition != INDEX_NONE) // Move cursor if character was found
 	{
-		Logger.Print(FString::Printf(TEXT("TryFindAndMoveToCursor: Found Position %d"), FoundPosition), true);
-
-		Logger.Print(FString::Printf(TEXT("TryFindAndMoveToCursor: Found Position %d\nLocationA Offset: %d\nLocationB Offset: %d"),
-						 FoundPosition,
-						 OriginSelectionRange.LocationA.GetOffset(),
-						 OriginSelectionRange.LocationB.GetOffset()),
-			true);
-
 		if (CurrentVimMode == EVimMode::Visual)
 		{
-			SelectTextInRange(SlateApp,
-				OriginSelectionRange.LocationA,
-				FTextLocation(OriginSelectionRange.LocationA.GetLineIndex(), FoundPosition),
-				true, /* Jump to Start of Boundary */
-				true /*Ignore Set Cursor to Default to Align properly*/);
+			if (FoundPosition > OriginCursorOffset)
+				++FoundPosition;
+			SelectTextToOffset(SlateApp, OriginCursorLocation, FoundPosition);
+			return true;
 		}
 		else
+		{
 			GoToTextLocation(SlateApp,
 				FTextLocation(OriginCursorLocation.GetLineIndex(), FoundPosition));
+			// SetCursorSelectionToDefaultLocation(SlateApp);
+			FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
+		}
 		return true;
 	}
 
 	Logger.Print("TryFindAndMoveToCursor: INDEX_NONE", true);
 	return false;
-}
-
-int32 UVimTextEditorSubsystem::FindCharacterPosition(const FString& Text, TCHAR CharToFind, int32 CursorOffset)
-{
-	const int32 TextLength = Text.Len();
-
-	// Validate cursor position is within text bounds
-	// When searching forward, ensure we have room to search ahead
-	if (bFindPreviousChar)
-	{
-		if (CursorOffset <= 0)
-			return INDEX_NONE;
-
-		return FVimTextEditorUtils::FindCharacterBackward(Text, CharToFind, CursorOffset);
-	}
-	else // Find Next Char
-	{
-		if (CursorOffset >= TextLength)
-			return INDEX_NONE;
-
-		return FVimTextEditorUtils::FindCharacterForward(Text, CharToFind, CursorOffset);
-	}
 }
 
 void UVimTextEditorSubsystem::BindCommands()

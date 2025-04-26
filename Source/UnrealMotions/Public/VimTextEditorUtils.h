@@ -188,24 +188,4 @@ public:
 	static int32 TextLocationToAbsoluteOffset(const FString& Text, const FTextLocation& Location);
 
 	static FUMLogger Logger;
-
-	/**
-	 * Searches for a character in text moving forward from the start position
-	 *
-	 * @param Text The text to search in
-	 * @param CharToFind The character to search for
-	 * @param StartOffset The position to start searching from
-	 * @return The index of the found character, or INDEX_NONE if not found
-	 */
-	static int32 FindCharacterForward(const FString& Text, TCHAR CharToFind, int32 StartOffset);
-
-	/**
-	 * Searches for a character in text moving backward from the start position
-	 *
-	 * @param Text The text to search in
-	 * @param CharToFind The character to search for
-	 * @param StartOffset The position to start searching from
-	 * @return The index of the found character, or INDEX_NONE if not found
-	 */
-	static int32 FindCharacterBackward(const FString& Text, TCHAR CharToFind, int32 StartOffset);
 };

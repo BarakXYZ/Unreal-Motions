@@ -335,16 +335,6 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	 */
 	bool TryFindAndMoveToCursor(FSlateApplication& SlateApp, TCHAR CharToFind);
 
-	/**
-	 * Finds the position of a character in text, searching forward or backward based on bFindPreviousChar
-	 *
-	 * @param Text The text to search in
-	 * @param CharToFind The character to search for
-	 * @param CursorOffset The current cursor position to start searching from
-	 * @return The index of the found character, or INDEX_NONE if not found
-	 */
-	int32 FindCharacterPosition(const FString& Text, TCHAR CharToFind, int32 CursorOffset);
-
 	FUMLogger		   Logger;
 	EVimMode		   CurrentVimMode{ EVimMode::Insert };
 	EVimMode		   PreviousVimMode{ EVimMode::Insert };
