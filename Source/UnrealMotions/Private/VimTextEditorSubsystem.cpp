@@ -3201,10 +3201,14 @@ int32 UVimTextEditorSubsystem::GetOffsetAdjustmentForFind(FSlateApplication& Sla
 	}
 }
 
-// TODO Fix Bugs:
-// 1. When trying to find the char closest to the char currently selected with f,
-// we'll stay stuck in place.
-// 2. Bugs in Visual Mode finding both in previous and next
+// TODO: Fix Find Character Navigation Issues:
+// 1. When searching for a character that is adjacent to the currently selected
+// character, the cursor gets stuck and doesn't move (unless at the char 1
+// before end is selected).
+// 2. Character finding in Visual Mode will select incorrect when trying to find
+// adject character 1 before the cursor offset.
+// + Same as 1. but for Visual Mode.
+// Other than that previous character selection seems to behave ok.
 bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp, TCHAR CharToFind)
 {
 	FString CurrentLineText;
@@ -3224,8 +3228,15 @@ bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp
 		FString::Chr(CharToFind),
 		ESearchCase::CaseSensitive,
 		bFindPreviousChar ? ESearchDir::FromEnd : ESearchDir::FromStart,
-		OriginCursorOffset + GetOffsetAdjustmentForFind(SlateApp));
-	// OriginCursorOffset);
+		// OriginCursorOffset + GetOffsetAdjustmentForFind(SlateApp));
+		OriginCursorOffset);
+	// NOTE:
+	// When searching without the adjustment it seems to find the next adjacent
+	// character fine. But when there's a duplicate character (e.g. currently
+	// selected char is 'r' and the next char is 'r') it won't be able to move it
+	// as it'll find and get stuck by the currently selected character for some
+	// reason. Need to dig deeper at the offsets, what it finds, there it starts,
+	// etc.
 
 	Logger.Print(FString::Printf(TEXT("Found Char Position: %d"), FoundPosition), true);
 
