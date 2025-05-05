@@ -3166,55 +3166,22 @@ void UVimTextEditorSubsystem::HandleFindChar(FSlateApplication& SlateApp, const 
 
 	// Ignore none-prinatble characters like Escape, BackSpace, etc.
 	if (!FChar::IsPrint(CharToFind))
-	{
 		Logger.Print("None Printable", true);
-		FVimInputProcessor::Get()->Unpossess(this);
-		return;
-	}
 
-	if (TryFindAndMoveToCursor(SlateApp, CharToFind))
-	{
+	else if (TryFindAndMoveToCursor(SlateApp, CharToFind))
 		Logger.Print("Found Char", true);
-	}
 
 	FVimInputProcessor::Get()->Unpossess(this); // Release
 }
 
-int32 UVimTextEditorSubsystem::GetOffsetAdjustmentForFind(FSlateApplication& SlateApp)
-{
-	const bool bIsCursorAlignedRight = IsCursorAlignedRight(SlateApp);
-
-	if (bIsCursorAlignedRight)
-	{
-		if (bFindPreviousChar)
-			return -1;
-		else
-			return 1;
-	}
-	else
-	{
-		if (bFindPreviousChar)
-			return 0; // Our cursor index should already be in the aligned place.
-		else
-			return 1; // We always need to move 1 forward to not get stuck in
-					  // scenearios of the same chars 1 after the other
-	}
-}
-
-// TODO: Fix Find Character Navigation Issues:
-// 1. When searching for a character that is adjacent to the currently selected
-// character, the cursor gets stuck and doesn't move (unless at the char 1
-// before end is selected).
-// 2. Character finding in Visual Mode will select incorrect when trying to find
-// adject character 1 before the cursor offset.
-// + Same as 1. but for Visual Mode.
-// Other than that previous character selection seems to behave ok.
 bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp, TCHAR CharToFind)
 {
+	// Get the current text, where we'll try to find the user inputted character.
 	FString CurrentLineText;
 	if (!GetActiveEditableTextContent(CurrentLineText, true /* CurrLine-Only */))
 		return false;
 
+	// Get the origin cursor location, where we'll start the searching from.
 	FTextLocation OriginCursorLocation;
 	if (!GetCursorLocation(SlateApp, OriginCursorLocation)
 		|| !OriginCursorLocation.IsValid())
@@ -3224,35 +3191,23 @@ bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp
 
 	Logger.Print(FString::Printf(TEXT("Adjustments: %d"), GetOffsetAdjustmentForFind(SlateApp)), true);
 
-	int32 FoundPosition = CurrentLineText.Find(
+	int32 FoundCharPos = CurrentLineText.Find(
 		FString::Chr(CharToFind),
 		ESearchCase::CaseSensitive,
 		bFindPreviousChar ? ESearchDir::FromEnd : ESearchDir::FromStart,
-		// OriginCursorOffset + GetOffsetAdjustmentForFind(SlateApp));
-		OriginCursorOffset);
-	// NOTE:
-	// When searching without the adjustment it seems to find the next adjacent
-	// character fine. But when there's a duplicate character (e.g. currently
-	// selected char is 'r' and the next char is 'r') it won't be able to move it
-	// as it'll find and get stuck by the currently selected character for some
-	// reason. Need to dig deeper at the offsets, what it finds, there it starts,
-	// etc.
+		OriginCursorOffset + GetOffsetAdjustmentForFind(SlateApp));
 
-	Logger.Print(FString::Printf(TEXT("Found Char Position: %d"), FoundPosition), true);
+	Logger.Print(FString::Printf(TEXT("Found Char Position: %d"), FoundCharPos), true);
 
-	if (FoundPosition != INDEX_NONE) // Move cursor if character was found
+	if (FoundCharPos != INDEX_NONE) // Move cursor if character was found
 	{
 		if (CurrentVimMode == EVimMode::Visual)
-		{
-			if (FoundPosition > OriginCursorOffset)
-				++FoundPosition;
-			SelectTextToOffset(SlateApp, OriginCursorLocation, FoundPosition);
-			return true;
-		}
+			return HandleFindAndMoveToCursorVisualMode(SlateApp, FoundCharPos, OriginCursorLocation);
+
 		else
 		{
 			GoToTextLocation(SlateApp,
-				FTextLocation(OriginCursorLocation.GetLineIndex(), FoundPosition));
+				FTextLocation(OriginCursorLocation.GetLineIndex(), FoundCharPos));
 			// SetCursorSelectionToDefaultLocation(SlateApp);
 			FVimInputProcessor::Get()->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 		}
@@ -3261,6 +3216,68 @@ bool UVimTextEditorSubsystem::TryFindAndMoveToCursor(FSlateApplication& SlateApp
 
 	Logger.Print("TryFindAndMoveToCursor: INDEX_NONE", true);
 	return false;
+}
+
+int32 UVimTextEditorSubsystem::GetOffsetAdjustmentForFind(FSlateApplication& SlateApp)
+{
+	const bool bIsCursorAlignedRight = IsCursorAlignedRight(SlateApp);
+
+	if (bIsCursorAlignedRight)
+		return bFindPreviousChar
+			// When aligned right, our cursor is after the selected character.
+			// For backward search, we must offset -1 to avoid getting stuck
+			// on the current char and properly find the previous character.
+			? -1
+
+			// In case we're trying to find the next character and are already
+			// aligned right, we're primed for a proper search.
+			: 0;
+
+	else // Cursor aligned left:
+		// In this case, we have the opposite scenario where when we're aligned
+		// left and trying to search for the previous char, we're primed for a
+		// proper search. And when we want to find the next char, we have to
+		// offset by +1 to not get stuck on the currently selectec character.
+		return bFindPreviousChar ? 0 : 1;
+}
+
+bool UVimTextEditorSubsystem::HandleFindAndMoveToCursorVisualMode(FSlateApplication& SlateApp, int32 FoundCharPos, FTextLocation OriginCursorLocation)
+{
+	// We need to work closely to our anchor point as it should dictate how we
+	// should wrap the found character.
+
+	FTextSelection TextSelection;
+	if (!GetSelectionRange(SlateApp, TextSelection))
+		return false;
+	const int32 StartLineIndex = TextSelection.LocationA.GetLineIndex();
+	const int32 EndLineIndex = TextSelection.LocationB.GetLineIndex();
+	if (StartLineIndex < EndLineIndex)
+	{
+		// Aligned right by lines, thus finding a char won't change
+		// the alignment and we're guaranteed to stay aligned right.
+
+		// Should always add +1 to the found char position to properly
+		// select it and align correctly.
+		++FoundCharPos;
+	}
+	else if (StartLineIndex == EndLineIndex) // Need to check the found char pos.
+	{
+		// In this case, finding a char may change the alignment
+		// and we should take in consideration the found char index
+		// to see if our alignment is in face going to change.
+		const int32 StartOffset = TextSelection.LocationA.GetOffset();
+		if (StartOffset <= FoundCharPos)
+			// We gonna end up being aligned right.
+			++FoundCharPos;
+
+		// Else we gonna end up being aligned left, thus we should not alter the
+		// found char position.
+	}
+	// Else: Aligned left by lines, thus finding a char won't change
+	// the alignment and we're guaranteed to stay aligned left ( Don't touch the
+	// found char position)
+
+	return SelectTextToOffset(SlateApp, OriginCursorLocation, FoundCharPos);
 }
 
 void UVimTextEditorSubsystem::BindCommands()
