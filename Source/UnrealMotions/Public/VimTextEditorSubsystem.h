@@ -334,12 +334,13 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	 * @return True if the character was found and the cursor was moved, false otherwise
 	 */
 	bool TryFindAndMoveToCursor(FSlateApplication& SlateApp, TCHAR CharToFind);
+
 	bool HandleFindAndMoveToCursorVisualMode(FSlateApplication& SlateApp, int32 FoundCharPos, FTextLocation OriginCursorLocation);
 
-	FUMLogger		   Logger;
-	EVimMode		   CurrentVimMode{ EVimMode::Insert };
-	EVimMode		   PreviousVimMode{ EVimMode::Insert };
-	FModifierKeysState ModShiftDown =
+	FUMLogger				 Logger;
+	EVimMode				 CurrentVimMode{ EVimMode::Insert };
+	EVimMode				 PreviousVimMode{ EVimMode::Insert };
+	const FModifierKeysState ModShiftDown =
 		FModifierKeysState(true, true, /*ShiftDown*/
 			false, false, false, false, false, false, false);
 

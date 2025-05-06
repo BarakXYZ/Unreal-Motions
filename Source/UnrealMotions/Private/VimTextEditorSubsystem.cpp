@@ -2126,11 +2126,12 @@ void UVimTextEditorSubsystem::DeleteUpOrDown(FSlateApplication& SlateApp, const 
 	if (!MultiTextBox.IsValid())
 		return;
 
+	// Get the MultiLine itself to quick access line count
 	const TSharedPtr<SMultiLineEditableText> MultiLine = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
 	if (!MultiLine.IsValid())
 		return;
 
-	const FTextLocation TextLocation = MultiLine->GetCursorLocation();
+	FTextLocation TextLocation = MultiLine->GetCursorLocation();
 	if (!TextLocation.IsValid())
 		return;
 	const int32 LineIndex = TextLocation.GetLineIndex();
@@ -2144,11 +2145,23 @@ void UVimTextEditorSubsystem::DeleteUpOrDown(FSlateApplication& SlateApp, const 
 	else if (!bIsUp && LineIndex + 1 == LineCount)
 		return; // Invalid: At the last line.
 
+	FString TextGetter;
+	FString TextToYank;
 	if (bIsUp)
+	{
 		HandleUpDownMultiLineNormalMode(SlateApp, EKeys::Up);
+		GetCursorLocation(SlateApp, TextLocation);
+	}
+
+	// Prepare lines for yanking
+	MultiLine->GetTextLine(TextLocation.GetLineIndex(), TextGetter);
+	TextToYank.Append(TextGetter + '\n');
+	MultiLine->GetTextLine(TextLocation.GetLineIndex() + 1, TextGetter);
+	TextToYank.Append(TextGetter);
 
 	DeleteLine(SlateApp, FKeyEvent());
 	DeleteLine(SlateApp, FKeyEvent());
+	YankData.SetData(TextToYank, EUMYankType::Linewise); // Manually yank lines
 }
 
 void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
