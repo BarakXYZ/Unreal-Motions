@@ -2164,6 +2164,46 @@ void UVimTextEditorSubsystem::DeleteUpOrDown(FSlateApplication& SlateApp, const 
 	YankData.SetData(TextToYank, EUMYankType::Linewise); // Manually yank lines
 }
 
+void UVimTextEditorSubsystem::DeleteToMotion(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+{
+	if (InSequence.Num() < 2)
+		return; // We expect at least 2 elements (e.g. dw, de, etc.)
+
+	FTextLocation OriginTextLocation;
+	if (!GetCursorLocation(SlateApp, OriginTextLocation))
+		return;
+	FTextLocation						 NewTextLocation;
+	const TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
+	InputProc->SetVimMode(SlateApp, EVimMode::Visual);
+
+	// Create a sub-array skipping the first element (d)
+	TArray<FInputChord> SubSequence;
+	for (int32 i = 1; i < InSequence.Num(); i++)
+		SubSequence.Add(InSequence[i]);
+
+	// Pass the newly created array containing the pure word motions (dw vs. w)
+	NavigateWordMotion(SlateApp, SubSequence);
+
+	if (!GetCursorLocation(SlateApp, NewTextLocation))
+		return;
+
+	if (NewTextLocation != OriginTextLocation)
+	{
+		if (NewTextLocation.GetLineIndex() != OriginTextLocation.GetLineIndex())
+		{
+			if (!GoToTextLocation(SlateApp, OriginTextLocation))
+				return;
+			FString TextLine;
+			GetActiveEditableTextContent(TextLine, true /*CurrLine*/);
+			SelectTextToOffset(SlateApp, OriginTextLocation, TextLine.Len());
+		}
+		// SOMETHING:
+		else
+			HandleLeftNavigation(SlateApp);
+	}
+	Delete(SlateApp, FKeyEvent());
+}
+
 void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	// Only in MultiLine we want to simulate \n (break line)
@@ -2642,6 +2682,74 @@ void UVimTextEditorSubsystem::NavigateGBigE(FSlateApplication& SlateApp, const T
 	// 'gE' – backward to end of word (big word)
 	NavigateWord(SlateApp, true,
 		&FVimTextEditorUtils::FindPreviousWordEnd);
+}
+
+void UVimTextEditorSubsystem::NavigateWordMotion(
+	FSlateApplication&		   SlateApp,
+	const TArray<FInputChord>& InSequence)
+{
+	// Determine if we're dealing with a big word (WORD) or small word (word)
+	bool bIsBigWord = false;
+
+	// Determine direction and position (beginning/end of word)
+	bool bIsForward = true;
+	bool bIsWordEnd = false;
+	bool bIsGCommand = false;
+
+	// Parse the sequence to determine the exact motion
+	if (InSequence.Num() == 1)
+	{
+		// Single key commands: w, W, b, B, e, E
+		const FInputChord& Chord = InSequence[0];
+
+		if (Chord.Key == EKeys::W)
+		{
+			// w or W - forward to beginning of word
+			bIsBigWord = Chord.bShift;
+			bIsForward = true;
+			bIsWordEnd = false;
+		}
+		else if (Chord.Key == EKeys::B)
+		{
+			// b or B - backward to beginning of word
+			bIsBigWord = Chord.bShift;
+			bIsForward = false;
+			bIsWordEnd = false;
+		}
+		else if (Chord.Key == EKeys::E)
+		{
+			// e or E - forward to end of word
+			bIsBigWord = Chord.bShift;
+			bIsForward = true;
+			bIsWordEnd = true;
+		}
+	}
+	else if (InSequence.Num() == 2 && InSequence[0].Key == EKeys::G)
+	{
+		// 'g' commands: ge, gE
+		bIsGCommand = true;
+		const FInputChord& SecondChord = InSequence[1];
+
+		if (SecondChord.Key == EKeys::E)
+		{
+			// ge or gE - backward to end of word
+			bIsBigWord = SecondChord.bShift;
+			bIsForward = false;
+			bIsWordEnd = true;
+		}
+	}
+
+	// Select the appropriate word boundary function
+	auto WordBoundaryFunc = bIsForward
+		? (bIsWordEnd
+				  ? &FVimTextEditorUtils::FindNextWordEnd
+				  : &FVimTextEditorUtils::FindNextWordBoundary)
+		: (bIsWordEnd
+				  ? &FVimTextEditorUtils::FindPreviousWordEnd
+				  : &FVimTextEditorUtils::FindPreviousWordBoundary);
+
+	// Call the navigation function with determined parameters
+	NavigateWord(SlateApp, bIsBigWord, WordBoundaryFunc);
 }
 
 int32 UVimTextEditorSubsystem::GetCursorOffsetSingle()
@@ -3456,6 +3564,34 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, EKeys::J },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteUpOrDown,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::W },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteToMotion,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::W) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteToMotion,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::E },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteToMotion,
+		EVimMode::Normal);
+
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::E) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::DeleteToMotion,
 		EVimMode::Normal);
 
 	// Append New Line (After & Before the current Line)
