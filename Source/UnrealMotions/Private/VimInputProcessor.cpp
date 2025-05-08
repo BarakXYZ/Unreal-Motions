@@ -194,6 +194,7 @@ bool FVimInputProcessor::ProcessKeySequence(
 
 void FVimInputProcessor::ResetSequence(FSlateApplication& SlateApp)
 {
+	// Logger.Print("Reset Input Sequence -> Vim Proc", true);
 	OnResetSequence.Broadcast();
 	CountBuffer.Empty();
 	CurrentSequence.Empty();
@@ -483,14 +484,17 @@ bool FVimInputProcessor::IsSimulateEscapeKey(FSlateApplication& SlateApp, const 
 	return false;
 }
 
-void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode)
+void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, bool bResetCurrSequence)
 {
 	if (VimMode != NewMode)
 	{
 		VimMode = NewMode;
 		Logger.Print(UEnum::GetValueAsString(NewMode));
 	}
-	ResetSequence(SlateApp);
+
+	if (bResetCurrSequence)
+		ResetSequence(SlateApp);
+
 	OnVimModeChanged.Broadcast(NewMode);
 }
 

@@ -123,7 +123,7 @@ public:
 	 * mode change delegate
 	 * @param NewMode - The new Vim mode to switch to (Normal, Insert, or Visual)
 	 */
-	void SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode);
+	void SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, bool bResetCurrSequence = true);
 
 	/**
 	 * Delayed override edition

@@ -555,7 +555,7 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 		}
 	}
 
-	Logger.Print("None || Cannot GetSelectionState", true);
+	// Logger.Print("None || Cannot GetSelectionState", true);
 	ClearTextSelection();
 	ToggleReadOnly();
 
@@ -1631,7 +1631,7 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(
 	FTextLocation StartTextLocation = InMultiLine->GetCursorLocation();
 	if (!StartTextLocation.IsValid())
 	{
-		Logger.Print("Cannot determine if at End-of-Document - Invalid Cursor Location", true);
+		// Logger.Print("Cannot determine if at End-of-Document - Invalid Cursor Location", true);
 		return false;
 	}
 
@@ -1643,10 +1643,10 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(
 	FTextLocation NewTextLocation = InMultiLine->GetCursorLocation();
 	if (NewTextLocation.GetLineIndex() > StartTextLocation.GetLineIndex())
 	{
-		Logger.Print(FString::Printf(TEXT("Not at end of document -> more lines to go\nStart Index: %d\nNext Index: %d"),
-						 StartTextLocation.GetLineIndex(),
-						 NewTextLocation.GetLineIndex()),
-			true);
+		// Logger.Print(FString::Printf(TEXT("Not at end of document -> more lines to go\nStart Index: %d\nNext Index: %d"),
+		// 				 StartTextLocation.GetLineIndex(),
+		// 				 NewTextLocation.GetLineIndex()),
+		// 	true);
 		// We're not at the end, we can revert to the origin position and return.
 		InputProc->SimulateKeyPress(SlateApp, EKeys::Up, ModShiftDown);
 		return false;
@@ -1660,7 +1660,7 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtEndOfDocument(
 	// in a specific way for highlighting.
 	if (IsCurrentLineInMultiEmpty())
 	{
-		Logger.Print("At End-of-Document - Last line is empty.", true);
+		// Logger.Print("At End-of-Document - Last line is empty.", true);
 		return true;
 	}
 
@@ -1816,7 +1816,7 @@ bool UVimTextEditorSubsystem::SelectTextToOffset(FSlateApplication& SlateApp, FT
 		if (!GetCursorLocation(SlateApp, CurrentTextLocation))
 			return false;
 		CurrOffset = CurrentTextLocation.GetOffset();
-		Logger.Print(FString::Printf(TEXT("Current Offset: %d\nPrevious Offset: %d\nTarget End Offset: %d"), CurrOffset, PrevOffset, EndOffset), true);
+		// Logger.Print(FString::Printf(TEXT("Current Offset: %d\nPrevious Offset: %d\nTarget End Offset: %d"), CurrOffset, PrevOffset, EndOffset), true);
 	}
 	return true;
 }
@@ -2164,10 +2164,19 @@ void UVimTextEditorSubsystem::DeleteUpOrDown(FSlateApplication& SlateApp, const 
 	YankData.SetData(TextToYank, EUMYankType::Linewise); // Manually yank lines
 }
 
-void UVimTextEditorSubsystem::DeleteToMotion(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
+void UVimTextEditorSubsystem::ActionToMotion(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	if (InSequence.Num() < 2)
 		return; // We expect at least 2 elements (e.g. dw, de, etc.)
+
+	const FKey Action = InSequence[0].Key; // i.e. Delete / Change / Yank
+
+	// Create a sub-array skipping the first element (d)
+	// (Should be done before switching to Visual Mode as switching Vim Modes
+	// resets the InSequence ref)
+	TArray<FInputChord> SubSequence;
+	for (int32 i = 1; i < InSequence.Num(); i++)
+		SubSequence.Add(InSequence[i]);
 
 	FTextLocation OriginTextLocation;
 	if (!GetCursorLocation(SlateApp, OriginTextLocation))
@@ -2175,11 +2184,6 @@ void UVimTextEditorSubsystem::DeleteToMotion(FSlateApplication& SlateApp, const 
 	FTextLocation						 NewTextLocation;
 	const TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
 	InputProc->SetVimMode(SlateApp, EVimMode::Visual);
-
-	// Create a sub-array skipping the first element (d)
-	TArray<FInputChord> SubSequence;
-	for (int32 i = 1; i < InSequence.Num(); i++)
-		SubSequence.Add(InSequence[i]);
 
 	// Pass the newly created array containing the pure word motions (dw vs. w)
 	NavigateWordMotion(SlateApp, SubSequence);
@@ -2197,11 +2201,20 @@ void UVimTextEditorSubsystem::DeleteToMotion(FSlateApplication& SlateApp, const 
 			GetActiveEditableTextContent(TextLine, true /*CurrLine*/);
 			SelectTextToOffset(SlateApp, OriginTextLocation, TextLine.Len());
 		}
-		// SOMETHING:
-		else
+		else if (SubSequence[0].Key == EKeys::W)
 			HandleLeftNavigation(SlateApp);
+		else if (SubSequence[0].Key == EKeys::G)
+			HandleRightNavigation(SlateApp);
 	}
-	Delete(SlateApp, FKeyEvent());
+
+	if (Action == EKeys::D)
+		Delete(SlateApp, FKeyEvent());
+
+	else if (Action == EKeys::C)
+		ChangeVisualMode(SlateApp, FKeyEvent());
+
+	else if (Action == EKeys::Y)
+		YankCharacter(SlateApp, TArray<FInputChord>());
 }
 
 void UVimTextEditorSubsystem::AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -3566,32 +3579,211 @@ void UVimTextEditorSubsystem::BindCommands()
 		&UVimTextEditorSubsystem::DeleteUpOrDown,
 		EVimMode::Normal);
 
+	// ============================================================================
+	// DELETE COMMANDS (d + motion)
+	// These bindings handle deletion operations combined with different motions
+	// ============================================================================
+
+	// Delete word (dw) - Deletes from cursor to start of next word
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
-		{ EKeys::D, EKeys::W },
+		{ FInputChord(EKeys::D), FInputChord(EKeys::W) },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::DeleteToMotion,
+		&UVimTextEditorSubsystem::ActionToMotion,
 		EVimMode::Normal);
 
+	// Delete WORD (dW) - Deletes from cursor to start of next WORD (space-delimited)
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::W) },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::DeleteToMotion,
+		&UVimTextEditorSubsystem::ActionToMotion,
 		EVimMode::Normal);
 
+	// Delete to end of word (de) - Deletes from cursor to end of current word
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::D, EKeys::E },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::DeleteToMotion,
+		&UVimTextEditorSubsystem::ActionToMotion,
 		EVimMode::Normal);
 
+	// Delete to end of WORD (dE) - Deletes from cursor to end of current WORD
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::E) },
 		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::DeleteToMotion,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Delete backward to start of word (db) - Deletes from cursor back to start of word
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::B },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Delete backward to start of WORD (dB) - Deletes from cursor back to start of WORD
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::B) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Delete to end of previous sentence (dge) - Deletes from cursor to end of prev sentence
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::G, EKeys::E },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Delete to end of previous SENTENCE (dgE) - Deletes from cursor to end of prev SENTENCE
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::D, EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// ============================================================================
+	// CHANGE COMMANDS (c + motion)
+	// These bindings handle change operations (delete + insert) with different motions
+	// ============================================================================
+
+	// Change word (cw) - Changes from cursor to start of next word
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EKeys::C), FInputChord(EKeys::W) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Change WORD (cW) - Changes from cursor to start of next WORD (space-delimited)
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, FInputChord(EModifierKey::Shift, EKeys::W) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Change to end of word (ce) - Changes from cursor to end of current word
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, EKeys::E },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Change to end of WORD (cE) - Changes from cursor to end of current WORD
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, FInputChord(EModifierKey::Shift, EKeys::E) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Change backward to start of word (cb) - Changes from cursor back to start of word
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, EKeys::B },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Change backward to start of WORD (cB) - Changes from cursor back to start of WORD
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, FInputChord(EModifierKey::Shift, EKeys::B) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Change to end of previous sentence (cge) - Changes from cursor to end of prev sentence
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, EKeys::G, EKeys::E },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Change to end of previous SENTENCE (cgE) - Changes from cursor to end of prev SENTENCE
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::C, EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// ============================================================================
+	// YANK COMMANDS (y + motion)
+	// These bindings handle yank (copy) operations combined with different motions
+	// ============================================================================
+
+	// Yank word (yw) - Yanks from cursor to start of next word
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EKeys::Y), FInputChord(EKeys::W) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Yank WORD (yW) - Yanks from cursor to start of next WORD (space-delimited)
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, FInputChord(EModifierKey::Shift, EKeys::W) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Yank to end of word (ye) - Yanks from cursor to end of current word
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, EKeys::E },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Yank to end of WORD (yE) - Yanks from cursor to end of current WORD
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, FInputChord(EModifierKey::Shift, EKeys::E) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Yank backward to start of word (yb) - Yanks from cursor back to start of word
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, EKeys::B },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Yank backward to start of WORD (yB) - Yanks from cursor back to start of WORD
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, FInputChord(EModifierKey::Shift, EKeys::B) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Yank to end of previous sentence (yge) - Yanks from cursor to end of prev sentence
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, EKeys::G, EKeys::E },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
+		EVimMode::Normal);
+
+	// Yank to end of previous SENTENCE (ygE) - Yanks from cursor to end of prev SENTENCE
+	VimInputProcessor->AddKeyBinding_Sequence(
+		EUMBindingContext::TextEditing,
+		{ EKeys::Y, EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ActionToMotion,
 		EVimMode::Normal);
 
 	// Append New Line (After & Before the current Line)

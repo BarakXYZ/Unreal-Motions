@@ -170,7 +170,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void DeleteLineNormalModeMulti(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void ShiftDeleteNormalMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	void DeleteUpOrDown(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
-	void DeleteToMotion(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
+	void ActionToMotion(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence);
 
 	void AppendNewLine(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 	bool AppendBreakMultiLine();
