@@ -2951,6 +2951,7 @@ bool UVimTextEditorSubsystem::GetCursorLocation(FSlateApplication& SlateApp, FTe
 
 FReply UVimTextEditorSubsystem::OnMultiLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
+	Logger.Print("MultiLine KeyDown", true);
 	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 		ActiveMultiLineEditableTextBox.Pin();
 	if (!MultiTextBox.IsValid())
@@ -2958,11 +2959,18 @@ FReply UVimTextEditorSubsystem::OnMultiLineKeyDown(const FGeometry& MyGeometry, 
 
 	// Check if the pressed key is Enter/Return
 	if (!bIsCurrMultiLineChildOfConsole
-		&& InKeyEvent.GetKey() == EKeys::Enter
-		&& !InKeyEvent.IsControlDown() /*if holding control, allow commission*/)
+		&& InKeyEvent.GetKey() == EKeys::Enter)
 	{
-		MultiTextBox->InsertTextAtCursor(FText::FromString("\n"));
-		return FReply::Handled();
+		if (InKeyEvent.IsControlDown()) // Commit text
+		{
+			MultiTextBox->SetIsReadOnly(false);
+			return FReply::Unhandled();
+		}
+		else
+		{
+			MultiTextBox->InsertTextAtCursor(FText::FromString("\n"));
+			return FReply::Handled();
+		}
 	}
 	return FReply::Unhandled();
 }
