@@ -398,61 +398,41 @@ void UVimTextEditorSubsystem::ToggleReadOnlyMulti(bool bNegateCurrentState, bool
 const FSlateRoundedBoxBrush& UVimTextEditorSubsystem::GetBorderBrush(EVimMode InVimMode)
 {
 	static const FLinearColor BaseColor = FLinearColor::White;
-	static const int32		  OutlineWidth = 1.0f;
-	static const int32		  CournerRoundness = 8.0f;
+	static const float		  OutlineWidth = 1.0f;
+	static const float		  CornerRoundness = 8.0f;
+	static UTexture2D*		  T_BorderDefault = LoadObject<UTexture2D>(
+		   nullptr,
+		   TEXT("/Engine/EngineResources/Black.Black"));
 
-	static UTexture2D* T_BorderDefault = LoadObject<UTexture2D>(
-		nullptr,
-		TEXT("/Script/Engine.Texture2D'/UnrealMotions/Textures/T_EditableBase.T_EditableBase'"));
+	// Define color map for different modes
+	static const TMap<EVimMode, FLinearColor> ModeColors = {
+		{ EVimMode::Any, FLinearColor(0.1f, 0.1f, 0.1f, 1.0f) },	 // Grey
+		{ EVimMode::Normal, FLinearColor(0.0f, 0.5f, 1.0f, 1.0f) },	 // Cyan
+		{ EVimMode::Visual, FLinearColor(1.0f, 0.25f, 1.0f, 1.0f) }, // Purple
+		{ EVimMode::Insert, FLinearColor(0.75f, 0.5f, 0.0f, 1.0f) }	 // Orange
+	};
 
-	static FSlateRoundedBoxBrush BorderDefault(
-		BaseColor,
-		CournerRoundness,
-		FLinearColor(0.1f, 0.1f, 0.1f, 1.0f), // Grey
-		OutlineWidth);
-
-	static FSlateRoundedBoxBrush BorderNormal(
-		BaseColor,
-		CournerRoundness,
-		FLinearColor(0.0f, 0.5f, 1.0f, 1.0f), // Cyan
-		OutlineWidth);
-
-	static FSlateRoundedBoxBrush BorderVisual(
-		BaseColor,
-		CournerRoundness,
-		FLinearColor(1.0f, 0.25f, 1.0f, 1.0f), // Purple
-		OutlineWidth);
-
-	static FSlateRoundedBoxBrush BorderInsert(
-		BaseColor,
-		CournerRoundness,
-		FLinearColor(0.75f, 0.5f, 0.0f, 1.0f), // Orange
-		OutlineWidth);
-
-	switch (InVimMode)
+	// Define and initialize brushes only once
+	static TMap<EVimMode, FSlateRoundedBoxBrush> ModeBrushes;
+	if (ModeBrushes.Num() == 0)
 	{
-		case (EVimMode::Any):
+		for (const auto& Pair : ModeColors)
 		{
-			BorderDefault.SetResourceObject(T_BorderDefault);
-			return BorderDefault;
-		}
-		case (EVimMode::Normal):
-		{
-			BorderNormal.SetResourceObject(T_BorderDefault);
-			return BorderNormal;
-		}
-		case (EVimMode::Insert):
-		{
-			BorderInsert.SetResourceObject(T_BorderDefault);
-			return BorderInsert;
-		}
-		case (EVimMode::Visual):
-		{
-			BorderVisual.SetResourceObject(T_BorderDefault);
-			return BorderVisual;
+			ModeBrushes.Add(Pair.Key, FSlateRoundedBoxBrush(BaseColor, CornerRoundness, Pair.Value, OutlineWidth));
 		}
 	}
-	return BorderDefault;
+
+	// Get the appropriate brush and set resource
+	FSlateRoundedBoxBrush* Brush = ModeBrushes.Find(InVimMode);
+	if (Brush)
+	{
+		Brush->SetResourceObject(T_BorderDefault);
+		return *Brush;
+	}
+
+	// Fallback to default brush
+	ModeBrushes[EVimMode::Any].SetResourceObject(T_BorderDefault);
+	return ModeBrushes[EVimMode::Any];
 }
 
 bool UVimTextEditorSubsystem::TrySetHintTextForVimMode()
