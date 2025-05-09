@@ -127,6 +127,8 @@ bool FVimInputProcessor::ProcessKeySequence(
 	// Add this key to CurrentSequence
 	CurrentSequence.Add(FUMInputHelpers::GetChordFromKeyEvent(InKeyEvent));
 
+	// Logger.Print(FString::Printf(TEXT("Current Sequence Num: %d"), CurrentSequence.Num()), true);
+
 	// Traverse the trie to find Partial / Full Matches in the following order:
 	//    1. (CurrentContext, VimMode) ->
 	//    2. (CurrentContext, Any)     ->
@@ -293,7 +295,7 @@ void FVimInputProcessor::RegisterDefaultKeyBindings()
 bool FVimInputProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	// DebugKeyEvent(InKeyEvent);
+	DebugKeyEvent(InKeyEvent);
 
 	// NOTE:
 	// When we call SlateApp.ProcessKeyDownEvent(), it will trigger another
@@ -484,7 +486,7 @@ bool FVimInputProcessor::IsSimulateEscapeKey(FSlateApplication& SlateApp, const 
 	return false;
 }
 
-void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, bool bResetCurrSequence)
+void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, bool bResetCurrSequence, bool bBroadcastModeChange)
 {
 	if (VimMode != NewMode)
 	{
@@ -495,7 +497,8 @@ void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode 
 	if (bResetCurrSequence)
 		ResetSequence(SlateApp);
 
-	OnVimModeChanged.Broadcast(NewMode);
+	if (bBroadcastModeChange)
+		OnVimModeChanged.Broadcast(NewMode);
 }
 
 void FVimInputProcessor::SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, const float Delay)
@@ -556,14 +559,14 @@ void FVimInputProcessor::ToggleNativeInputHandling(const bool bNativeHandling)
 
 void FVimInputProcessor::SimulateKeyPress(
 	FSlateApplication& SlateApp, const FKey& SimulatedKey,
-	const FModifierKeysState& ModifierKeys)
+	const FModifierKeysState& ModifierKeys, bool bSetNativeInputHandling)
 {
 	const FKeyEvent SimulatedEvent(
 		SimulatedKey,
 		ModifierKeys,
 		0 /*UserIndex*/, false /*bIsRepeat*/, 0, 0);
 
-	bNativeInputHandling = true;
+	bNativeInputHandling = bSetNativeInputHandling;
 	SlateApp.ProcessKeyDownEvent(SimulatedEvent);
 	SlateApp.ProcessKeyUpEvent(SimulatedEvent);
 }
@@ -669,7 +672,7 @@ void FVimInputProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
 	// InKeyEvent.GetPlatformUserId().Get();
 
 	const FString LogStr = FString::Printf(
-		TEXT("Key: %s, Shift: %s, Ctrl: %s, Alt: %s, Cmd: %s, CharCode: %d, KeyCode: %d, UserIndex: %d, IsRepeat: %s, IsPointerEvent: %s, EventPath: %s, InputDeviceID: %d"),
+		TEXT("Key: %s\nShift: %s, Ctrl: %s, Alt: %s, Cmd: %s\nCharCode: %d, KeyCode: %d\nUserIndex: %d\nIsRepeat: %s\nIsPointerEvent: %s\nEventPath: %s\nInputDeviceID: %d\nIsNativeInputHandling: %s\nCurrent Sequence Num: %d"),
 		*InKeyEvent.GetKey().ToString(),
 		InKeyEvent.IsShiftDown() ? TEXT("true") : TEXT("false"),
 		InKeyEvent.IsControlDown() ? TEXT("true") : TEXT("false"),
@@ -681,7 +684,9 @@ void FVimInputProcessor::DebugKeyEvent(const FKeyEvent& InKeyEvent)
 		InKeyEvent.IsRepeat() ? TEXT("true") : TEXT("false"),
 		InKeyEvent.IsPointerEvent() ? TEXT("true") : TEXT("false"),
 		*EventPath,
-		InKeyEvent.GetInputDeviceId().GetId());
+		InKeyEvent.GetInputDeviceId().GetId(),
+		bNativeInputHandling ? TEXT("true") : TEXT("false"),
+		CurrentSequence.Num());
 
 	Logger.Print(LogStr, true);
 }

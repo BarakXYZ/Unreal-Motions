@@ -1,4 +1,5 @@
 #include "VimTextEditorSubsystem.h"
+#include "Async/TaskTrace.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "VimInputProcessor.h"
@@ -27,9 +28,12 @@ void UVimTextEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	FCoreDelegates::OnPostEngineInit
 		.AddUObject(this, &UVimTextEditorSubsystem::RegisterSlateEvents);
 
+	OnSingleLineEditableKeyDown.BindUObject(
+		this, &UVimTextEditorSubsystem::OnSingleLineKeyDown);
+
 	// Handle KeyDown in Multis in a custom way to intercept and process 'Enter'
 	// manually.
-	OnEditableKeyDown.BindUObject(
+	OnMultiLineEditableKeyDown.BindUObject(
 		this, &UVimTextEditorSubsystem::OnMultiLineKeyDown);
 }
 
@@ -47,9 +51,13 @@ void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 	if (NewVimMode == EVimMode::Visual)
 		TrackVisualModeStartLocation(SlateApp);
 
-	RefreshActiveEditable(SlateApp);
-	AssignEditableBorder();
-	HandleEditableUX();
+	// We should skip this when initializing as our editable is still stablizing.
+	if (!bIsEditableInit)
+	{
+		RefreshActiveEditable(SlateApp);
+		AssignEditableBorder();
+		HandleEditableUX();
+	}
 }
 
 void UVimTextEditorSubsystem::RefreshActiveEditable(FSlateApplication& SlateApp)
@@ -212,25 +220,42 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 
 	// Flag we're not free to digest any new focus change until finish processing
 	bAlreadyProcessingFocusChange = true;
+
+	// This is another important flag to properly initialize SingleLines
+	bIsEditableInit = true;
+
+	// NOTE:
+	// At first encounter, single lines seems to have trouble with the first
+	// keystroke input, requiring 2 strokes to actually input. This is annoying
+	// so we're trying to mitigate this with some syntatic dummy stroke to
+	// end up with 1 regular stroke instead of 2.
+	bIsFirstSingleLineKeyStroke = true;
+
 	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::SingleLine)
 	{
 		if (Parent->GetWidgetClass().GetWidgetType().IsEqual("SBorder"))
 		{
+			// I feel like it's a better UX to enter Insert mode for SingleLines
+			// as the user probably expect quick instant typing XP
+			FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
+
 			TSharedPtr<SEditableTextBox> TextBox =
 				StaticCastSharedPtr<SEditableTextBox>(Parent);
 			ActiveEditableTextBox = TextBox;
+
+			TextBox->SetOnKeyDownHandler(OnSingleLineEditableKeyDown);
 
 			FText HintText = TextBox->GetHintText();
 			if (!HintText.IsEmpty())
 				DefaultHintText = HintText;
 
-			TextBox->SetSelectAllTextWhenFocused(false);
-			TextBox->SetSelectAllTextOnCommit(false);
+			// I think that for SingleLine it's a better UX to leave these off
+			// TextBox->SetSelectAllTextWhenFocused(false);
+			// TextBox->SetSelectAllTextOnCommit(false);
 			Logger.Print("Set Active Editable Text Box");
 		}
 	}
 	else // Multi-Line
-		 // else if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
 	{
 		if (Parent->GetWidgetClass().GetWidgetType().IsEqual("SBorder"))
 		{
@@ -254,7 +279,7 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 			// editable, or...
 			// Are there any other places like Console that need this commision?
 			bIsCurrMultiLineChildOfConsole = IsMultiChildOfConsole(MultiTextBox.ToSharedRef());
-			MultiTextBox->SetOnKeyDownHandler(OnEditableKeyDown);
+			MultiTextBox->SetOnKeyDownHandler(OnMultiLineEditableKeyDown);
 
 			FText HintText = MultiTextBox->GetHintText();
 			if (!HintText.IsEmpty())
@@ -477,6 +502,7 @@ void UVimTextEditorSubsystem::SetDefaultBuffer()
 
 void UVimTextEditorSubsystem::HandleInsertMode(const FString& InCurrentText)
 {
+	Logger.Print("HandleInsertMode", true);
 	// In Insert mode:
 	// 1. We clear the buffer if default setup ("  ")
 	// 2. Or simply just clear any previous selection.
@@ -500,6 +526,7 @@ void UVimTextEditorSubsystem::HandleNormalModeOneChar()
 
 void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 {
+	Logger.Print("HandleNormalModeMultipleChars", true);
 	FSlateApplication&			   SlateApp = FSlateApplication::Get();
 	TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 	// This seems to be needed for first contact with MultiLine
@@ -513,7 +540,7 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 			break; // Continue with the flow at the bottom
 
 		case (EUMSelectionState::OneChar):
-			// Logger.Print("One Char", true);
+			Logger.Print("One Char", true);
 			ToggleReadOnly();
 			return; // No need to do anything as we're already selecting 1 char
 
@@ -534,8 +561,8 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 			}
 		}
 	}
+	Logger.Print("None || Cannot GetSelectionState", true);
 
-	// Logger.Print("None || Cannot GetSelectionState", true);
 	ClearTextSelection();
 	ToggleReadOnly();
 
@@ -543,7 +570,16 @@ void UVimTextEditorSubsystem::HandleNormalModeMultipleChars()
 	if (EditableWidgetsFocusState == EUMEditableWidgetsFocusState::MultiLine)
 		SwitchInsertToNormalMultiLine(SlateApp);
 	else // Align cursor to the right in all other scenarios
-		SetCursorSelectionToDefaultLocation(SlateApp);
+	{
+		// NOTE:
+		// We're bypassing SetCursorToDefualtLocation on first time init for
+		// SingleLine Editables because there's seems to be a focus issue
+		// where simulating right / left will jump to a different widget
+		// throwing the entire focus out. This resolves after a few ms when the
+		// focus and editable settles down, but until then, we need this bypass.
+		if (!bIsEditableInit)
+			SetCursorSelectionToDefaultLocation(SlateApp);
+	}
 }
 
 void UVimTextEditorSubsystem::HandleEditableUX()
@@ -576,6 +612,8 @@ void UVimTextEditorSubsystem::HandleEditableUX()
 
 	else // Multi Chars
 		HandleNormalModeMultipleChars();
+
+	bIsEditableInit = false;
 }
 
 bool UVimTextEditorSubsystem::ForceFocusActiveEditable(FSlateApplication& SlateApp)
@@ -901,10 +939,12 @@ void UVimTextEditorSubsystem::ClearTextSelection(bool bKeepInputInNormalMode)
 
 void UVimTextEditorSubsystem::ToggleCursorBlinkingOff()
 {
+	return; // Is this function even needed?
+
 	TSharedRef<FVimInputProcessor> Processor = FVimInputProcessor::Get();
 	FSlateApplication&			   SlateApp = FSlateApplication::Get();
 
-	Processor->SimulateKeyPress(SlateApp, EKeys::Left, FUMInputHelpers::GetShiftDownModKeys());
+	Processor->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
 	if (DoesActiveEditableHasAnyTextSelected())
 	{
 		// Simply compensate by moving one time to the right (opposite direction)
@@ -1164,18 +1204,17 @@ void UVimTextEditorSubsystem::JumpUpOrDown(FSlateApplication& SlateApp, const TA
 void UVimTextEditorSubsystem::SetCursorSelectionToDefaultLocation(FSlateApplication& SlateApp, bool bAlignCursorRight)
 {
 	TSharedRef<FVimInputProcessor> InputProcessor = FVimInputProcessor::Get();
-	const FModifierKeysState	   ModKeys = FUMInputHelpers::GetShiftDownModKeys();
 	if (bAlignCursorRight)
 	{ // Right Align: for most cases
 		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left);
-		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, ModKeys);
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right, ModShiftDown);
 	}
 	else
 	// Left Align: for some cases (end of document and proper maintance of
 	// anchor char selection)
 	{
 		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Right);
-		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left, ModKeys);
+		InputProcessor->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
 	}
 }
 
@@ -2949,16 +2988,63 @@ bool UVimTextEditorSubsystem::GetCursorLocation(FSlateApplication& SlateApp, FTe
 	return false;
 }
 
+FReply UVimTextEditorSubsystem::OnSingleLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+{
+	Logger.Print("SingleLine KeyDown", true);
+
+	const TSharedPtr<SEditableTextBox> TextBox = ActiveEditableTextBox.Pin();
+	if (!TextBox.IsValid())
+		return FReply::Unhandled();
+
+	// Check if the pressed key is Enter/Return
+	// This is needed for proper commision when we're in ReadOnly mode
+	if (InKeyEvent.GetKey() == EKeys::Enter)
+	{
+		Logger.Print("Enter clicked", true);
+		TextBox->SetIsReadOnly(false);
+	}
+
+	if (bIsFirstSingleLineKeyStroke
+		&& !FUMInputHelpers::IsKeyEventModifierOnly(InKeyEvent))
+	{
+		Logger.Print("First Single Line Key Stroke", true);
+		bIsFirstSingleLineKeyStroke = false;
+		VerifySingleLineEditableFirstStroke(InKeyEvent, TextBox->GetText());
+	}
+	return FReply::Unhandled();
+}
+
+void UVimTextEditorSubsystem::VerifySingleLineEditableFirstStroke(const FKeyEvent& InKeyEvent, const FText& PreStrokeContent)
+{
+	FTimerHandle TimerHandle;
+	GEditor->GetTimerManager()->SetTimer(
+		TimerHandle,
+		[this, InKeyEvent, PreStrokeContent]() {
+			if (const TSharedPtr<SEditableTextBox> TextBox = ActiveEditableTextBox.Pin())
+			{
+				// If the text was not changed, it means our stroke did not went
+				// through, thus we need to manually add it.
+				if (TextBox->GetText().EqualTo(PreStrokeContent))
+				{
+					TextBox->SetText(FText::FromString(
+						FString::Chr(FUMInputHelpers::GetCharFromKeyEvent(InKeyEvent))));
+					RefreshActiveEditable(FSlateApplication::Get());
+				}
+			}
+		},
+		0.025f, false);
+}
+
 FReply UVimTextEditorSubsystem::OnMultiLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
-	Logger.Print("MultiLine KeyDown", true);
+	// Logger.Print("MultiLine KeyDown", true);
 	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
 		ActiveMultiLineEditableTextBox.Pin();
 	if (!MultiTextBox.IsValid())
 		return FReply::Unhandled();
 
 	// Check if the pressed key is Enter/Return
-	if (!bIsCurrMultiLineChildOfConsole
+	if (!bIsCurrMultiLineChildOfConsole // For consoles, commit as usual
 		&& InKeyEvent.GetKey() == EKeys::Enter)
 	{
 		if (InKeyEvent.IsControlDown()) // Commit text
@@ -3801,6 +3887,13 @@ void UVimTextEditorSubsystem::BindCommands()
 		&UVimTextEditorSubsystem::ChangeVisualMode,
 		EVimMode::Visual);
 
+	// Not-Vim-related but I believe helps in some scenarios with the UX
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ EKeys::BackSpace },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::ChangeVisualMode);
+
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::C) },
@@ -4050,3 +4143,16 @@ void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation
  * (to navigate properly) For now, we're manually setting the text to enforce
  * the most recent edits with itself for proper navigation.
  */
+
+// TODOS:
+// 1. Can't go down in visual mode from the first line in MultLine Editables
+// when the same line goes down inside itself:
+/*
+ * Example Input:
+TEST TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+Test)
+*/
+// 2. Trying to F select a node pin from an editable doesn't work?
+// ciw motion doesn't work in the first character
+// 3. Sometimes text won't retain it's final most updated form after typing some
+// input and switching between Vim modes.

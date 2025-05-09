@@ -310,6 +310,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	 */
 	void RefreshActiveEditable(FSlateApplication& SlateApp);
 
+	FReply OnSingleLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent);
 	FReply OnMultiLineKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent);
 
 	bool IsMultiChildOfConsole(const TSharedRef<SMultiLineEditableTextBox> InMultiBox);
@@ -340,6 +341,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	bool HandleFindAndMoveToCursorVisualMode(FSlateApplication& SlateApp, int32 FoundCharPos, FTextLocation OriginCursorLocation);
 
+	void VerifySingleLineEditableFirstStroke(const FKeyEvent& InKeyEvent, const FText& PreStrokeContent);
+
 	FUMLogger				 Logger;
 	EVimMode				 CurrentVimMode{ EVimMode::Insert };
 	EVimMode				 PreviousVimMode{ EVimMode::Insert };
@@ -356,9 +359,12 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	FTextLocation						StartCursorLocationVisualMode;
 	FText								DefaultHintText = FText::GetEmpty();
 	FUMYankData							YankData;
-	FOnKeyDown							OnEditableKeyDown;
+	FOnKeyDown							OnSingleLineEditableKeyDown;
+	FOnKeyDown							OnMultiLineEditableKeyDown;
 	bool								bIsCurrMultiLineChildOfConsole;
 	bool								bFindPreviousChar{ false };
+	bool								bIsEditableInit{ false };
+	bool								bIsFirstSingleLineKeyStroke{ false };
 
 	const FText	  InsertModeHintText = FText::FromString("Start Typing... ('Esc'-> Normal Mode)");
 	const FText	  NormalModeHintText = FText::FromString("Press 'i' to Start Typing...");

@@ -123,7 +123,7 @@ public:
 	 * mode change delegate
 	 * @param NewMode - The new Vim mode to switch to (Normal, Insert, or Visual)
 	 */
-	void SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, bool bResetCurrSequence = true);
+	void SetVimMode(FSlateApplication& SlateApp, const EVimMode NewMode, bool bResetCurrSequence = true, bool bBroadcastModeChange = true);
 
 	/**
 	 * Delayed override edition
@@ -549,7 +549,7 @@ public:
 	 */
 	static void SimulateKeyPress(
 		FSlateApplication& SlateApp, const FKey& SimulatedKey,
-		const FModifierKeysState& ModifierKeys = FModifierKeysState());
+		const FModifierKeysState& ModifierKeys = FModifierKeysState(), bool bSetNativeInputHandling = true);
 
 	// Buffer Visualizer:
 	void CheckCreateBufferVisualizer(
