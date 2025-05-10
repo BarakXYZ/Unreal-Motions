@@ -295,7 +295,7 @@ void FVimInputProcessor::RegisterDefaultKeyBindings()
 bool FVimInputProcessor::HandleKeyDownEvent(
 	FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
-	DebugKeyEvent(InKeyEvent);
+	// DebugKeyEvent(InKeyEvent);
 
 	// NOTE:
 	// When we call SlateApp.ProcessKeyDownEvent(), it will trigger another

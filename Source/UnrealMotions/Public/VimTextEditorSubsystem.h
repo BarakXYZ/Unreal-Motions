@@ -158,6 +158,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool IsCursorAtEndOfLine(FSlateApplication& SlateApp);
 	bool IsCursorAtEndOfLineSingle(FSlateApplication& SlateApp);
 	bool IsCursorAtEndOfLineMulti(FSlateApplication& SlateApp);
+	bool IsCursorAtBeginningOfDocument(FSlateApplication& SlateApp, bool bConsiderFirstCharSelAsStart = false);
 
 	void SwitchInsertToNormalMultiLine(FSlateApplication& SlateApp);
 

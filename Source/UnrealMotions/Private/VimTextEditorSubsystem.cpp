@@ -1993,6 +1993,18 @@ bool UVimTextEditorSubsystem::IsCursorAtEndOfLine(FSlateApplication& SlateApp)
 	return false;
 }
 
+bool UVimTextEditorSubsystem::IsCursorAtBeginningOfDocument(FSlateApplication& SlateApp, bool bConsiderFirstCharSelAsStart)
+{
+	FTextLocation TextLocation;
+	GetCursorLocation(SlateApp, TextLocation);
+	bool bIsOffsetAtBeginning = !TextLocation.GetOffset(); // 0 = true, 1 = false
+	if (!bIsOffsetAtBeginning && bConsiderFirstCharSelAsStart)
+	{
+		bIsOffsetAtBeginning = IsCursorAlignedRight(SlateApp) && TextLocation.GetOffset() == 1;
+	}
+	return TextLocation.GetLineIndex() == 0 && bIsOffsetAtBeginning;
+}
+
 bool UVimTextEditorSubsystem::IsCursorAtEndOfLineSingle(FSlateApplication& SlateApp)
 {
 	const auto EditTextBox = ActiveEditableTextBox.Pin();
@@ -2879,15 +2891,19 @@ bool UVimTextEditorSubsystem::SelectInsideWord(FSlateApplication& SlateApp)
 	if (!GetCursorLocation(SlateApp, OriginCursorLocation))
 		return false;
 
+	// We need to compensate by 1 in case we're right aligned.
+	const int32 OffsetAdj = IsCursorAlignedRight(SlateApp)
+			// Also checking we're not at beginning of document as the adjustment
+			// should be different in that case.
+			&& !IsCursorAtBeginningOfDocument(SlateApp, true)
+		? 1
+		: 0;
+
 	int32 CurrentAbs = FVimTextEditorUtils::TextLocationToAbsoluteOffset(
-		Text,
-		FTextLocation(
-			OriginCursorLocation.GetLineIndex(),
-			OriginCursorLocation.GetOffset()
-				- (IsCursorAlignedRight(SlateApp) ? 1 /*Comp-RightAlign*/ : 0)));
+		Text, FTextLocation(OriginCursorLocation.GetLineIndex(), OriginCursorLocation.GetOffset() - OffsetAdj));
 
 	TPair<int32, int32> WordBoundaries;
-	if (!FVimTextEditorUtils::GetAbsWordBoundaries(Text, CurrentAbs, WordBoundaries, false))
+	if (!FVimTextEditorUtils::GetAbsWordBoundaries(Text, CurrentAbs, WordBoundaries, false /*Don't include trailing spaces*/))
 		return false;
 
 	// Get Beginning & End Text Locations
@@ -4153,6 +4169,5 @@ TEST TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 Test)
 */
 // 2. Trying to F select a node pin from an editable doesn't work?
-// ciw motion doesn't work in the first character
 // 3. Sometimes text won't retain it's final most updated form after typing some
 // input and switching between Vim modes.
