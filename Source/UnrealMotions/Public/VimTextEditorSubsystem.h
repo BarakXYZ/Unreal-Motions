@@ -344,6 +344,8 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void VerifySingleLineEditableFirstStroke(const FKeyEvent& InKeyEvent, const FText& PreStrokeContent);
 
+	void StartHintMarkersTimeout(FSlateApplication& SlateApp);
+
 	FUMLogger				 Logger;
 	EVimMode				 CurrentVimMode{ EVimMode::Insert };
 	EVimMode				 PreviousVimMode{ EVimMode::Insert };
@@ -366,6 +368,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool								bFindPreviousChar{ false };
 	bool								bIsEditableInit{ false };
 	bool								bIsFirstSingleLineKeyStroke{ false };
+	FTimerHandle						FindCharTimerHandle;
 
 	const FText	  InsertModeHintText = FText::FromString("Start Typing... ('Esc'-> Normal Mode)");
 	const FText	  NormalModeHintText = FText::FromString("Press 'i' to Start Typing...");

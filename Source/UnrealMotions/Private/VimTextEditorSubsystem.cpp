@@ -1,11 +1,11 @@
 #include "VimTextEditorSubsystem.h"
-#include "Async/TaskTrace.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "VimInputProcessor.h"
 #include "UMInputHelpers.h"
 #include "Editor.h"
 #include "UMConfig.h"
+#include "VimNavigationEditorSubsystem.h"
 #include "VimTextEditorUtils.h"
 #include "UMSlateHelpers.h"
 #include "VimTextTypes.h"
@@ -3377,6 +3377,27 @@ void UVimTextEditorSubsystem::BeginFindChar(FSlateApplication& SlateApp, const F
 {
 	bFindPreviousChar = InKeyEvent.IsShiftDown();
 	FVimInputProcessor::Get()->Possess(this, &UVimTextEditorSubsystem::HandleFindChar);
+	StartHintMarkersTimeout(SlateApp);
+}
+
+void UVimTextEditorSubsystem::StartHintMarkersTimeout(FSlateApplication& SlateApp)
+{
+	GEditor->GetTimerManager()->SetTimer(
+		FindCharTimerHandle,
+		[this, &SlateApp]() {
+			FVimInputProcessor::Get()->Unpossess(this); // Release
+
+			// Init HintMarkers fallback
+			if (UVimNavigationEditorSubsystem* NavigationSub =
+					GEditor->GetEditorSubsystem<UVimNavigationEditorSubsystem>())
+			{
+				if (bFindPreviousChar)
+					NavigationSub->FlashHintMarkersMultiWindow(SlateApp, FKeyEvent());
+				else
+					NavigationSub->FlashHintMarkers(SlateApp, FKeyEvent());
+			}
+		},
+		0.5f, false);
 }
 
 void UVimTextEditorSubsystem::HandleFindChar(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -3395,6 +3416,8 @@ void UVimTextEditorSubsystem::HandleFindChar(FSlateApplication& SlateApp, const 
 	else if (TryFindAndMoveToCursor(SlateApp, CharToFind))
 		Logger.Print("Found Char", true);
 
+	// At this point there must be a running timer that we want to clear.
+	GEditor->GetTimerManager()->ClearTimer(FindCharTimerHandle);
 	FVimInputProcessor::Get()->Unpossess(this); // Release
 }
 
