@@ -1501,7 +1501,6 @@ bool UVimTextEditorSubsystem::IsCurrentLineInMultiEmpty(const TSharedRef<SMultiL
 	return CurrTextLine.IsEmpty();
 }
 
-// TODO: Refactor this function (i.e. break it down to smaller functions)
 bool UVimTextEditorSubsystem::HandleUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir)
 {
 	if (CurrentVimMode == EVimMode::Visual)
@@ -4191,6 +4190,5 @@ void UVimTextEditorSubsystem::DebugMultiLineCursorLocation(bool bIsPreNavigation
 TEST TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 Test)
 */
-// 2. Trying to F select a node pin from an editable doesn't work?
-// 3. Sometimes text won't retain it's final most updated form after typing some
+// 2. Sometimes text won't retain it's final most updated form after typing some
 // input and switching between Vim modes.

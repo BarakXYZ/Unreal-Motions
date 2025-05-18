@@ -226,7 +226,7 @@ void FUMFocusHelpers::ClickSNode(FSlateApplication& SlateApp, const TSharedRef<S
 
 void FUMFocusHelpers::ClickSPin(FSlateApplication& SlateApp, const TSharedRef<SWidget> InWidget)
 {
-	Logger.Print("Found SGraphPin", ELogVerbosity::Log, true);
+	Logger.Print("FUMFocusHelpers::ClickSPin\nFound SGraphPin", ELogVerbosity::Log, true);
 
 	TSharedPtr<SWidget> FoundWidget;
 	if (!FUMSlateHelpers::TraverseFindWidgetUpwards(InWidget, FoundWidget, "SGraphPanel"))
@@ -240,8 +240,13 @@ void FUMFocusHelpers::ClickSPin(FSlateApplication& SlateApp, const TSharedRef<SW
 		GraphSub->AddNodeToPin(SlateApp, GraphPin); };
 
 	TSharedPtr<SGraphPanel> GraphPanel = StaticCastSharedPtr<SGraphPanel>(FoundWidget);
+
 	if (GraphPanel->HasAnyUserFocusOrFocusedDescendants())
 	{
+		// Still keeping to focus pulling for safety, this seems to be needed
+		// when we're focused on things like editables within the panel
+		// for proper execution.
+		SlateApp.SetAllUserFocus(GraphPanel, EFocusCause::Navigation);
 		AddNode(SlateApp, InWidget);
 		return;
 	}
