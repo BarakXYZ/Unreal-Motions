@@ -89,9 +89,6 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	void HandleRightNavigation(FSlateApplication& SlateApp);
 	void HandleLeftNavigation(FSlateApplication& SlateApp);
 
-	int32 GetCursorOffsetSingle();
-	void  SetCursorOffsetSingle(int32 NewOffset);
-
 	void NavigateWord(
 		FSlateApplication& SlateApp,
 		bool			   bBigWord,
@@ -109,6 +106,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool TrySetHintTextForVimMode();
 
 	void InsertAndAppend(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void VisualLineMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	//////////////////////////////////////////////////////////////////////////
 	// ~			GoTo Start or End (gg + Shift + G)				~

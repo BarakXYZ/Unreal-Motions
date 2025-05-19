@@ -138,7 +138,7 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 	if (bAlreadyProcessingFocusChange)
 		return;
 
-	// TODO: Might wanna do an early return if we're in Insert mode.
+	// NOTE: Might wanna do an early return if we're in Insert mode.
 
 	// Logger.ToggleLogging(true);
 	if (!NewWidget.IsValid())
@@ -1025,6 +1025,28 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 		}
 	}
 	InputProc->SetVimMode(SlateApp, EVimMode::Insert);
+}
+
+void UVimTextEditorSubsystem::VisualLineMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+{
+	Logger.Print("Visual Line Mode", true);
+	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
+
+	// Not exactly like vim does it (UX wise), but a simplification for now.
+	if (CurrentVimMode == EVimMode::Visual)
+		VimProc->SetVimMode(SlateApp, EVimMode::Normal);
+
+	// TODO: We need to have a more robust support here:
+	// 1. We should probably have a dedicated vim mode for Visual Line from the
+	// Vim Proc itself.
+	// 2. When going up or down in Multiline we need to check for alignment
+	// to place our cursor in the correct place (end of line or beginning of
+	// line) to have the selection work correctly.
+	// Current setup will work well for starting in line x and going to lines > x
+	// but not for lines < x
+	HandleGoToStartOrEndOfLine(SlateApp, false /*Go-to-Start*/);
+	VimProc->SetVimMode(SlateApp, EVimMode::Visual);
+	HandleGoToStartOrEndOfLine(SlateApp, true /*Go-to-End*/);
 }
 
 // TODO: Update practice to conform with new methods for Multiline
@@ -2795,27 +2817,6 @@ void UVimTextEditorSubsystem::NavigateWordMotion(
 	NavigateWord(SlateApp, bIsBigWord, WordBoundaryFunc);
 }
 
-int32 UVimTextEditorSubsystem::GetCursorOffsetSingle()
-{
-	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
-	{
-		// TODO:
-		// Hypothetical function – implement according to your API.
-		// return EditTextBox->GetCursorOffset();
-	}
-	return 0;
-}
-
-void UVimTextEditorSubsystem::SetCursorOffsetSingle(int32 NewOffset)
-{
-	if (const auto EditTextBox = ActiveEditableTextBox.Pin())
-	{
-		// TODO:
-		// Hypothetical function – implement according to your API.
-		// EditTextBox->SetCursorOffset(NewOffset);
-	}
-}
-
 //------------------------------------------------------------------------------
 // Main Navigation Functions
 //------------------------------------------------------------------------------
@@ -3294,7 +3295,6 @@ void UVimTextEditorSubsystem::HandlePasteCharacterwiseVisualMode(FSlateApplicati
 	InputProc->SetVimMode(SlateApp, EVimMode::Normal);
 }
 
-// TODO: Fix bug in end of document Visual Mode nav
 void UVimTextEditorSubsystem::HandlePasteLinewise(FSlateApplication& SlateApp, const TArray<FInputChord>& InSequence)
 {
 	const TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
@@ -3594,6 +3594,12 @@ void UVimTextEditorSubsystem::BindCommands()
 		&UVimTextEditorSubsystem::InsertAndAppend);
 	//
 	// [i]nsert & [a]ppend + [I]nsert & [A]ppend (start / end of line)
+
+	VimInputProcessor->AddKeyBinding_KeyEvent(
+		EUMBindingContext::TextEditing,
+		{ FInputChord(EModifierKey::Shift, EKeys::V) },
+		WeakTextSubsystem,
+		&UVimTextEditorSubsystem::VisualLineMode);
 
 	// gg & Shift+g -> Goto to End & Start of line
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -4087,10 +4093,6 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Zero },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::JumpToStartOfLine);
-
-	// TODO: Caret GoTo first char in line
-	// Should be very similar to JumpToStart just with checking if we've reached
-	// a whitespace or something in that nature?
 
 	// Jump to End of Line
 	VimInputProcessor->AddKeyBinding_KeyEvent(
