@@ -347,6 +347,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	FUMLogger				 Logger;
 	EVimMode				 CurrentVimMode{ EVimMode::Insert };
 	EVimMode				 PreviousVimMode{ EVimMode::Insert };
+	bool					 bIsVimModeVisualBased = false;
 	const FModifierKeysState ModShiftDown =
 		FModifierKeysState(true, true, /*ShiftDown*/
 			false, false, false, false, false, false, false);

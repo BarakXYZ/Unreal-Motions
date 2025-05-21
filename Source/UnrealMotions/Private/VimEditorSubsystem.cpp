@@ -99,6 +99,7 @@ void UVimEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 			UMGenericAppMessageHandler->ToggleBlockAllCharInput(false, true);
 			break;
 		}
+		case EVimMode::VisualLine:
 		case EVimMode::Visual:
 		{
 			VisualNavOffsetIndicator = 0;

@@ -14,9 +14,10 @@ class SBufferVisualizer;
 UENUM(BlueprintType)
 enum class EVimMode : uint8
 {
-	Normal UMETA(DisplayName = "Normal"),
-	Insert UMETA(DisplayName = "Insert"),
-	Visual UMETA(DisplayName = "Visual"),
+	Normal	   UMETA(DisplayName = "Normal"),
+	Insert	   UMETA(DisplayName = "Insert"),
+	Visual	   UMETA(DisplayName = "Visual"),
+	VisualLine UMETA(DisplayName = "Visual Line"),
 
 	// Used mainly for binding to comply with any of the above modes
 	// (except Insert of course which will naturally be ignored)

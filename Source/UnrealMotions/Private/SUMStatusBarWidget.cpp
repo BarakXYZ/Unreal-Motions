@@ -19,18 +19,18 @@ void SUMStatusBarWidget::Construct(const FArguments& InArgs)
 				.OnClicked(InArgs._OnClicked)
 					[SNew(SHorizontalBox)
 						+ SHorizontalBox::Slot()
-							.AutoWidth()
-							.VAlign(VAlign_Center)
-							.HAlign(HAlign_Center)
-								[SAssignNew(StatusBarImage, SImage)
-										.Image(this, &SUMStatusBarWidget::GetCurrentStatusBarIcon)]
+							  .AutoWidth()
+							  .VAlign(VAlign_Center)
+							  .HAlign(HAlign_Center)
+								  [SAssignNew(StatusBarImage, SImage)
+										  .Image(this, &SUMStatusBarWidget::GetCurrentStatusBarIcon)]
 						+ SHorizontalBox::Slot()
-							.AutoWidth()
-							.VAlign(VAlign_Center)
-							.Padding(FMargin(5, 0, 0, 0))
-								[SAssignNew(StatusBarText, STextBlock)
-										.TextStyle(&FAppStyle::Get().GetWidgetStyle<FTextBlockStyle>("NormalText"))
-										.Text(this, &SUMStatusBarWidget::GetStatusBarText)]]];
+							  .AutoWidth()
+							  .VAlign(VAlign_Center)
+							  .Padding(FMargin(5, 0, 0, 0))
+								  [SAssignNew(StatusBarText, STextBlock)
+										  .TextStyle(&FAppStyle::Get().GetWidgetStyle<FTextBlockStyle>("NormalText"))
+										  .Text(this, &SUMStatusBarWidget::GetStatusBarText)]]];
 
 	// Update the icon when the on vim mode changed.
 	FVimInputProcessor::Get()->RegisterOnVimModeChanged(
@@ -66,6 +66,11 @@ FVimModeInfo SUMStatusBarWidget::GetVimModeInfo(EVimMode Mode) const
 			return {
 				FAppStyle::GetBrush("TextureEditor.RedChannel.Small"),
 				LOCTEXT("Visual_Mode", "Visual")
+			};
+		case EVimMode::VisualLine:
+			return {
+				FAppStyle::GetBrush("TextureEditor.RedChannel.Small"),
+				LOCTEXT("Visual_Line_Mode", "V-Line")
 			};
 		case EVimMode::Insert:
 		default:

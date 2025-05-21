@@ -48,15 +48,31 @@ void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 	CurrentVimMode = NewVimMode;
 	FSlateApplication& SlateApp = FSlateApplication::Get();
 
-	if (NewVimMode == EVimMode::Visual)
-		TrackVisualModeStartLocation(SlateApp);
-
 	// We should skip this when initializing as our editable is still stablizing.
 	if (!bIsEditableInit)
 	{
 		RefreshActiveEditable(SlateApp);
 		AssignEditableBorder();
 		HandleEditableUX();
+	}
+
+	switch (NewVimMode)
+	{
+		case (EVimMode::Visual):
+		{
+			bIsVimModeVisualBased = true;
+			TrackVisualModeStartLocation(SlateApp);
+			break;
+		}
+		case (EVimMode::VisualLine):
+		{
+			bIsVimModeVisualBased = true;
+			TrackVisualModeStartLocation(SlateApp);
+			VisualLineMode(SlateApp, FKeyEvent());
+			break;
+		}
+		default:
+			bIsVimModeVisualBased = false;
 	}
 }
 
@@ -431,10 +447,11 @@ const FSlateRoundedBoxBrush& UVimTextEditorSubsystem::GetBorderBrush(EVimMode In
 
 	// Define color map for different modes
 	static const TMap<EVimMode, FLinearColor> ModeColors = {
-		{ EVimMode::Any, FLinearColor(0.1f, 0.1f, 0.1f, 1.0f) },	 // Grey
-		{ EVimMode::Normal, FLinearColor(0.0f, 0.5f, 1.0f, 1.0f) },	 // Cyan
-		{ EVimMode::Visual, FLinearColor(1.0f, 0.25f, 1.0f, 1.0f) }, // Purple
-		{ EVimMode::Insert, FLinearColor(0.75f, 0.5f, 0.0f, 1.0f) }	 // Orange
+		{ EVimMode::Any, FLinearColor(0.1f, 0.1f, 0.1f, 1.0f) },		// Grey
+		{ EVimMode::Normal, FLinearColor(0.0f, 0.5f, 1.0f, 1.0f) },		// Cyan
+		{ EVimMode::Visual, FLinearColor(1.0f, 0.25f, 1.0f, 1.0f) },	// Purple
+		{ EVimMode::VisualLine, FLinearColor(1.0f, 0.0f, 0.0f, 1.0f) }, // Red
+		{ EVimMode::Insert, FLinearColor(0.75f, 0.5f, 0.0f, 1.0f) }		// Orange
 	};
 
 	// Define and initialize brushes only once
@@ -469,6 +486,7 @@ bool UVimTextEditorSubsystem::TrySetHintTextForVimMode()
 				true /* Only set Hint Text if editable had one initially */);
 
 		case EVimMode::Visual:
+		case EVimMode::VisualLine:
 		case EVimMode::Normal:
 			return SetActiveEditableHintText(NormalModeHintText,
 				true /* Only set Hint Text if editable had one initially */);
@@ -795,7 +813,7 @@ void UVimTextEditorSubsystem::HandleRightNavigation(FSlateApplication& SlateApp)
 		&& IsMultiLineCursorAtEndOfLine())
 		return; // Shouldn't continue navigation per Vim rules
 
-	if (CurrentVimMode == EVimMode::Visual)
+	if (bIsVimModeVisualBased)
 	{
 		switch (GetSelectionState())
 		{
@@ -844,7 +862,7 @@ void UVimTextEditorSubsystem::HandleLeftNavigation(FSlateApplication& SlateApp)
 		&& IsMultiLineCursorAtBeginningOfLine())
 		return; // Shouldn't continue navigation per Vim rules
 
-	if (CurrentVimMode == EVimMode::Visual)
+	if (bIsVimModeVisualBased)
 	{
 		switch (GetSelectionState())
 		{
@@ -979,13 +997,12 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 	const FKey					   InKey = InKeyEvent.GetKey();
 	const bool					   bIsShiftDown = InKeyEvent.IsShiftDown();
 	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-	const bool					   bIsVisualMode = CurrentVimMode == EVimMode::Visual;
 
 	if (InKey == EKeys::I)
 	{ // [i/I]nsert
 		if (bIsShiftDown)
 		{
-			if (bIsVisualMode || IsCurrentLineInMultiEmpty())
+			if (bIsVimModeVisualBased || IsCurrentLineInMultiEmpty())
 				ClearTextSelection(false); // Simply clear and insert
 			else
 				// Go to the beginning of the line.
@@ -993,7 +1010,7 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 		}
 		else
 		{
-			if (bIsVisualMode)
+			if (bIsVimModeVisualBased)
 				return; // Do nothing. AFAIK that's Vim behavior.
 			else if (IsCurrentLineInMultiEmpty())
 				ClearTextSelection(false); // Simply clear and insert in place.
@@ -1009,7 +1026,7 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 	{
 		if (bIsShiftDown)
 		{
-			if (bIsVisualMode)
+			if (bIsVimModeVisualBased)
 				ClearTextSelection(false); // Simply clear and insert
 			else
 				// Go to the end of the line.
@@ -1017,7 +1034,7 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 		}
 		else
 		{
-			if (bIsVisualMode)
+			if (bIsVimModeVisualBased)
 				return; // Do nothing. AFAIK that's Vim's behavior.
 
 			// Else, just enter Insert Mode:
@@ -1032,10 +1049,6 @@ void UVimTextEditorSubsystem::VisualLineMode(FSlateApplication& SlateApp, const 
 	Logger.Print("Visual Line Mode", true);
 	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 
-	// Not exactly like vim does it (UX wise), but a simplification for now.
-	if (CurrentVimMode == EVimMode::Visual)
-		VimProc->SetVimMode(SlateApp, EVimMode::Normal);
-
 	// TODO: We need to have a more robust support here:
 	// 1. We should probably have a dedicated vim mode for Visual Line from the
 	// Vim Proc itself.
@@ -1045,7 +1058,8 @@ void UVimTextEditorSubsystem::VisualLineMode(FSlateApplication& SlateApp, const 
 	// Current setup will work well for starting in line x and going to lines > x
 	// but not for lines < x
 	HandleGoToStartOrEndOfLine(SlateApp, false /*Go-to-Start*/);
-	VimProc->SetVimMode(SlateApp, EVimMode::Visual);
+	// Not exactly like vim does it (UX wise), but a simplification for now.
+	ClearTextSelection();
 	HandleGoToStartOrEndOfLine(SlateApp, true /*Go-to-End*/);
 }
 
@@ -1083,7 +1097,7 @@ void UVimTextEditorSubsystem::HandleGoToEndMultiLine(FSlateApplication& SlateApp
 	if (!MultiTextBox.IsValid())
 		return; // Bail if invalid Multiline Widget
 
-	if (CurrentVimMode == EVimMode::Visual)
+	if (bIsVimModeVisualBased)
 		HandleVisualModeGoToStartOrEndMultiLine(SlateApp, false /*Go-To-End*/);
 
 	else // Normal Mode
@@ -1100,7 +1114,7 @@ void UVimTextEditorSubsystem::HandleGoToStartMultiLine(FSlateApplication& SlateA
 	if (!MultiTextBox.IsValid())
 		return;
 
-	if (CurrentVimMode == EVimMode::Visual)
+	if (bIsVimModeVisualBased)
 		HandleVisualModeGoToStartOrEndMultiLine(SlateApp, true /*Go-To-Start*/);
 
 	else
@@ -1147,7 +1161,7 @@ void UVimTextEditorSubsystem::HandleVisualModeGoToStartOrEndMultiLine(FSlateAppl
 
 void UVimTextEditorSubsystem::HandleGoToStartOrEndSingleLine(FSlateApplication& SlateApp, bool bGoToEnd)
 {
-	if (CurrentVimMode == EVimMode::Visual)
+	if (bIsVimModeVisualBased)
 	{
 		if (!DoesActiveEditableHasAnyTextSelected())
 			HandleEditableUX();
@@ -1525,7 +1539,7 @@ bool UVimTextEditorSubsystem::IsCurrentLineInMultiEmpty(const TSharedRef<SMultiL
 
 bool UVimTextEditorSubsystem::HandleUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir)
 {
-	if (CurrentVimMode == EVimMode::Visual)
+	if (bIsVimModeVisualBased)
 		return HandleUpDownMultiLineVisualMode(SlateApp, InKeyDir);
 	else // Normal Mode
 		return HandleUpDownMultiLineNormalMode(SlateApp, InKeyDir);
@@ -1928,7 +1942,7 @@ bool UVimTextEditorSubsystem::IsMultiLineCursorAtBeginningOfLine(bool bForceZero
 	// keep the first char in the line selected.
 	const int32 TargetLimit =
 		bForceZeroValidation
-			|| (CurrentVimMode == EVimMode::Visual
+			|| (bIsVimModeVisualBased
 				&& !IsCursorAlignedRight(SlateApp))
 			// If no text selected, we should also only compare against 0,
 			// as we're not yet aligned to the right with highlighting
@@ -2144,7 +2158,7 @@ void UVimTextEditorSubsystem::Delete(FSlateApplication& SlateApp, const FKeyEven
 
 	ClearTextSelection(true /*Normal*/);
 
-	if (CurrentVimMode == EVimMode::Visual)
+	if (bIsVimModeVisualBased)
 		VimProc->SetVimMode(SlateApp, EVimMode::Normal);
 	else
 		HandleEditableUX();
@@ -3262,6 +3276,7 @@ void UVimTextEditorSubsystem::HandlePasteCharacterwise(FSlateApplication& SlateA
 			HandlePasteCharacterwiseNormalMode(SlateApp, InSequence, TextToPaste, InputProc);
 			break;
 		}
+		case EVimMode::VisualLine:
 		case EVimMode::Visual:
 		{
 			HandlePasteCharacterwiseVisualMode(SlateApp, InSequence, TextToPaste, InputProc);
@@ -3595,11 +3610,11 @@ void UVimTextEditorSubsystem::BindCommands()
 	//
 	// [i]nsert & [a]ppend + [I]nsert & [A]ppend (start / end of line)
 
-	VimInputProcessor->AddKeyBinding_KeyEvent(
-		EUMBindingContext::TextEditing,
-		{ FInputChord(EModifierKey::Shift, EKeys::V) },
-		WeakTextSubsystem,
-		&UVimTextEditorSubsystem::VisualLineMode);
+	// VimInputProcessor->AddKeyBinding_KeyEvent(
+	// 	EUMBindingContext::TextEditing,
+	// 	{ FInputChord(EModifierKey::Shift, EKeys::V) },
+	// 	WeakTextSubsystem,
+	// 	&UVimTextEditorSubsystem::VisualLineMode);
 
 	// gg & Shift+g -> Goto to End & Start of line
 	VimInputProcessor->AddKeyBinding_KeyEvent(

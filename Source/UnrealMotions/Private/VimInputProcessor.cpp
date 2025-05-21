@@ -345,7 +345,8 @@ bool FVimInputProcessor::HandleKeyDownEvent(
 	if (InKey.IsModifierKey()) // Simply ignore
 		return true;		   // or false?
 
-	// TODO: Add a small timer until actually showing the buffer &
+	// TODO:
+	// Add a small timer until actually showing the buffer &
 	// (retrigger timer upon keystrokes)
 	CheckCreateBufferVisualizer(SlateApp, InKey);
 	UpdateBufferAndVisualizer(InKey);
@@ -463,7 +464,10 @@ void FVimInputProcessor::SwitchVimModes(FSlateApplication& SlateApp, const FKeyE
 		if (KeyPressed == EKeys::I)
 			SetVimMode(SlateApp, EVimMode::Insert);
 		if (KeyPressed == EKeys::V)
-			SetVimMode(SlateApp, EVimMode::Visual);
+			SetVimMode(SlateApp,
+				InKeyEvent.IsShiftDown()
+					? EVimMode::VisualLine
+					: EVimMode::Visual);
 	}
 }
 
