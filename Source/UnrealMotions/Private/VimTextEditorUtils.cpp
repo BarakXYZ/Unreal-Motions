@@ -498,3 +498,15 @@ void FVimTextEditorUtils::AbsoluteOffsetToTextLocation(const FString& Text, int3
 	// Fallback: place at end of last line.
 	OutLocation = FTextLocation(Lines.Num() - 1, Lines.Last().Len());
 }
+
+void FVimTextEditorUtils::DetermineVimModeForSingleLineEncounter()
+{
+	// I feel like it's a better UX to enter Insert mode for SingleLines
+	// as the user probably expect quick instant typing XP.
+	// Though, if Ctrl is down;
+	// The user is currently navigating panels via Ctrl+HJKL, which seems
+	// reasonable to not block him with an Insert Mode switch, as hes in
+	// Normal Mode and may want to continue switching panels smoothly.
+	if (!FSlateApplication::Get().GetModifierKeys().IsControlDown())
+		FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
+}

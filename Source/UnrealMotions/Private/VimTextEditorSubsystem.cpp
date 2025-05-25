@@ -251,13 +251,7 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 	{
 		if (Parent->GetWidgetClass().GetWidgetType().IsEqual("SBorder"))
 		{
-			// I feel like it's a better UX to enter Insert mode for SingleLines
-			// as the user probably expect quick instant typing XP
-			// If Ctrl is down; The user is currently navigating around panels,
-			// which seems reasonable to not block him with an insert ->
-			// As he's in Normal Mode and may want to continue switching panels.
-			if (!FSlateApplication::Get().GetModifierKeys().IsControlDown())
-				FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
+			FVimTextEditorUtils::DetermineVimModeForSingleLineEncounter();
 
 			TSharedPtr<SEditableTextBox> TextBox =
 				StaticCastSharedPtr<SEditableTextBox>(Parent);

@@ -187,5 +187,7 @@ public:
 
 	static int32 TextLocationToAbsoluteOffset(const FString& Text, const FTextLocation& Location);
 
+	static void DetermineVimModeForSingleLineEncounter();
+
 	static FUMLogger Logger;
 };
