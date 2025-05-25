@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "CoreMinimal.h"
 #include "Layout/Visibility.h"
 #include "Widgets/SCompoundWidget.h"
@@ -56,6 +57,8 @@ public:
 		const FWidgetStyle&		 InWidgetStyle,
 		bool					 bParentEnabled) const override;
 	//~ End SWidget interface
+
+	const FSlateRoundedBoxBrush& CreateTransparentOutlineBrush() const;
 
 private:
 	/** The geometry we want to highlight in this window’s space. */

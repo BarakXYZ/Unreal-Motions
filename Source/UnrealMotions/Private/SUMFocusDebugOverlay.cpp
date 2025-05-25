@@ -1,4 +1,5 @@
 #include "SUMFocusDebugOverlay.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "UMLogger.h"
 
 FUMOnOutlineOverlayVisibilityChanged SUMFocusDebugOverlay::OnOutlineOverlayVisibilityChanged;
@@ -88,6 +89,18 @@ void SUMFocusDebugOverlay::HandleOnVimModeChanged(EVimMode NewVimMode)
 	}
 }
 
+const FSlateRoundedBoxBrush& SUMFocusDebugOverlay::CreateTransparentOutlineBrush() const
+{
+	static const FSlateRoundedBoxBrush Brush(
+		FLinearColor::Transparent,
+		8.0f,
+		// FLinearColor(0.784f, 0.749f, 1.0f), // Option 1# (Hyprland like)
+		FLinearColor::FromSRGBColor(FColor(160, 169, 226)), // Option 2#
+		// FLinearColor::FromSRGBColor(FColor(122, 162, 247)), // Option 3# - Bluish
+		1.5f);
+	return Brush;
+}
+
 //~ Begin SWidget interface
 int32 SUMFocusDebugOverlay::OnPaint(
 	const FPaintArgs&		 Args,
@@ -100,15 +113,13 @@ int32 SUMFocusDebugOverlay::OnPaint(
 {
 	if (TargetGeometry.IsSet())
 	{
-		// We assume TargetGeometry is already in the same coordinate space as the window.
 		FSlateDrawElement::MakeBox(
 			OutDrawElements,
-			++LayerId, // increment layer
+			++LayerId,
 			TargetGeometry.GetValue(),
-			FCoreStyle::Get().GetBrush(TEXT("Debug.Border")),
+			&CreateTransparentOutlineBrush(),
 			ESlateDrawEffect::None,
-			// FLinearColor::Yellow);
-			OutlineColor);
+			FLinearColor::Transparent);
 	}
 	return LayerId;
 }

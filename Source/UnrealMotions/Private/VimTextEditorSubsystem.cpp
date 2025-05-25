@@ -253,7 +253,11 @@ void UVimTextEditorSubsystem::OnFocusChanged(
 		{
 			// I feel like it's a better UX to enter Insert mode for SingleLines
 			// as the user probably expect quick instant typing XP
-			FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
+			// If Ctrl is down; The user is currently navigating around panels,
+			// which seems reasonable to not block him with an insert ->
+			// As he's in Normal Mode and may want to continue switching panels.
+			if (!FSlateApplication::Get().GetModifierKeys().IsControlDown())
+				FVimInputProcessor::Get()->SetVimMode(FSlateApplication::Get(), EVimMode::Insert);
 
 			TSharedPtr<SEditableTextBox> TextBox =
 				StaticCastSharedPtr<SEditableTextBox>(Parent);
@@ -460,7 +464,12 @@ const FSlateRoundedBoxBrush& UVimTextEditorSubsystem::GetBorderBrush(EVimMode In
 	{
 		for (const auto& Pair : ModeColors)
 		{
-			ModeBrushes.Add(Pair.Key, FSlateRoundedBoxBrush(BaseColor, CornerRoundness, Pair.Value, OutlineWidth));
+			ModeBrushes.Add(Pair.Key,
+				FSlateRoundedBoxBrush(
+					BaseColor,
+					CornerRoundness,
+					Pair.Value,
+					OutlineWidth));
 		}
 	}
 
