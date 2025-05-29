@@ -3649,21 +3649,21 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::X },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::Delete,
-		EVimMode::Any /* Handles deletion in both Normal & Visual Mode*/);
+		TArray<EVimMode>({ EVimMode::Any }) /* Handles deletion in both Normal & Visual Mode*/);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ EKeys::D },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::Delete,
-		EVimMode::Visual /* Handles deletion only in Visual Mode*/);
+		TArray<EVimMode>({ EVimMode::Visual, EVimMode::VisualLine }) /* Handles deletion only in Visual Mode*/);
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::X) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ShiftDeleteNormalMode,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Delete current line
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -3671,49 +3671,49 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, EKeys::D },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteLine,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::Four /*Shift+$*/) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteToEndOfLine,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::D) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteToEndOfLine,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::D) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteLineVisualMode,
-		EVimMode::Visual);
+		TArray<EVimMode>({ EVimMode::Visual, EVimMode::VisualLine }));
 
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::D, EKeys::I, EKeys::W },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteInsideWord,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::D, EKeys::K },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteUpOrDown,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::D, EKeys::J },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::DeleteUpOrDown,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// ============================================================================
 	// DELETE COMMANDS (d + motion)
@@ -3726,7 +3726,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EKeys::D), FInputChord(EKeys::W) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Delete WORD (dW) - Deletes from cursor to start of next WORD (space-delimited)
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3734,7 +3734,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::W) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Delete to end of word (de) - Deletes from cursor to end of current word
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3742,7 +3742,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, EKeys::E },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Delete to end of WORD (dE) - Deletes from cursor to end of current WORD
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3750,7 +3750,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::E) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Delete backward to start of word (db) - Deletes from cursor back to start of word
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3758,7 +3758,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, EKeys::B },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Delete backward to start of WORD (dB) - Deletes from cursor back to start of WORD
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3766,7 +3766,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, FInputChord(EModifierKey::Shift, EKeys::B) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Delete to end of previous sentence (dge) - Deletes from cursor to end of prev sentence
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3774,7 +3774,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, EKeys::G, EKeys::E },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Delete to end of previous SENTENCE (dgE) - Deletes from cursor to end of prev SENTENCE
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3782,7 +3782,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::D, EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// ============================================================================
 	// CHANGE COMMANDS (c + motion)
@@ -3795,7 +3795,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EKeys::C), FInputChord(EKeys::W) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Change WORD (cW) - Changes from cursor to start of next WORD (space-delimited)
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3803,7 +3803,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::C, FInputChord(EModifierKey::Shift, EKeys::W) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Change to end of word (ce) - Changes from cursor to end of current word
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3811,7 +3811,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::C, EKeys::E },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Change to end of WORD (cE) - Changes from cursor to end of current WORD
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3819,7 +3819,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::C, FInputChord(EModifierKey::Shift, EKeys::E) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Change backward to start of word (cb) - Changes from cursor back to start of word
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3827,7 +3827,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::C, EKeys::B },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Change backward to start of WORD (cB) - Changes from cursor back to start of WORD
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3835,7 +3835,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::C, FInputChord(EModifierKey::Shift, EKeys::B) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Change to end of previous sentence (cge) - Changes from cursor to end of prev sentence
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3843,7 +3843,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::C, EKeys::G, EKeys::E },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Change to end of previous SENTENCE (cgE) - Changes from cursor to end of prev SENTENCE
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3851,7 +3851,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::C, EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// ============================================================================
 	// YANK COMMANDS (y + motion)
@@ -3864,7 +3864,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EKeys::Y), FInputChord(EKeys::W) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Yank WORD (yW) - Yanks from cursor to start of next WORD (space-delimited)
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3872,7 +3872,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, FInputChord(EModifierKey::Shift, EKeys::W) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Yank to end of word (ye) - Yanks from cursor to end of current word
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3880,7 +3880,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, EKeys::E },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Yank to end of WORD (yE) - Yanks from cursor to end of current WORD
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3888,7 +3888,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, FInputChord(EModifierKey::Shift, EKeys::E) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Yank backward to start of word (yb) - Yanks from cursor back to start of word
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3896,7 +3896,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, EKeys::B },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Yank backward to start of WORD (yB) - Yanks from cursor back to start of WORD
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3904,7 +3904,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, FInputChord(EModifierKey::Shift, EKeys::B) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Yank to end of previous sentence (yge) - Yanks from cursor to end of prev sentence
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3912,7 +3912,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, EKeys::G, EKeys::E },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Yank to end of previous SENTENCE (ygE) - Yanks from cursor to end of prev SENTENCE
 	VimInputProcessor->AddKeyBinding_Sequence(
@@ -3920,7 +3920,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, EKeys::G, FInputChord(EModifierKey::Shift, EKeys::E) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ActionToMotion,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	// Append New Line (After & Before the current Line)
 	//
@@ -3929,14 +3929,14 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::O },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::AppendNewLine,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::O) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::AppendNewLine,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 	//
 	// Append New Line (After & Before the current Line)
 
@@ -3947,7 +3947,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::C },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ChangeVisualMode,
-		EVimMode::Visual);
+		TArray<EVimMode>({ EVimMode::Visual, EVimMode::VisualLine }));
 
 	// Not-Vim-related but I believe helps in some scenarios with the UX
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -3961,35 +3961,35 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ FInputChord(EModifierKey::Shift, EKeys::C) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ChangeVisualMode,
-		EVimMode::Visual);
+		TArray<EVimMode>({ EVimMode::Visual, EVimMode::VisualLine }));
 
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::C, EKeys::I, EKeys::W },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ChangeInsideWord,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ EKeys::C, EKeys::C },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ChangeEntireLine,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ FInputChord(EModifierKey::Shift, EKeys::C) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ChangeToEndOfLine,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
 		{ EKeys::C, FInputChord(EModifierKey::Shift, EKeys::Four /*Shift+$*/) },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ChangeToEndOfLine,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 	//
 	//							~ Change ~
 
@@ -4065,14 +4065,14 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, EKeys::Y },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::YankLine,
-		EVimMode::Normal /* Only available in Normal Mode */);
+		TArray<EVimMode>({ EVimMode::Normal }) /* Only available in Normal Mode */);
 
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
 		{ EKeys::Y },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::YankCharacter,
-		EVimMode::Visual /* Only available in Visual Mode */);
+		TArray<EVimMode>({ EVimMode::Visual, EVimMode::VisualLine }) /* Only available in Visual Mode */);
 
 	VimInputProcessor->AddKeyBinding_Sequence(
 		EUMBindingContext::TextEditing,
@@ -4091,7 +4091,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::Y, EKeys::I, EKeys::W },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::YankInsideWord,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	//
 	// Yanking / Pasting Related
@@ -4103,7 +4103,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::I, EKeys::W },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::SelectInsideWord,
-		EVimMode::Visual);
+		TArray<EVimMode>({ EVimMode::Visual, EVimMode::VisualLine }));
 
 	// Jump to Start of Line
 	VimInputProcessor->AddKeyBinding_KeyEvent(
@@ -4124,7 +4124,7 @@ void UVimTextEditorSubsystem::BindCommands()
 		{ EKeys::R },
 		WeakTextSubsystem,
 		&UVimTextEditorSubsystem::ReplaceCharacter,
-		EVimMode::Normal);
+		TArray<EVimMode>({ EVimMode::Normal }));
 
 	VimInputProcessor->AddKeyBinding_KeyEvent(
 		EUMBindingContext::TextEditing,
@@ -4213,5 +4213,3 @@ Test)
 // 2. Sometimes text won't retain it's final most updated form after typing some
 // input and switching between Vim modes.
 //
-// 3. Add the option to pass multiple vim modes on bind registration (so we can
-// bind for example Visual + Visual Line together.)

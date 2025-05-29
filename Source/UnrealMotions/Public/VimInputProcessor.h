@@ -207,20 +207,24 @@ public:
 
 	/**
 	 * Adds a key binding with no parameters
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param Callback - Function to execute when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	void AddKeyBinding_NoParam(
 		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TFunction<void()>		   Callback,
-		EVimMode				   VimMode = EVimMode::Any);
+		const TArray<EVimMode>&	   VimModes = { EVimMode::Any });
 
 	/**
 	 * Adds a key binding with no parameters using a weak pointer to an object
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param WeakObj - Weak pointer to the object containing the member function
 	 * @param MemberFunc - Member function to call when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
@@ -228,7 +232,7 @@ public:
 		const TArray<FInputChord>& Sequence,
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(),
-		EVimMode VimMode = EVimMode::Any)
+		const TArray<EVimMode>& VimModes = { EVimMode::Any })
 	{
 		AddKeyBinding_NoParam(
 			Context,
@@ -239,14 +243,16 @@ public:
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::NoParam);
 			},
-			VimMode);
+			VimModes);
 	}
 
 	/**
 	 * Adds a key binding with no parameters using a weak object pointer
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param WeakObj - Weak object pointer to the UObject containing the member function
 	 * @param MemberFunc - Member function to call when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
@@ -254,7 +260,7 @@ public:
 		const TArray<FInputChord>& Sequence,
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(),
-		EVimMode VimMode = EVimMode::Any)
+		const TArray<EVimMode>& VimModes = { EVimMode::Any })
 	{
 		AddKeyBinding_NoParam(
 			Context,
@@ -265,14 +271,16 @@ public:
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::NoParam);
 			},
-			VimMode);
+			VimModes);
 	}
 
 	/**
 	 * Adds a key binding with no parameters using a raw pointer
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param Obj - Raw pointer to the object containing the member function
 	 * @param MemberFunc - Member function to call when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_NoParam(
@@ -280,7 +288,7 @@ public:
 		const TArray<FInputChord>& Sequence,
 		ObjectType*				   Obj,
 		void (ObjectType::*MemberFunc)(),
-		EVimMode VimMode = EVimMode::Any)
+		const TArray<EVimMode>& VimModes = { EVimMode::Any })
 	{
 		AddKeyBinding_NoParam(
 			Context,
@@ -296,7 +304,7 @@ public:
 					// DebugInvalidRawPointer(EUMKeyBindingCallbackType::NoParam);
 				}
 			},
-			VimMode);
+			VimModes);
 	}
 
 	//
@@ -305,29 +313,33 @@ public:
 
 	/**
 	 * Adds a key binding that receives the Slate application and key event
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param Callback - Function to execute when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	void AddKeyBinding_KeyEvent(
 		EUMBindingContext											   Context,
 		const TArray<FInputChord>&									   Sequence,
 		TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback,
-		EVimMode													   VimMode = EVimMode::Any);
+		const TArray<EVimMode>&										   VimModes = { EVimMode::Any });
 
 	/**
 	 * Adds a key binding for a static function that receives the Slate application and key event.
 	 * This overload is designed for static member functions or free functions.
 	 *
 	 * @tparam ObjectType - Ignored in this static overload but kept for symmetry with the weak pointer version.
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback.
 	 * @param MemberFunc - Static function to call when the sequence is matched.
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
 		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		void (*MemberFunc)(FSlateApplication&, const FKeyEvent&),
-		EVimMode VimMode = EVimMode::Any)
+		const TArray<EVimMode>& VimModes = { EVimMode::Any })
 	{
 		AddKeyBinding_KeyEvent(
 			Context,
@@ -335,7 +347,7 @@ public:
 			[MemberFunc](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 				MemberFunc(SlateApp, InKeyEvent);
 			},
-			VimMode);
+			VimModes);
 	}
 
 	/**
@@ -345,9 +357,11 @@ public:
 	 * functions of objects that may be destroyed.
 	 *
 	 * @tparam ObjectType - The type of the object containing the member function.
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback.
 	 * @param WeakObj - Weak pointer to the object containing the member function.
 	 * @param MemberFunc - Member function to call when the sequence is matched.
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
@@ -356,7 +370,7 @@ public:
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(
 			FSlateApplication& SlateApp, const FKeyEvent&),
-		EVimMode VimMode = EVimMode::Any)
+		const TArray<EVimMode>& VimModes = { EVimMode::Any })
 	{
 		AddKeyBinding_KeyEvent(
 			Context,
@@ -368,14 +382,16 @@ public:
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::KeyEventParam);
 			},
-			VimMode);
+			VimModes);
 	}
 
 	/**
 	 * Adds a key binding that receives the Slate application and key event using a weak object pointer
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param WeakObj - Weak object pointer to the UObject containing the member function
 	 * @param MemberFunc - Member function to call when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_KeyEvent(
@@ -384,7 +400,7 @@ public:
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(
 			FSlateApplication& SlateApp, const FKeyEvent&),
-		EVimMode VimMode = EVimMode::Any)
+		const TArray<EVimMode>& VimModes = { EVimMode::Any })
 	{
 		AddKeyBinding_KeyEvent(
 			Context,
@@ -396,7 +412,7 @@ public:
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::KeyEventParam);
 			},
-			VimMode);
+			VimModes);
 	}
 
 	//
@@ -405,22 +421,26 @@ public:
 
 	/**
 	 * Adds a key binding that receives the Slate application and input chord sequence
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param Callback - Function to execute when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	void AddKeyBinding_Sequence(
 		EUMBindingContext		   Context,
 		const TArray<FInputChord>& Sequence,
 		TFunction<void(
 			FSlateApplication& SlateApp, const TArray<FInputChord>&)>
-				 Callback,
-		EVimMode VimMode = EVimMode::Any);
+								Callback,
+		const TArray<EVimMode>& VimModes = { EVimMode::Any });
 
 	/**
 	 * Adds a key binding that receives the Slate application and input chord sequence using a weak pointer
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param WeakObj - Weak pointer to the object containing the member function
 	 * @param MemberFunc - Member function to call when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_Sequence(
@@ -429,7 +449,7 @@ public:
 		TWeakPtr<ObjectType>	   WeakObj,
 		void (ObjectType::*MemberFunc)(
 			FSlateApplication& SlateApp, const TArray<FInputChord>&),
-		EVimMode VimMode = EVimMode::Any)
+		const TArray<EVimMode>& VimModes = { EVimMode::Any })
 	{
 		AddKeyBinding_Sequence(
 			Context,
@@ -441,14 +461,16 @@ public:
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::SequenceParam);
 			},
-			VimMode);
+			VimModes);
 	}
 
 	/**
 	 * Adds a key binding that receives the Slate application and input chord sequence using a weak object pointer
+	 * @param Context - The context in which this binding should be active
 	 * @param Sequence - Array of input chords that trigger the callback
 	 * @param WeakObj - Weak object pointer to the UObject containing the member function
 	 * @param MemberFunc - Member function to call when the sequence is matched
+	 * @param VimModes - Array of Vim modes in which this binding should be active (defaults to {Any})
 	 */
 	template <typename ObjectType>
 	void AddKeyBinding_Sequence(
@@ -457,7 +479,7 @@ public:
 		TWeakObjectPtr<ObjectType> WeakObj,
 		void (ObjectType::*MemberFunc)(
 			FSlateApplication& SlateApp, const TArray<FInputChord>&),
-		EVimMode VimMode = EVimMode::Any)
+		const TArray<EVimMode>& VimModes = { EVimMode::Any })
 	{
 		AddKeyBinding_Sequence(
 			Context,
@@ -469,7 +491,7 @@ public:
 				else
 					DebugInvalidWeakPtr(EUMKeyBindingCallbackType::SequenceParam);
 			},
-			VimMode);
+			VimModes);
 	}
 
 private:

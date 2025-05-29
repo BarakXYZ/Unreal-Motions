@@ -68,7 +68,7 @@ TSharedPtr<FKeyChordTrieNode> FVimInputProcessor::FindOrCreateTrieNode(
 
 	for (const FInputChord& Key : Sequence)
 	{
-		// If a child doesn’t exist for this chord, create one
+		// If a child doesn't exist for this chord, create one
 		if (!Current->Children.Contains(Key))
 		{
 			Current->Children.Add(Key, MakeShared<FKeyChordTrieNode>());
@@ -222,13 +222,17 @@ void FVimInputProcessor::AddKeyBinding_NoParam(
 	EUMBindingContext		   Context,
 	const TArray<FInputChord>& Sequence,
 	TFunction<void()>		   Callback,
-	EVimMode				   InVimMode)
+	const TArray<EVimMode>&	   VimModes)
 {
-	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, InVimMode);
-	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
+	// Register the binding for each Vim mode in the array
+	for (EVimMode Mode : VimModes)
+	{
+		TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, Mode);
+		TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
 
-	Node->NoParamCallback = MoveTemp(Callback);
-	Node->CallbackType = EUMKeyBindingCallbackType::NoParam;
+		Node->NoParamCallback = Callback;
+		Node->CallbackType = EUMKeyBindingCallbackType::NoParam;
+	}
 }
 
 // 2) Single FKeyEvent param
@@ -236,13 +240,17 @@ void FVimInputProcessor::AddKeyBinding_KeyEvent(
 	EUMBindingContext											   Context,
 	const TArray<FInputChord>&									   Sequence,
 	TFunction<void(FSlateApplication& SlateApp, const FKeyEvent&)> Callback,
-	EVimMode													   InVimMode)
+	const TArray<EVimMode>&										   VimModes)
 {
-	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, InVimMode);
-	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
+	// Register the binding for each Vim mode in the array
+	for (EVimMode Mode : VimModes)
+	{
+		TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, Mode);
+		TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
 
-	Node->KeyEventCallback = MoveTemp(Callback);
-	Node->CallbackType = EUMKeyBindingCallbackType::KeyEventParam;
+		Node->KeyEventCallback = Callback;
+		Node->CallbackType = EUMKeyBindingCallbackType::KeyEventParam;
+	}
 }
 
 // 3) TArray<FInputChord> param
@@ -251,14 +259,18 @@ void FVimInputProcessor::AddKeyBinding_Sequence(
 	const TArray<FInputChord>& Sequence,
 	TFunction<void(FSlateApplication& SlateApp,
 		const TArray<FInputChord>&)>
-			 Callback,
-	EVimMode InVimMode)
+							Callback,
+	const TArray<EVimMode>& VimModes)
 {
-	TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, InVimMode);
-	TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
+	// Register the binding for each Vim mode in the array
+	for (EVimMode Mode : VimModes)
+	{
+		TSharedPtr<FKeyChordTrieNode> Root = GetOrCreateTrieRoot(Context, Mode);
+		TSharedPtr<FKeyChordTrieNode> Node = FindOrCreateTrieNode(Root, Sequence);
 
-	Node->SequenceCallback = MoveTemp(Callback);
-	Node->CallbackType = EUMKeyBindingCallbackType::SequenceParam;
+		Node->SequenceCallback = Callback;
+		Node->CallbackType = EUMKeyBindingCallbackType::SequenceParam;
+	}
 }
 
 void FVimInputProcessor::RegisterDefaultKeyBindings()
@@ -273,7 +285,7 @@ void FVimInputProcessor::RegisterDefaultKeyBindings()
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		},
-		EVimMode::Any);
+		{ EVimMode::Any });
 
 	AddKeyBinding_KeyEvent(
 		EUMBindingContext::Generic,
@@ -281,7 +293,7 @@ void FVimInputProcessor::RegisterDefaultKeyBindings()
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		},
-		EVimMode::Any);
+		{ EVimMode::Any });
 
 	AddKeyBinding_KeyEvent(
 		EUMBindingContext::Generic,
@@ -289,7 +301,7 @@ void FVimInputProcessor::RegisterDefaultKeyBindings()
 		[this](FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) {
 			SwitchVimModes(SlateApp, InKeyEvent);
 		},
-		EVimMode::Any);
+		{ EVimMode::Any });
 }
 
 bool FVimInputProcessor::HandleKeyDownEvent(
