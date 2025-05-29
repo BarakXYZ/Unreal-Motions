@@ -67,8 +67,9 @@ void UVimTextEditorSubsystem::OnVimModeChanged(const EVimMode NewVimMode)
 		case (EVimMode::VisualLine):
 		{
 			bIsVimModeVisualBased = true;
-			TrackVisualModeStartLocation(SlateApp);
-			VisualLineMode(SlateApp, FKeyEvent());
+			// This function is also in-charge of tracking the visual mode loc
+			// as it will do that in a specfiic timing
+			SetupVisualLineMode(SlateApp, FKeyEvent());
 			break;
 		}
 		default:
@@ -806,6 +807,11 @@ void UVimTextEditorSubsystem::HandleVimTextNavigation(FSlateApplication& SlateAp
 
 void UVimTextEditorSubsystem::HandleRightNavigation(FSlateApplication& SlateApp)
 {
+	// if (IsCurrentLineEmpty()
+	// 	|| (CurrentVimMode == EVimMode::VisualLine
+	// 		&& !bBypassVisualLineNavBlock))
+	// 	return;
+
 	if (IsCurrentLineEmpty())
 		return;
 
@@ -855,6 +861,11 @@ void UVimTextEditorSubsystem::HandleRightNavigation(FSlateApplication& SlateApp)
 
 void UVimTextEditorSubsystem::HandleLeftNavigation(FSlateApplication& SlateApp)
 {
+	// if (IsCurrentLineEmpty()
+	// 	|| (CurrentVimMode == EVimMode::VisualLine
+	// 		&& !bBypassVisualLineNavBlock))
+	// 	return;
+
 	if (IsCurrentLineEmpty())
 		return;
 
@@ -1047,23 +1058,20 @@ void UVimTextEditorSubsystem::InsertAndAppend(
 	InputProc->SetVimMode(SlateApp, EVimMode::Insert);
 }
 
-void UVimTextEditorSubsystem::VisualLineMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
+void UVimTextEditorSubsystem::SetupVisualLineMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
 {
 	Logger.Print("Visual Line Mode", true);
 	const TSharedRef<FVimInputProcessor> VimProc = FVimInputProcessor::Get();
 
-	// TODO: We need to have a more robust support here:
-	// 1. We should probably have a dedicated vim mode for Visual Line from the
-	// Vim Proc itself.
-	// 2. When going up or down in Multiline we need to check for alignment
-	// to place our cursor in the correct place (end of line or beginning of
-	// line) to have the selection work correctly.
-	// Current setup will work well for starting in line x and going to lines > x
-	// but not for lines < x
+	bBypassVisualLineNavBlock = true;
 	HandleGoToStartOrEndOfLine(SlateApp, false /*Go-to-Start*/);
+
+	TrackVisualModeStartLocation(SlateApp);
 	// Not exactly like vim does it (UX wise), but a simplification for now.
 	ClearTextSelection();
+
 	HandleGoToStartOrEndOfLine(SlateApp, true /*Go-to-End*/);
+	bBypassVisualLineNavBlock = false;
 }
 
 // TODO: Update practice to conform with new methods for Multiline
@@ -1613,26 +1621,80 @@ bool UVimTextEditorSubsystem::HandleUpDownMultiLineNormalMode(FSlateApplication&
 
 bool UVimTextEditorSubsystem::HandleUpDownMultiLineVisualMode(FSlateApplication& SlateApp, const FKey& InKeyDir)
 {
-	TSharedRef<FVimInputProcessor> InputProc = FVimInputProcessor::Get();
-
-	const TSharedPtr<SMultiLineEditableTextBox> MultiTextBox =
-		ActiveMultiLineEditableTextBox.Pin();
+	// Early validation
+	const auto MultiTextBox = ActiveMultiLineEditableTextBox.Pin();
 	if (!MultiTextBox.IsValid())
 		return false;
 
-	FTextLocation CurrentTextLocation = MultiTextBox->GetCursorLocation();
-	if (!CurrentTextLocation.IsValid()
-		|| !StartCursorLocationVisualMode.IsValid())
+	const FTextLocation CurrentLocation = MultiTextBox->GetCursorLocation();
+	if (!CurrentLocation.IsValid() || !StartCursorLocationVisualMode.IsValid())
 		return false;
 
-	const FTextLocation GoToTextLocation(
-		CurrentTextLocation.GetLineIndex() + (InKeyDir == EKeys::Up ? -1 : 1),
-		CurrentTextLocation.GetOffset());
+	// Extract position data
+	const VisualModePositions positions = {
+		.CurrLineIndex = CurrentLocation.GetLineIndex(),
+		.CurrOffset = CurrentLocation.GetOffset(),
+		.StartLine = StartCursorLocationVisualMode.GetLineIndex(),
+		.StartOffset = StartCursorLocationVisualMode.GetOffset(),
+		.bIsMovingUp = (InKeyDir == EKeys::Up),
+		.MaxLine = GetMultiLineCount()
+	};
 
-	TSharedPtr<SMultiLineEditableText> MultiLine = GetMultilineEditableFromBox(MultiTextBox.ToSharedRef());
+	// Handle visual line mode special case
+	if (CurrentVimMode == EVimMode::VisualLine)
+		HandleVisualLineModeSelection(SlateApp, positions);
 
-	return SelectTextInRange(SlateApp,
-		StartCursorLocationVisualMode, GoToTextLocation);
+	// Calculate and apply the new selection
+	const FTextLocation targetLocation = CalculateTargetLocation(positions);
+	if (!SelectTextInRange(SlateApp, StartCursorLocationVisualMode, targetLocation))
+		return false;
+
+	// Adjust cursor position for visual line mode
+	if (CurrentVimMode == EVimMode::VisualLine)
+		AdjustVisualLineModeCursor(SlateApp, positions);
+
+	return true;
+}
+
+void UVimTextEditorSubsystem::HandleVisualLineModeSelection(FSlateApplication& SlateApp, const VisualModePositions& positions)
+{
+	if (!positions.IsOnStartLine()) // i.e. tracked line index == curr line index
+		return;
+
+	// When on the start line, we need to ensure the entire line is selected
+	// Go to end, then start if moving up, start, then end if moving down
+	HandleGoToStartOrEndOfLine(SlateApp, positions.bIsMovingUp);
+
+	ClearTextSelection();
+	TrackVisualModeStartLocation(SlateApp);
+
+	// Then go to the opposite end
+	HandleGoToStartOrEndOfLine(SlateApp, !positions.bIsMovingUp);
+}
+
+FTextLocation UVimTextEditorSubsystem::CalculateTargetLocation(const VisualModePositions& positions)
+{
+	const int32 lineDelta = positions.bIsMovingUp ? -1 : 1;
+	return FTextLocation(positions.CurrLineIndex + lineDelta, positions.CurrOffset);
+}
+
+void UVimTextEditorSubsystem::AdjustVisualLineModeCursor(FSlateApplication& SlateApp, const VisualModePositions& positions)
+{
+	// Determine cursor position based on selection direction
+	bool shouldGoToEnd = false;
+
+	if (positions.IsBelowStartLine())
+		shouldGoToEnd = true; // Always go to end when below start line
+
+	else if (positions.IsAboveStartLine())
+		shouldGoToEnd = false; // Always go to start when above start line
+
+	else // On start line
+		// If we were below and moving up to start line, go to end
+		// If we were above and moving down to start line, go to start
+		shouldGoToEnd = (positions.CurrLineIndex > positions.StartLine);
+
+	HandleGoToStartOrEndOfLine(SlateApp, shouldGoToEnd);
 }
 
 void UVimTextEditorSubsystem::AlignCursorToIndex(FSlateApplication& SlateApp, int32 CurrIndex, int32 AlignToIndex, bool bAlignRight)

@@ -106,7 +106,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	bool TrySetHintTextForVimMode();
 
 	void InsertAndAppend(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
-	void VisualLineMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
+	void SetupVisualLineMode(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
 	//////////////////////////////////////////////////////////////////////////
 	// ~			GoTo Start or End (gg + Shift + G)				~
@@ -137,9 +137,12 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 
 	void DebugMultiLineCursorLocation(bool bIsPreNavigation, bool bIgnoreDelay = false);
 
-	bool HandleUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir);
-	bool HandleUpDownMultiLineNormalMode(FSlateApplication& SlateApp, const FKey& InKeyDir);
-	bool HandleUpDownMultiLineVisualMode(FSlateApplication& SlateApp, const FKey& InKeyDir);
+	bool		  HandleUpDownMultiLine(FSlateApplication& SlateApp, const FKey& InKeyDir);
+	bool		  HandleUpDownMultiLineNormalMode(FSlateApplication& SlateApp, const FKey& InKeyDir);
+	bool		  HandleUpDownMultiLineVisualMode(FSlateApplication& SlateApp, const FKey& InKeyDir);
+	void		  HandleVisualLineModeSelection(FSlateApplication& SlateApp, const VisualModePositions& positions);
+	FTextLocation CalculateTargetLocation(const VisualModePositions& positions);
+	void		  AdjustVisualLineModeCursor(FSlateApplication& SlateApp, const VisualModePositions& positions);
 
 	bool IsMultiLineCursorAtBeginningOfDocument();
 
@@ -351,6 +354,7 @@ class UNREALMOTIONS_API UVimTextEditorSubsystem : public UEditorSubsystem
 	const FModifierKeysState ModShiftDown =
 		FModifierKeysState(true, true, /*ShiftDown*/
 			false, false, false, false, false, false, false);
+	bool bBypassVisualLineNavBlock = false;
 
 	TWeakPtr<SWidget>					ActiveEditableGeneric{ nullptr };
 	TWeakPtr<SEditableText>				ActiveEditableText{ nullptr };
