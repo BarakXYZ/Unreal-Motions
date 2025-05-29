@@ -4212,3 +4212,6 @@ Test)
 */
 // 2. Sometimes text won't retain it's final most updated form after typing some
 // input and switching between Vim modes.
+//
+// 3. Add the option to pass multiple vim modes on bind registration (so we can
+// bind for example Visual + Visual Line together.)
