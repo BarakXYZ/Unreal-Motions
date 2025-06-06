@@ -151,6 +151,15 @@ public:
 
 	void UndoRedo(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent);
 
+	inline auto ConvertToNodePosition(const FVector2D& Position)
+	{
+#if ENGINE_MAJOR_VERSION >= 5 && ENGINE_MINOR_VERSION >= 6
+		return FVector2f(Position);
+#else
+		return Position;
+#endif
+	}
+
 	UEdGraphNode* FindFallbackNode(const TArray<UEdGraphNode*>& SelectedNodes);
 	UEdGraphPin*  FindFallbackPin(const TArray<UEdGraphNode*>& SelectedNodes);
 

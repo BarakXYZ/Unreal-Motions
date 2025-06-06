@@ -973,15 +973,16 @@ void UVimTextEditorSubsystem::ToggleCursorBlinkingOff()
 {
 	return; // Is this function even needed?
 
-	TSharedRef<FVimInputProcessor> Processor = FVimInputProcessor::Get();
-	FSlateApplication&			   SlateApp = FSlateApplication::Get();
+	// TSharedRef<FVimInputProcessor> Processor = FVimInputProcessor::Get();
+	// FSlateApplication&			   SlateApp = FSlateApplication::Get();
 
-	Processor->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
-	if (DoesActiveEditableHasAnyTextSelected())
-	{
-		// Simply compensate by moving one time to the right (opposite direction)
-		Processor->SimulateKeyPress(SlateApp, EKeys::Right /*No Shift Down*/);
-	}
+	// Processor->SimulateKeyPress(SlateApp, EKeys::Left, ModShiftDown);
+	// if (DoesActiveEditableHasAnyTextSelected())
+	// {
+	// 	// Simply compensate by moving one time to the right (opposite direction)
+	// 	Processor->SimulateKeyPress(SlateApp, EKeys::Right /*No Shift Down*/);
+	// }
+
 	// else we're at the beginning of the input, and we can simply do nothing
 	// as the blinking stopped by this point.
 }

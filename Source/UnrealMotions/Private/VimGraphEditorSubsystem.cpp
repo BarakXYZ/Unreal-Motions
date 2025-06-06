@@ -545,9 +545,10 @@ void UVimGraphEditorSubsystem::OnNodeCreationMenuClosed(
 
 	// Align the X position of the Origin and new node
 	SNodePanel::SNode::FNodeSet MovedNodes;
+
 	NewNode->MoveTo(
-		GetAlignedNodePositionX(DraggedFromNode.ToSharedRef(),
-			NewNodeRef, bIsAppendingNode),
+		ConvertToNodePosition(GetAlignedNodePositionX(DraggedFromNode.ToSharedRef(),
+			NewNodeRef, bIsAppendingNode)),
 		MovedNodes);
 
 	// Add the previous node to the selection and align the Y position too.
@@ -910,7 +911,7 @@ void UVimGraphEditorSubsystem::ShiftNodesForSpace(
 			FVector2D NewPos(CurPos.X + ShiftAmountX, CurPos.Y);
 
 			// SNodePanel::SNode interface
-			SNode->MoveTo(NewPos, NodeFilter, /*bMarkDirty=*/true);
+			SNode->MoveTo(ConvertToNodePosition(NewPos), NodeFilter, /*bMarkDirty=*/true);
 		}
 	}
 
@@ -951,7 +952,7 @@ void UVimGraphEditorSubsystem::RevertShiftedNodes(
 			if (!SNode.IsValid())
 				continue;
 
-			const FVector2D OriginalPos = Pair.Value;
+			const auto OriginalPos = ConvertToNodePosition(Pair.Value);
 			SNode->MoveTo(OriginalPos, NodeFilter, /*bMarkDirty=*/true);
 		}
 	}
