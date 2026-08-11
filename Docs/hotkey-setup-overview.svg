@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Unreal Motions hotkey setup overview</title>
+  <desc id="desc">Recommended keyboard mappings for major tabs, minor tabs, viewport bookmarks, and graph bookmarks.</desc>
+  <rect width="1200" height="520" rx="28" fill="#111318"/>
+  <text x="60" y="76" fill="#f5c84b" font-family="Segoe UI, sans-serif" font-size="38" font-weight="700">One setup, four navigation layers</text>
+  <text x="60" y="116" fill="#c7ccd6" font-family="Segoe UI, sans-serif" font-size="21">The setup assistant keeps tab movement and bookmarks predictable.</text>
+  <g font-family="Segoe UI, sans-serif">
+    <rect x="60" y="160" width="520" height="130" rx="20" fill="#20242c" stroke="#4a5262"/>
+    <text x="90" y="205" fill="#ffffff" font-size="24" font-weight="600">Major tabs</text>
+    <text x="90" y="245" fill="#f5c84b" font-size="22" font-weight="700">Ctrl + 0–9</text>
+    <text x="300" y="245" fill="#9ba3b2" font-size="19">jump directly</text>
+    <rect x="620" y="160" width="520" height="130" rx="20" fill="#20242c" stroke="#4a5262"/>
+    <text x="650" y="205" fill="#ffffff" font-size="24" font-weight="600">Minor tabs</text>
+    <text x="650" y="245" fill="#f5c84b" font-size="22" font-weight="700">Ctrl + Shift + 0–9</text>
+    <text x="900" y="245" fill="#9ba3b2" font-size="19">jump directly</text>
+    <rect x="60" y="330" width="520" height="130" rx="20" fill="#20242c" stroke="#4a5262"/>
+    <text x="90" y="375" fill="#ffffff" font-size="24" font-weight="600">Viewport bookmarks</text>
+    <text x="90" y="415" fill="#f5c84b" font-size="22" font-weight="700">Ctrl + Alt + Shift + 0–9</text>
+    <rect x="620" y="330" width="520" height="130" rx="20" fill="#20242c" stroke="#4a5262"/>
+    <text x="650" y="375" fill="#ffffff" font-size="24" font-weight="600">Graph bookmarks</text>
+    <text x="650" y="415" fill="#f5c84b" font-size="22" font-weight="700">Ctrl + Alt + Shift + 0–9</text>
+  </g>
+</svg>

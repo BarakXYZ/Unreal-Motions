@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// SPDX-License-Identifier: MIT
 
 #include "UMWindowDebugger.h"
 #include "Framework/Docking/TabManager.h"

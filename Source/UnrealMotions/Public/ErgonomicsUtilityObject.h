@@ -39,8 +39,8 @@ public:
 
 public:
 	TArray<FInputChord> Chords;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unreal Motions|Utilities")
 	FUMHotkeySectionInfo UMHotkeySectionInfo;
-	UPROPERTY(BlueprintAssignable)
+	UPROPERTY(BlueprintAssignable, Category = "Unreal Motions|Utilities")
 	FOnUtilityObjectAction OnUtilityObjectAction;
 };

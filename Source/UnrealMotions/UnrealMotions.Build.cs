@@ -1,4 +1,4 @@
-// Copyright 2024 BarakXYZ. All Rights Reserved.
+// SPDX-License-Identifier: MIT
 
 using UnrealBuildTool;
 

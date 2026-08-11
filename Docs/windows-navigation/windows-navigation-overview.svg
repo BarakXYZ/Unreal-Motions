@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Unreal Motions window navigation overview</title>
+  <desc id="desc">Keyboard shortcuts for moving between editor windows and toggling root-window focus.</desc>
+  <rect width="1200" height="360" rx="28" fill="#111318"/>
+  <text x="60" y="75" fill="#f5c84b" font-family="Segoe UI, sans-serif" font-size="38" font-weight="700">Window navigation</text>
+  <text x="60" y="115" fill="#c7ccd6" font-family="Segoe UI, sans-serif" font-size="21">Keep your hands on the keyboard while moving across editor windows.</text>
+  <g font-family="Segoe UI, sans-serif">
+    <rect x="60" y="160" width="320" height="130" rx="20" fill="#20242c" stroke="#4a5262"/>
+    <text x="88" y="205" fill="#ffffff" font-size="22" font-weight="600">Previous window</text>
+    <rect x="88" y="228" width="188" height="42" rx="10" fill="#343b48"/>
+    <text x="110" y="257" fill="#f5c84b" font-size="20" font-weight="700">Ctrl + Comma</text>
+    <rect x="440" y="160" width="320" height="130" rx="20" fill="#20242c" stroke="#4a5262"/>
+    <text x="468" y="205" fill="#ffffff" font-size="22" font-weight="600">Next window</text>
+    <rect x="468" y="228" width="188" height="42" rx="10" fill="#343b48"/>
+    <text x="490" y="257" fill="#f5c84b" font-size="20" font-weight="700">Ctrl + Period</text>
+    <rect x="820" y="160" width="320" height="130" rx="20" fill="#20242c" stroke="#4a5262"/>
+    <text x="848" y="205" fill="#ffffff" font-size="22" font-weight="600">Toggle root focus</text>
+    <rect x="848" y="228" width="224" height="42" rx="10" fill="#343b48"/>
+    <text x="870" y="257" fill="#f5c84b" font-size="20" font-weight="700">Ctrl + Forward Slash</text>
+  </g>
+</svg>

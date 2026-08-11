@@ -10,7 +10,7 @@ struct FUMHotkeySectionInfo
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unreal Motions|Hotkeys")
 	TMap<EUMHotkeySection, FUMHotkeyInfo> Map;
 
 	FUMHotkeySectionInfo()

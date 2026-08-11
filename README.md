@@ -1,10 +1,14 @@
 # Unreal-Motions 🖐️✨
 
-This project started with simple motions for tab and window navigation, but it has since evolved into a full-fledged Vim Motions system! I'll be working on another official release in the coming weeks, focusing on stability and proper documentation. Stay tuned! For now the official release contains the tab & window navigation features while main has many of the Vim features already implemented (if you want to try them out) 🧘‍♂️
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-### Things left until Vim features release:
+Unreal Motions is a keyboard-centric navigation plugin for Unreal Editor. It started with tab and window movement and has grown into a broader Vim-inspired interaction system for editor UI, Blueprint graphs, search, and text editing.
 
-- [x] Customizable Vim like bindings (\<leader> + n [num of keys]) to call any type of functionality.
+Unreal Motions is MIT licensed. You may use it commercially, modify it, redistribute it, keep changes private, sublicense it, or sell copies. The only license condition is preserving the copyright and license notice.
+
+## Vim feature coverage
+
+- [x] Customizable Vim-like bindings (\<leader> + n [number of keys]) to call any type of functionality.
 - [x] Normal, Visual and Insert mode: custom Input Processor and Message Handler.
 - [x] Fallback mechanisms to retain focus on last selected widgets inside tabs (Nomad, Panel, etc.)
 - [x] Vimium generic UI navigation (via Hint Markers).
@@ -16,12 +20,10 @@ This project started with simple motions for tab and window navigation, but it h
 - [x] Search-Box like pop-up menu for Shift + / like free search.
 - [ ] Editable Text Vim-Motions (Single & MultiLine).
 - [ ] Basic Level-Viewport Vim-inspired navigation (for rotation and moving around without the mouse).
-- [ ] Basic config setup for enabling // disabling Vim features and some preferences.
+- [ ] Basic config setup for enabling or disabling Vim features and preferences.
 - [ ] UI, Highlighting cleanup and fine-tuning.
 
-- Estimated Vim-Features Release Date: May-June 2025.
-
-## Features Present in latest release:
+## Features in version 1.1.0
 
 ### Windows Navigation 🪟
 
@@ -31,7 +33,7 @@ Navigate between editor windows effortlessly using keyboard shortcuts!<br>
 - Toggle between root window and other windows using `Ctrl + Forward Slash` - minimizes non-root windows to focus root window, or vice versa
 - You can expect solid focus activation when navigating between windows (unlike UE's occasional issue where focus remains on the previous window after navigation)
 - Customize any hotkey configuration in preferences - simply search for "Cycle Window" to find all available commands
-  ![windows-navigation-pref](Docs/windows-navigation/windows-navigation-preferences.png)
+  ![Windows navigation overview](Docs/windows-navigation/windows-navigation-overview.svg)
 
 ### Major & Minor Tab Navigation 🔄
 
@@ -47,19 +49,16 @@ The plugin is designed to work alongside existing Unreal Engine shortcuts:
 
 ### Editor Utility Widget ⚡
 
-![EUW1](Docs/euw-hotkey-assist-major-tab-nav.png)
-![EUW2](Docs/euw-hotkey-assist-minor-tab-nav.png)
-![EUW3](Docs/euw-hotkey-assist-viewport-bookmarks.png)
-![EUW4](Docs/euw-hotkey-assist-graph-bookmarks.png)
-Since some users (muah) might prefer to move their bookmarks to `Ctrl + Alt + Shift + 0-9`, I've included a Editor Utility Widget that lets you:
+![Hotkey setup overview](Docs/hotkey-setup-overview.svg)
+Since some users (muah) might prefer to move their bookmarks to `Ctrl + Alt + Shift + 0-9`, I've included an Editor Utility Widget that lets you:
 
-- Easily clear and Auto-Setup Hotkeys to the recommened or any configuration you like quickly and easily!
+- Easily clear and auto-configure hotkeys using the recommended setup or any configuration you prefer.
 - Have a quick overview of the currently set configuration and hotkeys.
 - Try out different modifiers to find your perfect configuration and iterate quickly!
 
 ## Support & Installation 🔧
 
-1. The plugin should work safely in UE 5.3 to 5.5. I believe 5.0+ should also work (but haven't tested that). Keep in mind that the Editor Utility Widget won't show up in versions earlier than 5.3. If really needed you can manually copy paste the logic and recreate it.
+1. The plugin targets UE 5.3 to 5.6. Version 1.1.0 is build-verified on UE 5.6 Win64; other Engine versions have not been revalidated for this release. The Editor Utility Widget requires UE 5.3 or newer.
 1. Create a `Plugins` folder in your Unreal Engine project's root directory (if it doesn't exist)
 1. Clone this repository into the `Plugins` folder:
 
@@ -69,12 +68,18 @@ cd Plugins
 git clone https://github.com/BarakXYZ/Unreal-Motions.git
 ```
 
-3. Restart the Unreal Editor
-4. The plugin should now be available in your project!
+1. Restart the Unreal Editor
+1. The plugin should now be available in your project!
 
 ## Contributing 🤝
 
-Bug reports, PR's and feature suggestions are welcome!
+Bug reports, pull requests, and feature suggestions are welcome. Contributions are accepted under the MIT License; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Unreal Motions is available under the [MIT License](LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the project, provided that the copyright and license notice are preserved.
+
+Unreal Engine and Epic Games-owned material are not part of this license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Thank You! ❤️
 

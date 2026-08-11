@@ -86,21 +86,11 @@ public:
 
 	const FSlateRoundedBoxBrush& GetBorderBrush()
 	{
-		static UTexture2D* GradientTexture = LoadObject<UTexture2D>(
-			nullptr,
-			// TEXT("/Engine/EngineResources/GradientTexture0.GradientTexture0")
-			TEXT("/Script/Engine.Texture2D'/UnrealMotions/Textures/HintMarkerGradientBackground.HintMarkerGradientBackground'") // Path inside .uasset
-		);
-
-		static FSlateRoundedBoxBrush RoundBorder(
-			// Piping the path directly doesn't seem to have any effect?
-			// TEXT("/Script/Engine.Texture2D'/UnrealMotions/Textures/HintMarkerGradientBackground.HintMarkerGradientBackground'"),
-			FLinearColor::White,				   // Tint
-			4.0f,								   // Corner Radius
-			FLinearColor(0.75f, 0.5f, 0.0f, 1.0f), // OutlineColor
-			1.25f);								   // OutlineWidth
-
-		RoundBorder.SetResourceObject(GradientTexture);
+		static const FSlateRoundedBoxBrush RoundBorder(
+			FLinearColor(1.0f, 0.82f, 0.18f, 1.0f),
+			4.0f,
+			FLinearColor(0.75f, 0.5f, 0.0f, 1.0f),
+			1.25f);
 
 		return RoundBorder;
 	}

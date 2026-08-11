@@ -34,7 +34,7 @@ struct FUMWindowDebugMap
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Unreal Motions|Windows Debugger")
 	TMap<FString, FString> PropertyMap;
 };
 
