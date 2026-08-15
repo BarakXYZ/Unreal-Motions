@@ -1,3 +1,5 @@
+
+
 # Unreal-Motions 🖐️✨
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -73,7 +75,7 @@ git clone https://github.com/BarakXYZ/Unreal-Motions.git
 
 ## Contributing 🤝
 
-Bug reports, pull requests, and feature suggestions are welcome. Contributions are accepted under the MIT License; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports, pull requests, feature suggestions, and documentation improvements are welcome. Contributions are accepted under the MIT License; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
